@@ -919,4 +919,4 @@ in the second category are better fits.
 Questions, ideas, or feedback? Join our
 [WhatsApp Community](https://chat.whatsapp.com/Ch6AwZizSDt5quzHodcYh5) or open
 an [issue](https://github.com/matiasbattocchia/open-bsp-api/issues). We'd love
-to hear from you.
+to hear from your side too.
