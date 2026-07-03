@@ -18,7 +18,7 @@ import { markdownToWhatsApp } from "../_shared/markdown.ts";
 const API_VERSION = "v24.0";
 const DEFAULT_ACCESS_TOKEN = Deno.env.get("META_SYSTEM_USER_ACCESS_TOKEN") ||
   "";
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SERVICE_ROLE_KEY = Deno.env.get("EDGE_FUNCTIONS_TOKEN")!;;
 
 // A business-scoped user ID (BSUID) is the user's ISO 3166 alpha-2 country code,
 // a period, then alphanumerics (e.g. US.13491208655302741918; parent BSUIDs add
