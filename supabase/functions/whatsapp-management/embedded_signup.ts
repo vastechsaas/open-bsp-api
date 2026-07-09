@@ -310,6 +310,7 @@ export async function performEmbeddedSignup(
       extra: {
         waba_id: payload.waba_id,
         business_id: payload.business_id,
+        application_id: app_id,
         flow_type: payload.flow_type,
         access_token: business_access_token,
         phone_number: normalizePhoneNumber(phone_number.display_phone_number),

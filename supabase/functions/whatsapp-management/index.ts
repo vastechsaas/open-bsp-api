@@ -23,6 +23,7 @@ import {
   performEmbeddedSignup,
   SignupPayload,
 } from "./embedded_signup.ts";
+import { syncWhatsAppProfile, updateWhatsAppProfile } from "./profile.ts";
 import { type User } from "@supabase/supabase-js";
 
 type TemplatePayload = {
@@ -138,8 +139,17 @@ function requireRoles(
 
     // We must clone the request if we want to read the body in middleware
     // because c.req.json() consumes the stream.
-    const body = await c.req.raw.clone().json();
-    const organization_id = body.organization_id;
+    const request = c.req.raw.clone();
+    const contentType = request.headers.get("content-type") || "";
+    const organization_id = contentType.includes("multipart/form-data")
+      ? (await request.formData()).get("organization_id")
+      : (await request.json()).organization_id;
+
+    if (typeof organization_id !== "string" || !organization_id) {
+      throw new HTTPException(400, {
+        message: "Missing organization_id",
+      });
+    }
 
     const user = c.get("user");
 
@@ -287,6 +297,44 @@ app.delete(
     );
 
     return c.json(response);
+  },
+);
+
+// Business profile routes
+
+app.post(
+  "/whatsapp-management/profile/sync",
+  requireRoles(["admin", "owner"]),
+  async (c) => {
+    const { organization_id, organization_address } = await c.req.json<{
+      organization_id: string;
+      organization_address: string;
+    }>();
+
+    if (!organization_address) {
+      throw new HTTPException(400, {
+        message: "Missing organization_address",
+      });
+    }
+
+    const client = createUnsecureClient();
+    return c.json(
+      await syncWhatsAppProfile(
+        client,
+        organization_id,
+        organization_address,
+      ),
+    );
+  },
+);
+
+app.patch(
+  "/whatsapp-management/profile",
+  requireRoles(["admin", "owner"]),
+  async (c) => {
+    const form = await c.req.formData();
+    const client = createUnsecureClient();
+    return c.json(await updateWhatsAppProfile(client, form));
   },
 );
 

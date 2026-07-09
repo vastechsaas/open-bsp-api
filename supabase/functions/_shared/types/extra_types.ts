@@ -29,8 +29,22 @@ export type OrganizationExtra = {
 export type WhatsAppOrganizationAddressExtra = {
   waba_id?: string;
   business_id?: string;
+  application_id?: string;
   phone_number?: string;
   verified_name?: string;
+  quality_rating?: string;
+  phone_number_status?: string;
+  messaging_limit_tier?: string;
+  profile_synced_at?: string;
+  business_profile?: {
+    about?: string;
+    address?: string;
+    description?: string;
+    email?: string;
+    profile_picture_url?: string;
+    websites?: string[];
+    vertical?: string;
+  };
   flow_type?: "only_waba" | "new_phone_number" | "existing_phone_number";
   access_token?: string; // Meta system-user token
   callback_url?: string | null;
