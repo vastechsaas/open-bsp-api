@@ -6,6 +6,7 @@ create table public.conversations (
   contact_address text, -- one of contact_address or group_address
   group_address text,   -- must be not null for whatsapp service
   name text,
+  assigned_agent_id uuid,
   extra jsonb,
   status text default 'active'::text not null,
   created_at timestamp with time zone default now() not null,
@@ -37,6 +38,10 @@ on delete no action;
 create index conversations_organization_id_idx
 on public.conversations
 using btree (organization_id);
+
+create index conversations_organization_id_assigned_agent_id_idx
+on public.conversations
+using btree (organization_id, assigned_agent_id);
 
 create index conversations_updated_at_idx
 on public.conversations

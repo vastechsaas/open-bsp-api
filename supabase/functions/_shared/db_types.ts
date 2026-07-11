@@ -749,6 +749,7 @@ export type Database = {
       }
       conversations: {
         Row: {
+          assigned_agent_id: string | null
           contact_address: string | null
           created_at: string
           extra: Json | null
@@ -762,6 +763,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          assigned_agent_id?: string | null
           contact_address?: string | null
           created_at?: string
           extra?: Json | null
@@ -775,6 +777,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          assigned_agent_id?: string | null
           contact_address?: string | null
           created_at?: string
           extra?: Json | null
@@ -801,6 +804,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations_addresses"
             referencedColumns: ["organization_id", "address"]
+          },
+          {
+            foreignKeyName: "conversations_organization_id_assigned_agent_id_fkey"
+            columns: ["organization_id", "assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["organization_id", "id"]
           },
           {
             foreignKeyName: "conversations_organization_id_fkey"
