@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -1151,6 +1151,29 @@ export type Database = {
         }
         Returns: boolean
       }
+      assign_conversation_to_me: {
+        Args: { p_conversation_id: string }
+        Returns: {
+          assigned_agent_id: string | null
+          contact_address: string | null
+          created_at: string
+          extra: Json | null
+          group_address: string | null
+          id: string
+          name: string | null
+          organization_address: string
+          organization_id: string
+          service: Database["public"]["Enums"]["service"]
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "conversations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       contact_address_update_rules: {
         Args: {
           p_address: string
@@ -1192,6 +1215,29 @@ export type Database = {
       org_update_by_admin_rules: {
         Args: { p_id: string; p_name: string }
         Returns: boolean
+      }
+      unassign_conversation_from_me: {
+        Args: { p_conversation_id: string }
+        Returns: {
+          assigned_agent_id: string | null
+          contact_address: string | null
+          created_at: string
+          extra: Json | null
+          group_address: string | null
+          id: string
+          name: string | null
+          organization_address: string
+          organization_id: string
+          service: Database["public"]["Enums"]["service"]
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "conversations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
     }
     Enums: {
