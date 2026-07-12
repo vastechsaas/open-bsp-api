@@ -56,9 +56,15 @@ service window is closed and a template is required.
 All queue queries must remain organization-scoped and must continue to respect
 the existing row-level security model.
 
-## Backend configuration shape
+## Backend configuration RPC
 
-The backend should expose queue configuration in a shape equivalent to:
+The backend exposes queue configuration through:
+
+```sql
+public.get_conversation_queues(p_organization_id uuid default null)
+```
+
+It returns rows in this shape:
 
 ```json
 [
@@ -101,10 +107,8 @@ The backend should expose queue configuration in a shape equivalent to:
 ]
 ```
 
-The exact delivery mechanism is left for the implementation subtasks. It could
-be an RPC, view, organization extra default, or another backend-owned read
-model. The important contract is that queue identity and ordering come from the
-backend.
+The UI treats this RPC as the source of truth for enabled tabs, labels, and
+ordering.
 
 ## Frontend responsibilities
 
@@ -161,6 +165,58 @@ conversation list path, the first iteration may document and use a narrower
 approximation, but the contract must state that the product meaning is the Meta
 24-hour service-window boundary.
 
+## Automated checks
+
+Backend coverage lives in:
+
+```powershell
+npx supabase test db --local supabase/tests/conversation_queues.sql
+npx supabase test db --local supabase/tests/conversation_queue_filtering.sql
+```
+
+These tests cover:
+
+- base queue config keys, labels, order, and enabled state;
+- organization access checks for queue configuration;
+- filter behavior for `all_active`, `assigned`, `pending`, `spam`, `closed`, and
+  `expired`;
+- invalid queue key rejection;
+- deterministic limit/offset pagination for queue-filtered conversations.
+
+Frontend coverage lives in the UI repo:
+
+```powershell
+npm test
+```
+
+The UI tests cover:
+
+- backend queue config normalization;
+- backend-provided label/order behavior;
+- disabled queues being hidden;
+- unsupported future queue keys being ignored until implemented;
+- local queue filter semantics used by the conversation list.
+
+## Manual QA checklist
+
+Before marking the base queue feature ready in staging:
+
+1. Deploy/apply the backend migrations that add:
+   - `public.get_conversation_queues`;
+   - `public.get_conversation_queue_conversations`.
+2. Deploy the frontend branch that renders queue tabs from backend config.
+3. Sign in as a member of a staging organization with seeded conversations.
+4. Open **Conversations** and verify the queue tabs render in this order:
+   `All (active)`, `Assigned`, `Pending`, `Spam`, `Closed`, `Expired`.
+5. Select each queue and confirm the visible list matches the base semantics in
+   the queue contract table.
+6. Use the conversation search box while a queue is selected and confirm search
+   narrows the selected queue instead of resetting it.
+7. Confirm empty queues show a graceful empty state.
+8. Switch organizations and confirm queue tabs/data remain organization-scoped.
+9. Confirm no department/team queues, Mentioned, Exited, auto-routing, or
+   supervisor reassignment UI appears in this base version.
+
 ## Out of scope for the base version
 
 The following Digital Connect-style capabilities are intentionally deferred:
@@ -182,6 +238,36 @@ The following Digital Connect-style capabilities are intentionally deferred:
 
 Those items require separate product and architecture decisions on top of this
 base queue contract.
+
+## Future implementation notes
+
+The base version deliberately uses existing conversation/message state. Future
+Digital Connect-style queues should be added as separate product slices rather
+than expanding this base story quietly.
+
+### Mentioned
+
+`Mentioned` needs an explicit mention signal. Possible sources include internal
+notification messages, parsed `@agent` references, or a dedicated mentions
+table. Do not infer mentions from unread messages alone.
+
+### Exited
+
+`Exited` needs a defined lifecycle event, such as a customer opt-out, channel
+exit, agent exit, or bot-flow exit. The event should be modeled before adding a
+queue tab.
+
+### Department/team queues
+
+Named queues need queue membership, agent/team membership, queue visibility, and
+possibly queue-level permissions. A separate queue or routing table is likely
+needed once the system supports more than the six derived base queues.
+
+### Auto-routing
+
+Auto-routing should not reuse the base queue config RPC as an assignment engine.
+It needs its own architecture for routing rules, conflict handling, assignment
+history, reassignment, and observability.
 
 ## Implementation sequencing
 
