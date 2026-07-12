@@ -150,3 +150,6 @@ re-evaluated.
 5. SCRUM-13 adds focused tests, regression checks, and documentation.
 
 No schema, API, or UI implementation is part of this ADR.
+
+For the delivered base behavior and regression commands, see
+[`../basic-conversation-assignment.md`](../basic-conversation-assignment.md).
