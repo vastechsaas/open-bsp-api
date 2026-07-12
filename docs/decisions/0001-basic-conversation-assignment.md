@@ -35,8 +35,7 @@ Add one nullable `assigned_agent_id` column to `public.conversations`.
 - `null` means the conversation is unassigned.
 - A non-null value identifies the one current human assignee.
 - The value references `public.agents.id`.
-- The referenced agent must belong to the same organization as the
-  conversation.
+- The referenced agent must belong to the same organization as the conversation.
 - The referenced agent must be a human agent (`ai = false`) with an associated
   user.
 
@@ -46,15 +45,15 @@ has one optional current value and no assignment history.
 
 ### Tenant integrity
 
-Same-organization assignment is a database invariant, not a UI convention.
-The schema implementation must enforce that the conversation's
-`organization_id` and the assignee's `organization_id` match. The intended
-relational shape is a composite relationship using organization and agent IDs,
-with any supporting unique constraint added to `agents`.
+Same-organization assignment is a database invariant, not a UI convention. The
+schema implementation must enforce that the conversation's `organization_id` and
+the assignee's `organization_id` match. The intended relational shape is a
+composite relationship using organization and agent IDs, with any supporting
+unique constraint added to `agents`.
 
 The relational constraint enforces tenant membership. The guarded assignment
-operations enforce that the target row is a human agent with an associated
-user; a foreign key alone cannot express `ai = false`.
+operations enforce that the target row is a human agent with an associated user;
+a foreign key alone cannot express `ai = false`.
 
 RLS continues to determine which organization's conversations and agents a
 caller may access. The relationship constraint prevents a permitted update to
@@ -76,14 +75,14 @@ The base public workflow has two operations:
 1. **Assign to me:** an authenticated organization member with a current human
    agent may change an unassigned conversation from `null` to their own agent
    ID.
-2. **Unassign:** the same human agent may change a conversation assigned to
-   them from their agent ID to `null`.
+2. **Unassign:** the same human agent may change a conversation assigned to them
+   from their agent ID to `null`.
 
 The base workflow does not allow selecting another agent, taking over a
 conversation assigned to someone else, or assigning an AI agent.
 
-The implementation must validate these transitions at the database boundary;
-the UI must not be the only enforcement point. A claim should update only an
+The implementation must validate these transitions at the database boundary; the
+UI must not be the only enforcement point. A claim should update only an
 unassigned row, and an unassign should update only a row owned by the current
 agent. If the row no longer matches that condition, the operation returns a
 normal conflict/no-change result and refreshes the current state. This is basic
