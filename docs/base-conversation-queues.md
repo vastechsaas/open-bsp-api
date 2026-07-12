@@ -122,6 +122,29 @@ The frontend should not:
 - infer undocumented queue semantics;
 - introduce local-only queue keys that the backend does not understand.
 
+## Backend filtering RPC
+
+The backend exposes queue-aware conversation filtering through:
+
+```sql
+public.get_conversation_queue_conversations(
+  p_organization_id uuid,
+  p_queue_key text,
+  p_limit integer default 50,
+  p_offset integer default 0
+)
+```
+
+The RPC returns `public.conversations` rows ordered by
+`updated_at desc, id desc`. It clamps `p_limit` to the range `1..500`, treats
+negative offsets as `0`, and rejects unknown queue keys with
+`invalid conversation queue key`.
+
+The RPC validates that the authenticated user can access `p_organization_id`
+through the existing `get_authorized_orgs('member')` path. It does not introduce
+queue-specific permissions; queue access remains organization-scoped for the
+base version.
+
 ## Expired queue behavior
 
 The `Expired` queue is the only base queue with a non-trivial prerequisite. It
