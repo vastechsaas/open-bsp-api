@@ -15,6 +15,10 @@ add constraint agents_organization_id_user_id_key
 unique (organization_id, user_id);
 
 alter table only public.agents
+add constraint agents_organization_id_id_key
+unique (organization_id, id);
+
+alter table only public.agents
 add constraint agents_pkey
 primary key (id);
 
@@ -29,6 +33,12 @@ add constraint agents_user_id_fkey
 foreign key (user_id)
 references auth.users(id)
 on delete cascade;
+
+alter table only public.conversations
+add constraint conversations_organization_id_assigned_agent_id_fkey
+foreign key (organization_id, assigned_agent_id)
+references public.agents(organization_id, id)
+on delete set null (assigned_agent_id);
 
 create index agents_user_id_idx
 on public.agents
