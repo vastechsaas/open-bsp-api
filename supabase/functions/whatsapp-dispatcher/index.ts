@@ -3,89 +3,25 @@ import * as log from "../_shared/logger.ts";
 import {
   createUnsecureClient,
   type EndpointMessage,
-  type EndpointMessageResponse,
   type EndpointStatus,
-  type EndpointStatusResponse,
   type MessageRow,
   type OutgoingMessage,
   type WebhookPayload,
 } from "../_shared/supabase.ts";
 import { downloadFromStorage } from "../_shared/media.ts";
 import { commitDispatchedMessage } from "../_shared/dispatch.ts";
-import { Json } from "../_shared/db_types.ts";
 import { markdownToWhatsApp } from "../_shared/markdown.ts";
+import {
+  getWhatsAppErrorDetails,
+  postPayloadToWhatsAppEndpoint,
+  resolveWhatsAppRecipient,
+  WHATSAPP_API_VERSION,
+  WhatsAppError,
+} from "../_shared/whatsapp.ts";
 
-const API_VERSION = "v24.0";
 const DEFAULT_ACCESS_TOKEN = Deno.env.get("META_SYSTEM_USER_ACCESS_TOKEN") ||
   "";
 const SERVICE_ROLE_KEY = Deno.env.get("EDGE_FUNCTIONS_TOKEN")!;
-
-// A business-scoped user ID (BSUID) is the user's ISO 3166 alpha-2 country code,
-// a period, then alphanumerics (e.g. US.13491208655302741918; parent BSUIDs add
-// an ENT segment: US.ENT.118...). A phone number is bare digits, so the leading
-// "<CC>." reliably distinguishes a BSUID from a phone number.
-function isBsuid(address: string): boolean {
-  const BSUID_PATTERN = /^[A-Z]{2}\.[A-Za-z0-9.]+$/;
-
-  return BSUID_PATTERN.test(address);
-}
-
-class WhatsAppError extends Error {
-  constructor(
-    message: string,
-    options?: { cause?: { headers: unknown; body: unknown } },
-  ) {
-    super(message, options);
-    this.name = "WhatsAppError";
-  }
-}
-
-/**
- * WhatsApp Cloud API error codes that are transient and should be retried.
- * All other codes are treated as permanent and mark the message as failed.
- *
- * Source: https://developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes/
- *
- * Transient:
- *   1      API Unknown — "possible server error"
- *   2      API Service — downtime/overloaded (503)
- *   4      API Too Many Calls — app rate limit
- *   80007  Rate limit issues — WABA rate limit
- *   130429 Rate limit hit — throughput limit
- *   131000 Something went wrong — unknown error (500)
- *   131016 Service unavailable — temporary (500)
- *   131048 Spam rate limit hit — too many blocked
- *   131056 Pair rate limit hit — too many to same recipient
- *   131057 Account in maintenance mode (500)
- *   131064 Template classification limit — auto-lifted
- *   133004 Server Temporarily Unavailable (503)
- *
- * Permanent (everything else), including:
- *   0, 3, 10, 190, 200-299 — auth/permission
- *   33, 100, 131008, 131009 — invalid parameters
- *   131021, 131026, 131037, 131042, 131047 — undeliverable
- *   131049, 131050 — Meta chose not to deliver / user opted out
- *   131051, 131052, 131053 — media errors
- *   131062 — BSUID recipient not supported for this message (e.g. one-tap/
- *           zero-tap/copy-code auth templates require a phone number); never
- *           retry — a BSUID-only contact has no phone to fall back to
- *   132xxx — template errors
- *   368, 130497, 131031 — policy/integrity
- */
-const RETRYABLE_META_CODES = new Set([
-  1,
-  2,
-  4,
-  80007,
-  130429,
-  131000,
-  131016,
-  131048,
-  131056,
-  131057,
-  131064,
-  133004,
-]);
 
 /** Uploads media to WA servers
  *
@@ -195,7 +131,7 @@ async function uploadMediaItem({
   const phone_number_id = message.organization_address;
 
   const response = await fetch(
-    `https://graph.facebook.com/${API_VERSION}/${phone_number_id}/media`,
+    `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${phone_number_id}/media`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${access_token}` },
@@ -204,9 +140,10 @@ async function uploadMediaItem({
   );
 
   if (!response.ok) {
-    throw new WhatsAppError("Could not upload media item to WhatsApp servers", {
-      cause: await response.json().catch(() => ({})),
-    });
+    throw new WhatsAppError(
+      "Could not upload media item to WhatsApp servers",
+      await response.json().catch(() => ({})),
+    );
   }
 
   const mediaMetadata = (await response.json()) as { id: string };
@@ -359,48 +296,6 @@ function outgoingMessageToEndpointMessage({
   }
 }
 
-// Overload signatures
-async function postPayloadToWhatsAppEndpoint(params: {
-  payload: EndpointMessage;
-  phone_number_id: string;
-  access_token: string;
-}): Promise<EndpointMessageResponse>;
-async function postPayloadToWhatsAppEndpoint(params: {
-  payload: EndpointStatus;
-  phone_number_id: string;
-  access_token: string;
-}): Promise<EndpointStatusResponse>;
-
-async function postPayloadToWhatsAppEndpoint({
-  payload,
-  phone_number_id,
-  access_token,
-}: {
-  payload: EndpointMessage | EndpointStatus;
-  phone_number_id: string;
-  access_token: string;
-}): Promise<EndpointMessageResponse | EndpointStatusResponse> {
-  const response = await fetch(
-    `https://graph.facebook.com/${API_VERSION}/${phone_number_id}/messages`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${access_token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    },
-  );
-
-  if (!response.ok) {
-    throw new WhatsAppError("Could not post payload to WhatsApp servers", {
-      cause: await response.json().catch(() => ({})),
-    });
-  }
-
-  return await response.json();
-}
-
 Deno.serve(async (req) => {
   const authHeader = req.headers.get("Authorization");
   const token = authHeader?.replace("Bearer ", "");
@@ -431,26 +326,11 @@ Deno.serve(async (req) => {
 
   const access_token = account.access_token || DEFAULT_ACCESS_TOKEN;
 
-  let to: string | undefined;
-  let recipient: string | undefined;
-
-  // Resolve the recipient identifiers. The contact_address is either a BSUID or
-  // a phone number; the stored contact may also carry a phone in extra.
-  // TODO: deprecate when phone numbers are not used anymore as contact addresses
-  if (isBsuid(message.contact_address)) {
-    const { data: contactAddress } = await client
-      .from("contacts_addresses")
-      .select("phone_number:extra->>phone_number")
-      .eq("organization_id", message.organization_id)
-      .eq("address", message.contact_address)
-      .single()
-      .throwOnError();
-
-    to = contactAddress.phone_number;
-    recipient = message.contact_address;
-  } else {
-    to = message.contact_address;
-  }
+  const { to, recipient } = await resolveWhatsAppRecipient({
+    client,
+    organizationId: message.organization_id,
+    contactAddress: message.contact_address,
+  });
 
   if (message.direction === "outgoing") {
     try {
@@ -468,8 +348,8 @@ Deno.serve(async (req) => {
 
       const response = await postPayloadToWhatsAppEndpoint({
         payload,
-        phone_number_id: message.organization_address,
-        access_token,
+        phoneNumberId: message.organization_address,
+        accessToken: access_token,
       });
 
       await commitDispatchedMessage({
@@ -482,19 +362,8 @@ Deno.serve(async (req) => {
         },
       });
     } catch (error) {
-      const isWhatsAppError = error instanceof WhatsAppError;
-      const errorMessage = error instanceof Error
-        ? error.message
-        : String(error);
-      const metaCode = isWhatsAppError
-        ? (error.cause as { error?: { code?: number } } | undefined)?.error
-          ?.code
-        : undefined;
-      const isRetryable = metaCode != null &&
-        RETRYABLE_META_CODES.has(metaCode);
-      const errorDetail: Json = isWhatsAppError
-        ? error.cause as Json
-        : errorMessage;
+      const { errorDetail, errorMessage, isRetryable, metaCode } =
+        getWhatsAppErrorDetails(error);
 
       if (isRetryable) {
         // Transient: record the error for user visibility but keep retryable (no "failed" key).
@@ -578,8 +447,8 @@ Deno.serve(async (req) => {
 
     await postPayloadToWhatsAppEndpoint({
       payload,
-      phone_number_id: message.organization_address,
-      access_token,
+      phoneNumberId: message.organization_address,
+      accessToken: access_token,
     });
   } else {
     throw new Error(

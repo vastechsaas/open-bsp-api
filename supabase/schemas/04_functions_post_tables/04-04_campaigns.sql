@@ -238,7 +238,7 @@ declare
   mapping_key text;
   mapping_value text;
   csv_column text;
-  queued_count bigint;
+  snapshot_count bigint;
 begin
   if not exists (
     select 1
@@ -410,23 +410,244 @@ begin
       on conflict (campaign_id, contact_address) do nothing;
   end case;
 
-  get diagnostics queued_count = row_count;
+  get diagnostics snapshot_count = row_count;
 
-  if queued_count = 0 then
+  if snapshot_count = 0 then
     raise exception using
       errcode = '23514',
       message = 'campaign audience is empty';
   end if;
 
   update public.campaigns
-  set status = 'queued'
+  set
+    status = 'queued',
+    queued_count = snapshot_count,
+    processing_count = 0,
+    accepted_count = 0,
+    failed_count = 0
   where id = p_campaign_id
     and organization_id = p_organization_id;
 
-  return queued_count;
+  return snapshot_count;
 end;
 $$;
 
 revoke execute on function public.start_campaign(uuid, uuid) from public;
 grant execute on function public.start_campaign(uuid, uuid)
 to anon, authenticated, service_role;
+
+create function public.claim_campaign_deliveries(
+  p_limit integer default 25
+) returns table (
+  delivery_id uuid,
+  campaign_id uuid,
+  organization_id uuid,
+  organization_address text,
+  contact_address text,
+  contact_name text,
+  variables jsonb,
+  template jsonb,
+  template_variable_mapping jsonb,
+  attempts integer
+)
+language plpgsql
+volatile
+security definer
+set search_path to ''
+as $$
+declare
+  target_campaign_id uuid;
+  normalized_limit integer;
+begin
+  normalized_limit := least(greatest(coalesce(p_limit, 25), 1), 25);
+
+  select c.id into target_campaign_id
+  from public.campaigns c
+  where c.status in ('queued', 'running')
+    and c.queued_count > 0
+    and exists (
+      select 1
+      from public.campaign_deliveries d
+      where d.campaign_id = c.id
+        and d.status = 'queued'
+    )
+  order by c.created_at, c.id
+  for update skip locked
+  limit 1;
+
+  if not found then
+    return;
+  end if;
+
+  return query
+  with candidates as (
+    select d.id
+    from public.campaign_deliveries d
+    where d.campaign_id = target_campaign_id
+      and d.status = 'queued'
+    order by d.created_at, d.id
+    for update skip locked
+    limit normalized_limit
+  ),
+  claimed as (
+    update public.campaign_deliveries d
+    set
+      status = 'processing',
+      attempts = d.attempts + 1,
+      error = null
+    from candidates
+    where d.id = candidates.id
+    returning d.*
+  ),
+  campaign_update as (
+    update public.campaigns c
+    set
+      status = 'running',
+      queued_count = c.queued_count - (select count(*)::integer from claimed),
+      processing_count = c.processing_count + (
+        select count(*)::integer from claimed
+      )
+    where c.id = target_campaign_id
+    returning
+      c.id,
+      c.organization_id,
+      c.organization_address,
+      c.template,
+      c.template_variable_mapping
+  )
+  select
+    d.id,
+    d.campaign_id,
+    c.organization_id,
+    c.organization_address,
+    d.contact_address,
+    d.name,
+    d.variables,
+    c.template,
+    c.template_variable_mapping,
+    d.attempts
+  from claimed d
+  cross join campaign_update c
+  order by d.created_at, d.id;
+end;
+$$;
+
+revoke execute on function public.claim_campaign_deliveries(integer) from public;
+grant execute on function public.claim_campaign_deliveries(integer)
+to service_role;
+
+create function public.record_campaign_delivery_result(
+  p_delivery_id uuid,
+  p_external_id text default null,
+  p_error jsonb default null,
+  p_retryable boolean default false
+) returns text
+language plpgsql
+volatile
+security definer
+set search_path to ''
+as $$
+declare
+  delivery public.campaign_deliveries;
+  target_campaign public.campaigns;
+  target_campaign_id uuid;
+  final_status text;
+begin
+  select d.campaign_id into target_campaign_id
+  from public.campaign_deliveries d
+  where d.id = p_delivery_id;
+
+  if not found then
+    raise exception using
+      errcode = 'P0002',
+      message = 'campaign delivery not found';
+  end if;
+
+  select * into target_campaign
+  from public.campaigns c
+  where c.id = target_campaign_id
+  for update;
+
+  select * into delivery
+  from public.campaign_deliveries d
+  where d.id = p_delivery_id
+  for update;
+
+  if delivery.status <> 'processing' then
+    raise exception using
+      errcode = '23514',
+      message = 'campaign delivery is not processing';
+  end if;
+
+  if p_external_id is not null then
+    final_status := 'accepted';
+
+    update public.campaign_deliveries
+    set
+      status = final_status,
+      external_id = p_external_id,
+      error = null
+    where id = p_delivery_id;
+
+    update public.campaigns
+    set
+      processing_count = processing_count - 1,
+      accepted_count = accepted_count + 1
+    where id = target_campaign_id
+    returning * into target_campaign;
+  elsif p_retryable and delivery.attempts < 3 then
+    final_status := 'queued';
+
+    update public.campaign_deliveries
+    set
+      status = final_status,
+      error = p_error
+    where id = p_delivery_id;
+
+    update public.campaigns
+    set
+      processing_count = processing_count - 1,
+      queued_count = queued_count + 1
+    where id = target_campaign_id
+    returning * into target_campaign;
+  else
+    final_status := 'failed';
+
+    update public.campaign_deliveries
+    set
+      status = final_status,
+      error = p_error
+    where id = p_delivery_id;
+
+    update public.campaigns
+    set
+      processing_count = processing_count - 1,
+      failed_count = failed_count + 1
+    where id = target_campaign_id
+    returning * into target_campaign;
+  end if;
+
+  if target_campaign.queued_count = 0
+    and target_campaign.processing_count = 0
+  then
+    update public.campaigns
+    set status = 'completed'
+    where id = target_campaign_id;
+  end if;
+
+  return final_status;
+end;
+$$;
+
+revoke execute on function public.record_campaign_delivery_result(
+  uuid,
+  text,
+  jsonb,
+  boolean
+) from public;
+grant execute on function public.record_campaign_delivery_result(
+  uuid,
+  text,
+  jsonb,
+  boolean
+) to service_role;

@@ -9,6 +9,10 @@ create table public.campaigns (
   template_variable_mapping jsonb default '{}'::jsonb not null,
   audience_type public.campaign_audience_type not null,
   status text default 'draft'::text not null,
+  queued_count integer default 0 not null,
+  processing_count integer default 0 not null,
+  accepted_count integer default 0 not null,
+  failed_count integer default 0 not null,
   created_at timestamp with time zone default now() not null,
   updated_at timestamp with time zone default now() not null
 );
@@ -50,6 +54,15 @@ check (service = 'whatsapp'::public.service);
 alter table only public.campaigns
 add constraint campaigns_status_check
 check (status in ('draft', 'queued', 'running', 'completed', 'failed'));
+
+alter table only public.campaigns
+add constraint campaigns_delivery_counts_check
+check (
+  queued_count >= 0
+  and processing_count >= 0
+  and accepted_count >= 0
+  and failed_count >= 0
+);
 
 alter table only public.campaigns
 add constraint campaigns_template_check
