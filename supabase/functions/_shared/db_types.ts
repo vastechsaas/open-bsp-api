@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -661,6 +661,114 @@ export type Database = {
           },
         ]
       }
+      campaign_csv_recipients: {
+        Row: {
+          campaign_id: string
+          contact_address: string
+          created_at: string
+          id: string
+          name: string | null
+          organization_id: string
+          updated_at: string
+          variables: Json
+        }
+        Insert: {
+          campaign_id: string
+          contact_address: string
+          created_at?: string
+          id?: string
+          name?: string | null
+          organization_id: string
+          updated_at?: string
+          variables?: Json
+        }
+        Update: {
+          campaign_id?: string
+          contact_address?: string
+          created_at?: string
+          id?: string
+          name?: string | null
+          organization_id?: string
+          updated_at?: string
+          variables?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_csv_recipients_campaign_fkey"
+            columns: ["organization_id", "campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
+      campaigns: {
+        Row: {
+          audience_type: Database["public"]["Enums"]["campaign_audience_type"]
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          organization_address: string
+          organization_id: string
+          service: Database["public"]["Enums"]["service"]
+          status: string
+          template: Json
+          template_variable_mapping: Json
+          updated_at: string
+        }
+        Insert: {
+          audience_type: Database["public"]["Enums"]["campaign_audience_type"]
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          organization_address: string
+          organization_id: string
+          service?: Database["public"]["Enums"]["service"]
+          status?: string
+          template: Json
+          template_variable_mapping?: Json
+          updated_at?: string
+        }
+        Update: {
+          audience_type?: Database["public"]["Enums"]["campaign_audience_type"]
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          organization_address?: string
+          organization_id?: string
+          service?: Database["public"]["Enums"]["service"]
+          status?: string
+          template?: Json
+          template_variable_mapping?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaigns_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaigns_organization_address_fkey"
+            columns: ["organization_id", "organization_address"]
+            isOneToOne: false
+            referencedRelation: "organizations_addresses"
+            referencedColumns: ["organization_id", "address"]
+          },
+          {
+            foreignKeyName: "campaigns_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           created_at: string
@@ -1188,6 +1296,59 @@ export type Database = {
         Args: { role?: Database["public"]["Enums"]["role"] }
         Returns: string[]
       }
+      get_campaign_audience_count: {
+        Args: { p_campaign_id: string; p_organization_id: string }
+        Returns: number
+      }
+      get_campaign_audience_preview: {
+        Args: {
+          p_campaign_id: string
+          p_limit?: number
+          p_organization_id: string
+        }
+        Returns: {
+          contact_address: string
+          name: string
+          variables: Json
+        }[]
+      }
+      get_conversation_queue_conversations: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_organization_id: string
+          p_queue_key: string
+        }
+        Returns: {
+          assigned_agent_id: string | null
+          contact_address: string | null
+          created_at: string
+          extra: Json | null
+          group_address: string | null
+          id: string
+          name: string | null
+          organization_address: string
+          organization_id: string
+          service: Database["public"]["Enums"]["service"]
+          status: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "conversations"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_conversation_queues: {
+        Args: { p_organization_id?: string }
+        Returns: {
+          enabled: boolean
+          key: string
+          label: string
+          order: number
+        }[]
+      }
       init_data: {
         Args: {
           p_limit?: number
@@ -1241,6 +1402,7 @@ export type Database = {
       }
     }
     Enums: {
+      campaign_audience_type: "all_contacts" | "active_24h" | "csv_upload"
       direction: "incoming" | "outgoing" | "internal"
       log_level: "info" | "warning" | "error"
       role: "owner" | "admin" | "member"
@@ -1934,6 +2096,7 @@ export const Constants = {
   },
   public: {
     Enums: {
+      campaign_audience_type: ["all_contacts", "active_24h", "csv_upload"],
       direction: ["incoming", "outgoing", "internal"],
       log_level: ["info", "warning", "error"],
       role: ["owner", "admin", "member"],
