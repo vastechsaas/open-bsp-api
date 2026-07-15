@@ -49,7 +49,7 @@ check (service = 'whatsapp'::public.service);
 
 alter table only public.campaigns
 add constraint campaigns_status_check
-check (status = 'draft');
+check (status in ('draft', 'queued', 'running', 'completed', 'failed'));
 
 alter table only public.campaigns
 add constraint campaigns_template_check
@@ -126,10 +126,77 @@ on public.campaign_csv_recipients
 for each row
 execute function public.moddatetime('updated_at');
 
+create table public.campaign_deliveries (
+  organization_id uuid not null,
+  campaign_id uuid not null,
+  id uuid default gen_random_uuid() not null,
+  contact_address text not null,
+  name text,
+  variables jsonb default '{}'::jsonb not null,
+  status text default 'queued'::text not null,
+  attempts integer default 0 not null,
+  external_id text,
+  error jsonb,
+  created_at timestamp with time zone default now() not null,
+  updated_at timestamp with time zone default now() not null
+);
+
+alter table only public.campaign_deliveries
+add constraint campaign_deliveries_pkey
+primary key (id);
+
+alter table only public.campaign_deliveries
+add constraint campaign_deliveries_campaign_fkey
+foreign key (organization_id, campaign_id)
+references public.campaigns(organization_id, id)
+on delete cascade;
+
+alter table only public.campaign_deliveries
+add constraint campaign_deliveries_campaign_address_key
+unique (campaign_id, contact_address);
+
+alter table only public.campaign_deliveries
+add constraint campaign_deliveries_external_id_key
+unique (external_id);
+
+alter table only public.campaign_deliveries
+add constraint campaign_deliveries_contact_address_check
+check (length(btrim(contact_address)) > 0);
+
+alter table only public.campaign_deliveries
+add constraint campaign_deliveries_variables_check
+check (jsonb_typeof(variables) = 'object');
+
+alter table only public.campaign_deliveries
+add constraint campaign_deliveries_status_check
+check (status in ('queued', 'processing', 'accepted', 'failed'));
+
+alter table only public.campaign_deliveries
+add constraint campaign_deliveries_attempts_check
+check (attempts >= 0);
+
+create index campaign_deliveries_organization_id_idx
+on public.campaign_deliveries
+using btree (organization_id);
+
+create index campaign_deliveries_campaign_status_idx
+on public.campaign_deliveries
+using btree (campaign_id, status, created_at);
+
+create trigger set_updated_at
+before update
+on public.campaign_deliveries
+for each row
+execute function public.moddatetime('updated_at');
+
 grant delete, insert, references, select, trigger, truncate, update
 on table public.campaigns
 to anon, authenticated, service_role;
 
 grant delete, insert, references, select, trigger, truncate, update
 on table public.campaign_csv_recipients
+to anon, authenticated, service_role;
+
+grant delete, insert, references, select, trigger, truncate, update
+on table public.campaign_deliveries
 to anon, authenticated, service_role;

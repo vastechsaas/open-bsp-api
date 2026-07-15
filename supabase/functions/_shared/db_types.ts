@@ -702,6 +702,59 @@ export type Database = {
           },
         ]
       }
+      campaign_deliveries: {
+        Row: {
+          attempts: number
+          campaign_id: string
+          contact_address: string
+          created_at: string
+          error: Json | null
+          external_id: string | null
+          id: string
+          name: string | null
+          organization_id: string
+          status: string
+          updated_at: string
+          variables: Json
+        }
+        Insert: {
+          attempts?: number
+          campaign_id: string
+          contact_address: string
+          created_at?: string
+          error?: Json | null
+          external_id?: string | null
+          id?: string
+          name?: string | null
+          organization_id: string
+          status?: string
+          updated_at?: string
+          variables?: Json
+        }
+        Update: {
+          attempts?: number
+          campaign_id?: string
+          contact_address?: string
+          created_at?: string
+          error?: Json | null
+          external_id?: string | null
+          id?: string
+          name?: string | null
+          organization_id?: string
+          status?: string
+          updated_at?: string
+          variables?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_deliveries_campaign_fkey"
+            columns: ["organization_id", "campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
       campaigns: {
         Row: {
           audience_type: Database["public"]["Enums"]["campaign_audience_type"]
@@ -1376,6 +1429,10 @@ export type Database = {
       org_update_by_admin_rules: {
         Args: { p_id: string; p_name: string }
         Returns: boolean
+      }
+      start_campaign: {
+        Args: { p_campaign_id: string; p_organization_id: string }
+        Returns: number
       }
       unassign_conversation_from_me: {
         Args: { p_conversation_id: string }
