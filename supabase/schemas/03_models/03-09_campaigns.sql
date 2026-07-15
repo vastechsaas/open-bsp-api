@@ -1,0 +1,135 @@
+create table public.campaigns (
+  organization_id uuid not null,
+  id uuid default gen_random_uuid() not null,
+  created_by uuid,
+  name text not null,
+  service public.service default 'whatsapp'::public.service not null,
+  organization_address text not null,
+  template jsonb not null,
+  template_variable_mapping jsonb default '{}'::jsonb not null,
+  audience_type public.campaign_audience_type not null,
+  status text default 'draft'::text not null,
+  created_at timestamp with time zone default now() not null,
+  updated_at timestamp with time zone default now() not null
+);
+
+alter table only public.campaigns
+add constraint campaigns_pkey
+primary key (id);
+
+alter table only public.campaigns
+add constraint campaigns_organization_id_id_key
+unique (organization_id, id);
+
+alter table only public.campaigns
+add constraint campaigns_organization_id_fkey
+foreign key (organization_id)
+references public.organizations(id)
+on delete cascade;
+
+alter table only public.campaigns
+add constraint campaigns_created_by_fkey
+foreign key (created_by)
+references public.agents(id)
+on delete set null;
+
+alter table only public.campaigns
+add constraint campaigns_organization_address_fkey
+foreign key (organization_id, organization_address)
+references public.organizations_addresses(organization_id, address)
+on delete no action;
+
+alter table only public.campaigns
+add constraint campaigns_name_check
+check (length(btrim(name)) > 0);
+
+alter table only public.campaigns
+add constraint campaigns_service_check
+check (service = 'whatsapp'::public.service);
+
+alter table only public.campaigns
+add constraint campaigns_status_check
+check (status = 'draft');
+
+alter table only public.campaigns
+add constraint campaigns_template_check
+check (
+  jsonb_typeof(template) = 'object'
+  and length(coalesce(template->>'id', '')) > 0
+  and length(coalesce(template->>'name', '')) > 0
+  and length(coalesce(template->>'language', '')) > 0
+  and template->>'status' = 'APPROVED'
+);
+
+alter table only public.campaigns
+add constraint campaigns_template_variable_mapping_check
+check (jsonb_typeof(template_variable_mapping) = 'object');
+
+create index campaigns_organization_id_idx
+on public.campaigns
+using btree (organization_id);
+
+create index campaigns_organization_updated_at_idx
+on public.campaigns
+using btree (organization_id, updated_at desc);
+
+create trigger set_updated_at
+before update
+on public.campaigns
+for each row
+execute function public.moddatetime('updated_at');
+
+create table public.campaign_csv_recipients (
+  organization_id uuid not null,
+  campaign_id uuid not null,
+  id uuid default gen_random_uuid() not null,
+  contact_address text not null,
+  name text,
+  variables jsonb default '{}'::jsonb not null,
+  created_at timestamp with time zone default now() not null,
+  updated_at timestamp with time zone default now() not null
+);
+
+alter table only public.campaign_csv_recipients
+add constraint campaign_csv_recipients_pkey
+primary key (id);
+
+alter table only public.campaign_csv_recipients
+add constraint campaign_csv_recipients_campaign_fkey
+foreign key (organization_id, campaign_id)
+references public.campaigns(organization_id, id)
+on delete cascade;
+
+alter table only public.campaign_csv_recipients
+add constraint campaign_csv_recipients_campaign_address_key
+unique (campaign_id, contact_address);
+
+alter table only public.campaign_csv_recipients
+add constraint campaign_csv_recipients_contact_address_check
+check (length(btrim(contact_address)) > 0);
+
+alter table only public.campaign_csv_recipients
+add constraint campaign_csv_recipients_variables_check
+check (jsonb_typeof(variables) = 'object');
+
+create index campaign_csv_recipients_organization_id_idx
+on public.campaign_csv_recipients
+using btree (organization_id);
+
+create index campaign_csv_recipients_campaign_id_idx
+on public.campaign_csv_recipients
+using btree (campaign_id);
+
+create trigger set_updated_at
+before update
+on public.campaign_csv_recipients
+for each row
+execute function public.moddatetime('updated_at');
+
+grant delete, insert, references, select, trigger, truncate, update
+on table public.campaigns
+to anon, authenticated, service_role;
+
+grant delete, insert, references, select, trigger, truncate, update
+on table public.campaign_csv_recipients
+to anon, authenticated, service_role;

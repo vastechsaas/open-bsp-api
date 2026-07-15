@@ -21,3 +21,9 @@ create type public.webhook_table as enum (
 );
 
 create type public.role as enum ('owner', 'admin', 'member');
+
+create type public.campaign_audience_type as enum (
+  'all_contacts',
+  'active_24h',
+  'csv_upload'
+);
