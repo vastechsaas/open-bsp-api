@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 
 set local search_path = extensions, public, auth;
 
-select plan(16);
+select plan(30);
 
 insert into public.organizations (id, name, extra)
 values
@@ -126,6 +126,13 @@ values
     'campaign-org-b-main',
     '{}',
     'connected'
+  ),
+  (
+    '13000000-0000-4000-8000-000000000001',
+    'whatsapp',
+    'campaign-org-a-disconnected',
+    '{}',
+    'disconnected'
   );
 
 insert into public.contacts (id, organization_id, name, status)
@@ -330,6 +337,33 @@ values
     'campaign-org-b-main',
     '{"id":"template-1","name":"campaign_template","language":"en_US","status":"APPROVED","components":[]}',
     'all_contacts'
+  ),
+  (
+    '13000000-0000-4000-8000-000000000001',
+    '63000000-0000-4000-8000-000000000005',
+    '33000000-0000-4000-8000-000000000001',
+    'Missing Mapping Campaign',
+    'campaign-org-a-main',
+    '{"id":"template-2","name":"mapped_template","language":"en_US","status":"APPROVED","components":[{"type":"BODY","text":"Hello {{1}}"}]}',
+    'all_contacts'
+  ),
+  (
+    '13000000-0000-4000-8000-000000000001',
+    '63000000-0000-4000-8000-000000000006',
+    '33000000-0000-4000-8000-000000000001',
+    'Empty CSV Campaign',
+    'campaign-org-a-main',
+    '{"id":"template-1","name":"campaign_template","language":"en_US","status":"APPROVED","components":[]}',
+    'csv_upload'
+  ),
+  (
+    '13000000-0000-4000-8000-000000000001',
+    '63000000-0000-4000-8000-000000000007',
+    '33000000-0000-4000-8000-000000000001',
+    'Disconnected Account Campaign',
+    'campaign-org-a-disconnected',
+    '{"id":"template-1","name":"campaign_template","language":"en_US","status":"APPROVED","components":[]}',
+    'all_contacts'
   );
 
 insert into public.campaign_csv_recipients (
@@ -354,6 +388,19 @@ values
     'CSV Bob',
     '{"1":"Bob"}'
   );
+
+insert into public.campaign_deliveries (
+  organization_id,
+  campaign_id,
+  contact_address,
+  name
+)
+values (
+  '13000000-0000-4000-8000-000000000002',
+  '63000000-0000-4000-8000-000000000004',
+  '15559990001',
+  'Other Org Delivery'
+);
 
 select is(
   (
@@ -590,6 +637,163 @@ select throws_ok(
   '23514',
   'Campaign account must be a WhatsApp address in the same organization',
   'campaign validation rejects writes to another organization before persistence'
+);
+
+select throws_ok(
+  $$
+    select public.start_campaign(
+      '13000000-0000-4000-8000-000000000002',
+      '63000000-0000-4000-8000-000000000004'
+    )
+  $$,
+  '42501',
+  'organization is not accessible to the authenticated user',
+  'campaign start denies organizations outside the authenticated user access'
+);
+
+select throws_ok(
+  $$
+    select public.start_campaign(
+      '13000000-0000-4000-8000-000000000001',
+      '63000000-0000-4000-8000-000000000005'
+    )
+  $$,
+  '23514',
+  'campaign template variable body.1 is not mapped',
+  'campaign start requires every template variable mapping'
+);
+
+select throws_ok(
+  $$
+    select public.start_campaign(
+      '13000000-0000-4000-8000-000000000001',
+      '63000000-0000-4000-8000-000000000006'
+    )
+  $$,
+  '23514',
+  'campaign audience is empty',
+  'campaign start rejects an empty audience'
+);
+
+select throws_ok(
+  $$
+    select public.start_campaign(
+      '13000000-0000-4000-8000-000000000001',
+      '63000000-0000-4000-8000-000000000007'
+    )
+  $$,
+  '23514',
+  'campaign WhatsApp account is not connected',
+  'campaign start requires a connected WhatsApp account'
+);
+
+select is(
+  public.start_campaign(
+    '13000000-0000-4000-8000-000000000001',
+    '63000000-0000-4000-8000-000000000001'
+  ),
+  2::bigint,
+  'all contacts campaign snapshots two recipients'
+);
+
+select is(
+  (
+    select status
+    from public.campaigns
+    where id = '63000000-0000-4000-8000-000000000001'
+  ),
+  'queued',
+  'started campaign moves to queued'
+);
+
+select results_eq(
+  $$
+    select contact_address, name, variables, status, attempts
+    from public.campaign_deliveries
+    where campaign_id = '63000000-0000-4000-8000-000000000001'
+    order by contact_address
+  $$,
+  $$
+    values
+      ('15550000001'::text, 'Fresh Contact'::text, '{}'::jsonb, 'queued'::text, 0),
+      ('15550000002'::text, 'Old Contact'::text, '{}'::jsonb, 'queued'::text, 0)
+  $$,
+  'all contacts snapshot stores deduplicated queued deliveries'
+);
+
+select throws_ok(
+  $$
+    select public.start_campaign(
+      '13000000-0000-4000-8000-000000000001',
+      '63000000-0000-4000-8000-000000000001'
+    )
+  $$,
+  '23514',
+  'campaign has already been started',
+  'campaign cannot be started more than once'
+);
+
+select is(
+  public.start_campaign(
+    '13000000-0000-4000-8000-000000000001',
+    '63000000-0000-4000-8000-000000000002'
+  ),
+  1::bigint,
+  'active campaign snapshots only recent incoming recipients'
+);
+
+select results_eq(
+  $$
+    select contact_address
+    from public.campaign_deliveries
+    where campaign_id = '63000000-0000-4000-8000-000000000002'
+  $$,
+  $$ values ('15550000001'::text) $$,
+  'active campaign snapshot is scoped to the selected account and 24 hour window'
+);
+
+select is(
+  public.start_campaign(
+    '13000000-0000-4000-8000-000000000001',
+    '63000000-0000-4000-8000-000000000003'
+  ),
+  2::bigint,
+  'CSV campaign snapshots campaign-only recipients'
+);
+
+select results_eq(
+  $$
+    select contact_address, name, variables
+    from public.campaign_deliveries
+    where campaign_id = '63000000-0000-4000-8000-000000000003'
+    order by contact_address
+  $$,
+  $$
+    values
+      ('15551110001'::text, 'CSV Alice'::text, '{"1":"Alice"}'::jsonb),
+      ('15551110002'::text, 'CSV Bob'::text, '{"1":"Bob"}'::jsonb)
+  $$,
+  'CSV snapshot preserves recipient variables without creating contacts'
+);
+
+select is(
+  (
+    select count(*)::integer
+    from public.campaign_deliveries
+    where organization_id = '13000000-0000-4000-8000-000000000002'
+  ),
+  0,
+  'campaign delivery RLS hides rows from other organizations'
+);
+
+select is_empty(
+  $$
+    update public.campaigns
+    set name = 'Changed after start'
+    where id = '63000000-0000-4000-8000-000000000001'
+    returning 1
+  $$,
+  'members cannot modify campaigns after they are started'
 );
 
 select * from finish();
