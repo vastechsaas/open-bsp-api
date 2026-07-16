@@ -5,6 +5,8 @@ import { HTTPException } from "jsr:@hono/hono/http-exception";
 import { ContentfulStatusCode } from "jsr:@hono/hono/utils/http-status";
 
 const API_VERSION = "v24.0";
+const DEFAULT_ACCESS_TOKEN = Deno.env.get("META_SYSTEM_USER_ACCESS_TOKEN") ||
+  "";
 
 async function getBusinessCredentials(
   client: SupabaseClient<Database>,
@@ -26,7 +28,15 @@ async function getBusinessCredentials(
     });
   }
 
-  return data;
+  const access_token = data.access_token || DEFAULT_ACCESS_TOKEN;
+
+  if (!data.waba_id || !access_token) {
+    throw new HTTPException(422, {
+      message: "WhatsApp account credentials are not configured",
+    });
+  }
+
+  return { waba_id: data.waba_id, access_token };
 }
 
 export async function listTemplates(
