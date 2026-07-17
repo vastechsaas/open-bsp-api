@@ -1045,6 +1045,82 @@ export type Database = {
           },
         ]
       }
+      message_templates: {
+        Row: {
+          category: string
+          components: Json
+          created_at: string
+          created_by: string | null
+          external_id: string | null
+          id: string
+          language: string
+          name: string
+          organization_address: string
+          organization_id: string
+          rejection_reason: string | null
+          status: string
+          submitted_at: string | null
+          synced_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          components?: Json
+          created_at?: string
+          created_by?: string | null
+          external_id?: string | null
+          id?: string
+          language: string
+          name: string
+          organization_address: string
+          organization_id: string
+          rejection_reason?: string | null
+          status?: string
+          submitted_at?: string | null
+          synced_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          components?: Json
+          created_at?: string
+          created_by?: string | null
+          external_id?: string | null
+          id?: string
+          language?: string
+          name?: string
+          organization_address?: string
+          organization_id?: string
+          rejection_reason?: string | null
+          status?: string
+          submitted_at?: string | null
+          synced_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_templates_organization_address_fkey"
+            columns: ["organization_id", "organization_address"]
+            isOneToOne: false
+            referencedRelation: "organizations_addresses"
+            referencedColumns: ["organization_id", "address"]
+          },
+          {
+            foreignKeyName: "message_templates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           agent_id: string | null
@@ -1466,6 +1542,35 @@ export type Database = {
           status: string
           template: Json
           template_variable_mapping: Json
+          total_count: number
+          updated_at: string
+        }[]
+      }
+      list_message_templates_page: {
+        Args: {
+          p_category?: string
+          p_organization_address?: string
+          p_organization_id: string
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+          p_status?: string
+        }
+        Returns: {
+          category: string
+          components: Json
+          created_at: string
+          created_by: string
+          external_id: string
+          id: string
+          language: string
+          name: string
+          organization_address: string
+          organization_id: string
+          rejection_reason: string
+          status: string
+          submitted_at: string
+          synced_at: string
           total_count: number
           updated_at: string
         }[]

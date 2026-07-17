@@ -13,11 +13,18 @@ import {
 } from "../_shared/supabase.ts";
 import {
   createTemplate,
+  createTemplateDraft,
   deleteTemplate,
+  deleteTemplateDraft,
   editTemplate,
   fetchTemplate,
+  listTemplateRecordsPage,
   listTemplates,
+  submitTemplateDraft,
+  syncTemplates,
+  updateTemplateDraft,
 } from "./templates.ts";
+import { parseTemplateDraftInput } from "../_shared/template_validation.ts";
 import {
   deleteSignup,
   performEmbeddedSignup,
@@ -30,6 +37,23 @@ type TemplatePayload = {
   organization_id: string;
   organization_address: string;
   template?: TemplateData;
+};
+
+type TemplateDraftPayload = {
+  organization_id: string;
+  organization_address: string;
+  draft_id?: string;
+  template?: unknown;
+};
+
+type TemplatePagePayload = {
+  organization_id: string;
+  page?: number;
+  page_size?: number;
+  search?: string | null;
+  organization_address?: string | null;
+  category?: string | null;
+  status?: string | null;
 };
 
 type AppEnv = {
@@ -206,6 +230,40 @@ function requireRoles(
   };
 }
 
+function parseDraftInput(value: unknown, requireComplete = false) {
+  try {
+    return parseTemplateDraftInput(value, { requireComplete });
+  } catch (error) {
+    throw new HTTPException(400, {
+      message: error instanceof Error ? error.message : "Template is invalid",
+    });
+  }
+}
+
+async function getCurrentAgentId(
+  c: Context<AppEnv>,
+  organizationId: string,
+): Promise<string | null> {
+  const user = c.get("user");
+  if (!user) return null;
+
+  const { data, error } = await c.get("supabase")
+    .from("agents")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error || !data) {
+    throw new HTTPException(403, {
+      message: "Could not resolve the template creator",
+      cause: error,
+    });
+  }
+
+  return data.id;
+}
+
 // Templates routes
 
 app.put(
@@ -297,6 +355,144 @@ app.delete(
     );
 
     return c.json(response);
+  },
+);
+
+app.put(
+  "/whatsapp-management/templates/page",
+  requireRoles(["member", "admin", "owner"]),
+  async (c) => {
+    const payload = await c.req.json<TemplatePagePayload>();
+
+    return c.json(
+      await listTemplateRecordsPage(
+        c.get("supabase"),
+        payload.organization_id,
+        {
+          page: payload.page,
+          pageSize: payload.page_size,
+          search: payload.search,
+          organizationAddress: payload.organization_address,
+          category: payload.category,
+          status: payload.status,
+        },
+      ),
+    );
+  },
+);
+
+app.post(
+  "/whatsapp-management/templates/sync",
+  requireRoles(["member", "admin", "owner"]),
+  async (c) => {
+    const { organization_id, organization_address } = await c.req
+      .json<TemplateDraftPayload>();
+
+    if (!organization_address) {
+      throw new HTTPException(400, {
+        message: "Missing organization_address",
+      });
+    }
+
+    // Authorization was checked above. The service client is used only for the
+    // local upsert so members can refresh readable Meta state without receiving
+    // direct write permission on message_templates.
+    return c.json(
+      await syncTemplates(
+        createUnsecureClient(),
+        organization_id,
+        organization_address,
+      ),
+    );
+  },
+);
+
+app.post(
+  "/whatsapp-management/template-drafts",
+  requireRoles(["admin", "owner"]),
+  async (c) => {
+    const payload = await c.req.json<TemplateDraftPayload>();
+    if (!payload.organization_address) {
+      throw new HTTPException(400, {
+        message: "Missing organization_address",
+      });
+    }
+
+    return c.json(
+      await createTemplateDraft(
+        c.get("supabase"),
+        payload.organization_id,
+        payload.organization_address,
+        await getCurrentAgentId(c, payload.organization_id),
+        parseDraftInput(payload.template),
+      ),
+      201,
+    );
+  },
+);
+
+app.patch(
+  "/whatsapp-management/template-drafts",
+  requireRoles(["admin", "owner"]),
+  async (c) => {
+    const payload = await c.req.json<TemplateDraftPayload>();
+    if (!payload.draft_id) {
+      throw new HTTPException(400, { message: "Missing draft_id" });
+    }
+    if (!payload.organization_address) {
+      throw new HTTPException(400, {
+        message: "Missing organization_address",
+      });
+    }
+
+    return c.json(
+      await updateTemplateDraft(
+        c.get("supabase"),
+        payload.organization_id,
+        payload.draft_id,
+        payload.organization_address,
+        parseDraftInput(payload.template),
+      ),
+    );
+  },
+);
+
+app.delete(
+  "/whatsapp-management/template-drafts",
+  requireRoles(["admin", "owner"]),
+  async (c) => {
+    const payload = await c.req.json<TemplateDraftPayload>();
+    if (!payload.draft_id) {
+      throw new HTTPException(400, { message: "Missing draft_id" });
+    }
+
+    return c.json(
+      await deleteTemplateDraft(
+        c.get("supabase"),
+        payload.organization_id,
+        payload.draft_id,
+      ),
+    );
+  },
+);
+
+app.post(
+  "/whatsapp-management/template-drafts/submit",
+  requireRoles(["admin", "owner"]),
+  async (c) => {
+    const payload = await c.req.json<TemplateDraftPayload>();
+    if (!payload.draft_id) {
+      throw new HTTPException(400, { message: "Missing draft_id" });
+    }
+
+    return c.json(
+      await submitTemplateDraft(
+        c.get("supabase"),
+        payload.organization_id,
+        payload.draft_id,
+        parseDraftInput(payload.template, true),
+      ),
+    );
   },
 );
 

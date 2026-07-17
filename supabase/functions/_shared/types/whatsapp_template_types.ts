@@ -8,40 +8,45 @@ import type {
 
 // Template data, used to create or update a template message
 
+export type TemplateCategory = "AUTHENTICATION" | "MARKETING" | "UTILITY";
+
+export type TemplateStatus =
+  | "APPROVED"
+  | "IN_APPEAL"
+  | "PENDING"
+  | "REJECTED"
+  | "PENDING_DELETION"
+  | "DELETED"
+  | "DISABLED"
+  | "PAUSED"
+  | "LIMIT_EXCEEDED";
+
 export type TemplateData = {
   id: string;
   name: string;
-  status:
-    | "APPROVED"
-    | "IN_APPEAL"
-    | "PENDING"
-    | "REJECTED"
-    | "PENDING_DELETION"
-    | "DELETED"
-    | "DISABLED"
-    | "PAUSED"
-    | "LIMIT_EXCEEDED";
-  category: "MARKETING"; // TODO: service and auth categories - cabra 2024/09/12
+  status: TemplateStatus;
+  category: TemplateCategory;
   language: string;
-  components: (
-    | BodyComponent
-    | HeaderComponent
-    | FooterComponent
-    | ButtonsComponent
-  )[];
-  sub_category: "CUSTOM";
+  components: TemplateComponent[];
+  sub_category?: "CUSTOM";
+  rejected_reason?: string;
 };
 
-type HeaderComponent = {
+export type TemplateDraftInput = Pick<
+  TemplateData,
+  "name" | "language" | "category" | "components"
+>;
+
+export type HeaderComponent = {
   type: "HEADER";
   text: string;
-  format: "TEXT"; // TODO: other formats such as image - cabra 2024/09/12
+  format: "TEXT";
   example?: {
     header_text: [string];
   };
 };
 
-type BodyComponent = {
+export type BodyComponent = {
   type: "BODY";
   text: string;
   example?: {
@@ -49,20 +54,26 @@ type BodyComponent = {
   };
 };
 
-type FooterComponent = {
+export type FooterComponent = {
   type: "FOOTER";
   text: string;
 };
 
-type ButtonsComponent = {
+export type ButtonsComponent = {
   type: "BUTTONS";
-  buttons: QuickReply[]; // TODO: call to action buttons - cabra 2024/09/12
+  buttons: QuickReply[];
 };
 
-type QuickReply = {
+export type QuickReply = {
   type: "QUICK_REPLY";
   text: string;
 };
+
+export type TemplateComponent =
+  | BodyComponent
+  | HeaderComponent
+  | FooterComponent
+  | ButtonsComponent;
 
 // Template message, used to send a template message
 
