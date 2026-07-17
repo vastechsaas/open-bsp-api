@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 
 set local search_path = extensions, public, auth;
 
-select plan(30);
+select plan(36);
 
 insert into public.organizations (id, name, extra)
 values
@@ -501,6 +501,82 @@ select set_config(
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 set local search_path = extensions, public, auth;
+
+select results_eq(
+  $$
+    select count(*)::integer, max(total_count)::integer
+    from public.list_campaigns_page(
+      '13000000-0000-4000-8000-000000000001',
+      1,
+      2
+    )
+  $$,
+  $$ values (2, 6) $$,
+  'campaign listing returns one backend-paginated page and the full total'
+);
+
+select results_eq(
+  $$
+    select count(*)::integer, max(total_count)::integer
+    from public.list_campaigns_page(
+      '13000000-0000-4000-8000-000000000001',
+      p_page_size => 10,
+      p_audience_type => 'csv_upload'
+    )
+  $$,
+  $$ values (2, 2) $$,
+  'campaign listing applies the audience filter before pagination'
+);
+
+select results_eq(
+  $$
+    select count(*)::integer, max(total_count)::integer
+    from public.list_campaigns_page(
+      '13000000-0000-4000-8000-000000000001',
+      p_page_size => 10,
+      p_readiness => 'ready'
+    )
+  $$,
+  $$ values (4, 4) $$,
+  'campaign listing calculates and filters ready campaigns'
+);
+
+select results_eq(
+  $$
+    select count(*)::integer, max(total_count)::integer
+    from public.list_campaigns_page(
+      '13000000-0000-4000-8000-000000000001',
+      p_page_size => 10,
+      p_readiness => 'needs_attention'
+    )
+  $$,
+  $$ values (2, 2) $$,
+  'campaign listing calculates and filters campaigns needing attention'
+);
+
+select results_eq(
+  $$
+    select name
+    from public.list_campaigns_page(
+      '13000000-0000-4000-8000-000000000001',
+      p_search => 'missing mapping'
+    )
+  $$,
+  $$ values ('Missing Mapping Campaign'::text) $$,
+  'campaign listing searches campaign names before pagination'
+);
+
+select throws_ok(
+  $$
+    select *
+    from public.list_campaigns_page(
+      '13000000-0000-4000-8000-000000000002'
+    )
+  $$,
+  '42501',
+  'organization is not accessible to the authenticated user',
+  'campaign listing denies organizations outside the authenticated user access'
+);
 
 select is(
   public.get_campaign_audience_count(
