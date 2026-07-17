@@ -510,14 +510,14 @@ export async function listTemplates(params: ListTemplatesParams) {
     allowedAccounts,
   });
 
-  const templates = await listTemplatesMethod(
+  const response = await listTemplatesMethod(
     params.supabase,
     params.orgId,
     account.address,
   );
 
   return {
-    templates: templates.map((t: TemplateData) => ({
+    templates: response.data.map((t: TemplateData) => ({
       id: t.id,
       name: t.name,
       status: t.status,

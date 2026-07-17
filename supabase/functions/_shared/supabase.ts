@@ -60,8 +60,12 @@ export type {
 } from "./types/whatsapp_webhook_message_types.ts";
 export type {
   Template,
+  TemplateCategory,
+  TemplateComponent,
   TemplateData,
+  TemplateDraftInput,
   TemplateMessage,
+  TemplateStatus,
 } from "./types/whatsapp_template_types.ts";
 export type {
   EndpointMessage,
