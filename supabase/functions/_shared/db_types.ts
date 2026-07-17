@@ -1439,6 +1439,37 @@ export type Database = {
         }
         Returns: Json
       }
+      list_campaigns_page: {
+        Args: {
+          p_audience_type?: Database["public"]["Enums"]["campaign_audience_type"]
+          p_organization_id: string
+          p_page?: number
+          p_page_size?: number
+          p_readiness?: string
+          p_search?: string
+        }
+        Returns: {
+          accepted_count: number
+          audience_count: number
+          audience_type: Database["public"]["Enums"]["campaign_audience_type"]
+          created_at: string
+          created_by: string
+          failed_count: number
+          id: string
+          name: string
+          organization_address: string
+          organization_id: string
+          processing_count: number
+          queued_count: number
+          readiness: string
+          service: Database["public"]["Enums"]["service"]
+          status: string
+          template: Json
+          template_variable_mapping: Json
+          total_count: number
+          updated_at: string
+        }[]
+      }
       member_self_update_rules: {
         Args: {
           p_ai: boolean
