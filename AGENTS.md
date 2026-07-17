@@ -63,6 +63,30 @@ The UI mirrors this generated file at:
 
 When syncing to UI, ensure the generated types include the `billing` schema.
 
+## Paginated data-table APIs
+
+Use backend pagination for list screens that can grow. Do not fetch every row
+and paginate with frontend `slice()`.
+
+- Create a module-specific RPC with the shared pagination contract:
+  `p_organization_id`, `p_page`, `p_page_size`, optional `p_search`, and
+  module-specific filters.
+- Return the requested rows with `total_count` so the UI can calculate page
+  controls without a second count request.
+- Apply organization authorization, search, and filters before counting and
+  pagination. Keep RLS active and use deterministic ordering with a unique
+  tie-breaker such as `updated_at desc, id desc`.
+- Cap `p_page_size` at a safe value. The frontend standard options are 10, 25,
+  and 50 rows.
+- Include list-only derived values in the same RPC when practical. Avoid N+1
+  requests such as one count RPC for every visible row.
+- Add database tests for organization isolation, totals, page size, search,
+  filters, and derived list values.
+
+`public.list_campaigns_page` is the reference implementation. Other modules
+should use the same contract while keeping their SQL and filters
+module-specific.
+
 ## Required checks
 
 Run Deno checks from the correct directories:
