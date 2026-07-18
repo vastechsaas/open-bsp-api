@@ -1546,6 +1546,29 @@ export type Database = {
           updated_at: string
         }[]
       }
+      list_members_page: {
+        Args: {
+          p_organization_id: string
+          p_page?: number
+          p_page_size?: number
+          p_role?: Database["public"]["Enums"]["role"]
+          p_search?: string
+          p_status?: string
+        }
+        Returns: {
+          created_at: string
+          email: string
+          id: string
+          name: string
+          organization_id: string
+          picture: string
+          role: Database["public"]["Enums"]["role"]
+          status: string
+          total_count: number
+          updated_at: string
+          user_id: string
+        }[]
+      }
       list_message_templates_page: {
         Args: {
           p_category?: string
