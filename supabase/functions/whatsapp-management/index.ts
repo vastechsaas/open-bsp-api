@@ -16,7 +16,9 @@ import {
   createTemplateDraft,
   deleteTemplate,
   deleteTemplateDraft,
+  deleteTemplateRecord,
   editTemplate,
+  editTemplateRecord,
   fetchTemplate,
   listTemplateRecordsPage,
   listTemplates,
@@ -54,6 +56,11 @@ type TemplatePagePayload = {
   organization_address?: string | null;
   category?: string | null;
   status?: string | null;
+};
+
+type TemplateRecordMutationPayload = {
+  organization_id: string;
+  template?: unknown;
 };
 
 type AppEnv = {
@@ -240,6 +247,14 @@ function parseDraftInput(value: unknown, requireComplete = false) {
   }
 }
 
+function getTemplateId(c: Context<AppEnv>) {
+  const templateId = c.req.param("templateId");
+  if (!templateId) {
+    throw new HTTPException(400, { message: "Missing templateId" });
+  }
+  return templateId;
+}
+
 async function getCurrentAgentId(
   c: Context<AppEnv>,
   organizationId: string,
@@ -355,6 +370,37 @@ app.delete(
     );
 
     return c.json(response);
+  },
+);
+
+app.patch(
+  "/whatsapp-management/templates/:templateId",
+  requireRoles(["admin", "owner"]),
+  async (c) => {
+    const payload = await c.req.json<TemplateRecordMutationPayload>();
+    return c.json(
+      await editTemplateRecord(
+        c.get("supabase"),
+        payload.organization_id,
+        getTemplateId(c),
+        parseDraftInput(payload.template, true),
+      ),
+    );
+  },
+);
+
+app.delete(
+  "/whatsapp-management/templates/:templateId",
+  requireRoles(["admin", "owner"]),
+  async (c) => {
+    const payload = await c.req.json<TemplateRecordMutationPayload>();
+    return c.json(
+      await deleteTemplateRecord(
+        c.get("supabase"),
+        payload.organization_id,
+        getTemplateId(c),
+      ),
+    );
   },
 );
 

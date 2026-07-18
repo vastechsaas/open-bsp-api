@@ -31,6 +31,29 @@ export type TemplatePageParams = {
   status?: string | null;
 };
 
+const EDITABLE_SUBMITTED_TEMPLATE_STATUSES = new Set([
+  "pending",
+  "approved",
+  "rejected",
+]);
+
+export function isEditableSubmittedTemplateStatus(status: string) {
+  return EDITABLE_SUBMITTED_TEMPLATE_STATUSES.has(status.toLowerCase());
+}
+
+export function buildMetaTemplateDeleteUrl(
+  wabaId: string,
+  templateId: string,
+  templateName: string,
+) {
+  const url = new URL(
+    `https://graph.facebook.com/${API_VERSION}/${wabaId}/message_templates`,
+  );
+  url.searchParams.set("hsm_id", templateId);
+  url.searchParams.set("name", templateName);
+  return url;
+}
+
 async function getBusinessCredentials(
   client: SupabaseClient<Database>,
   organization_id: string,
@@ -277,10 +300,7 @@ export async function deleteTemplate(
     organization_id,
     organization_address,
   );
-  const url = new URL(
-    `https://graph.facebook.com/${API_VERSION}/${waba_id}/message_templates`,
-  );
-  url.searchParams.set("name", template.name);
+  const url = buildMetaTemplateDeleteUrl(waba_id, template.id, template.name);
 
   const response = await fetch(url, {
     method: "DELETE",
@@ -288,6 +308,209 @@ export async function deleteTemplate(
   });
 
   return await readMetaResponse(response, "Could not delete template");
+}
+
+async function loadTemplateRecord(
+  client: SupabaseClient<Database>,
+  organizationId: string,
+  templateId: string,
+) {
+  const { data, error } = await client
+    .from("message_templates")
+    .select()
+    .eq("organization_id", organizationId)
+    .eq("id", templateId)
+    .maybeSingle();
+
+  if (error) {
+    throw new HTTPException(400, {
+      message: "Could not load template",
+      cause: error,
+    });
+  }
+  if (!data) {
+    throw new HTTPException(404, { message: "Template not found" });
+  }
+
+  return data;
+}
+
+function asMetaTemplate(
+  record: Awaited<ReturnType<typeof loadTemplateRecord>>,
+  template: TemplateDraftInput,
+): TemplateData {
+  return {
+    id: record.external_id!,
+    name: record.name,
+    language: record.language,
+    status: record.status.toUpperCase() as TemplateData["status"],
+    category: template.category,
+    components: template.components,
+  };
+}
+
+export async function editTemplateRecord(
+  client: SupabaseClient<Database>,
+  organizationId: string,
+  templateId: string,
+  template: TemplateDraftInput,
+) {
+  const record = await loadTemplateRecord(client, organizationId, templateId);
+
+  if (
+    !record.external_id ||
+    !isEditableSubmittedTemplateStatus(record.status)
+  ) {
+    throw new HTTPException(409, {
+      message: "Template cannot be edited in its current status",
+    });
+  }
+
+  const metaTemplate = asMetaTemplate(record, template);
+  await editTemplate(
+    client,
+    organizationId,
+    record.organization_address,
+    metaTemplate,
+  );
+
+  let remoteTemplate: TemplateData | null = null;
+  let syncPending = false;
+  try {
+    remoteTemplate = await fetchTemplate(
+      client,
+      organizationId,
+      record.organization_address,
+      metaTemplate,
+    );
+  } catch (error) {
+    syncPending = true;
+    log.warn("Template was edited but its Meta state could not be refreshed", {
+      organizationId,
+      templateId,
+      error,
+    });
+  }
+
+  const { data, error } = await client
+    .from("message_templates")
+    .update({
+      category: (remoteTemplate?.category || template.category).toLowerCase(),
+      components:
+        (remoteTemplate?.components || template.components) as unknown as Json,
+      ...(remoteTemplate
+        ? {
+          status: remoteTemplate.status.toLowerCase(),
+          rejection_reason: remoteTemplate.rejected_reason || null,
+          synced_at: new Date().toISOString(),
+        }
+        : { synced_at: null }),
+    })
+    .eq("organization_id", organizationId)
+    .eq("id", templateId)
+    .eq("external_id", record.external_id)
+    .select()
+    .maybeSingle();
+
+  if (error || !data) {
+    throw new HTTPException(500, {
+      message: "Template was edited on Meta but could not be saved locally",
+      cause: error,
+    });
+  }
+
+  return { template: data, sync_pending: syncPending };
+}
+
+export async function deleteTemplateRecord(
+  client: SupabaseClient<Database>,
+  organizationId: string,
+  templateId: string,
+) {
+  const record = await loadTemplateRecord(client, organizationId, templateId);
+
+  if (
+    !record.external_id ||
+    !isEditableSubmittedTemplateStatus(record.status)
+  ) {
+    throw new HTTPException(409, {
+      message: "Template cannot be deleted in its current status",
+    });
+  }
+
+  const { data: claimed, error: claimError } = await client
+    .from("message_templates")
+    .update({ status: "pending_deletion" })
+    .eq("organization_id", organizationId)
+    .eq("id", templateId)
+    .eq("status", record.status)
+    .select("id")
+    .maybeSingle();
+
+  if (claimError) {
+    throw new HTTPException(400, {
+      message: "Could not prepare template deletion",
+      cause: claimError,
+    });
+  }
+  if (!claimed) {
+    throw new HTTPException(409, {
+      message: "Template deletion is already in progress",
+    });
+  }
+
+  try {
+    await deleteTemplate(
+      client,
+      organizationId,
+      record.organization_address,
+      asMetaTemplate(record, {
+        name: record.name,
+        language: record.language,
+        category: record.category
+          .toUpperCase() as TemplateDraftInput["category"],
+        components: record
+          .components as unknown as TemplateDraftInput["components"],
+      }),
+    );
+  } catch (error) {
+    const { error: restoreError } = await client
+      .from("message_templates")
+      .update({ status: record.status })
+      .eq("organization_id", organizationId)
+      .eq("id", templateId)
+      .eq("status", "pending_deletion");
+    if (restoreError) {
+      log.error("Could not restore template status after deletion failure", {
+        organizationId,
+        templateId,
+        restoreError,
+      });
+    }
+    throw error;
+  }
+
+  const { data, error } = await client
+    .from("message_templates")
+    .update({
+      status: "deleted",
+      rejection_reason: null,
+      synced_at: new Date().toISOString(),
+    })
+    .eq("organization_id", organizationId)
+    .eq("id", templateId)
+    .eq("status", "pending_deletion")
+    .select()
+    .maybeSingle();
+
+  if (error || !data) {
+    throw new HTTPException(500, {
+      message: "Template was deleted on Meta but could not be saved locally",
+      cause: error,
+    });
+  }
+
+  return { template: data };
 }
 
 export async function createTemplateDraft(
@@ -459,19 +682,41 @@ export async function syncTemplates(
 
   if (!templates.length) return { synced: 0 };
 
+  const { data: deletedTemplates, error: deletedTemplatesError } = await client
+    .from("message_templates")
+    .select("external_id")
+    .eq("organization_id", organizationId)
+    .eq("organization_address", organizationAddress)
+    .eq("status", "deleted");
+
+  if (deletedTemplatesError) {
+    throw new HTTPException(500, {
+      message: "Could not load deleted templates",
+      cause: deletedTemplatesError,
+    });
+  }
+
+  const deletedExternalIds = new Set(
+    deletedTemplates.map((template) => template.external_id).filter(Boolean),
+  );
+
   const syncedAt = new Date().toISOString();
-  const rows = templates.map((template) => ({
-    organization_id: organizationId,
-    organization_address: organizationAddress,
-    external_id: template.id,
-    name: template.name,
-    language: template.language,
-    category: template.category.toLowerCase(),
-    status: template.status.toLowerCase(),
-    components: template.components as unknown as Json,
-    rejection_reason: template.rejected_reason || null,
-    synced_at: syncedAt,
-  }));
+  const rows = templates
+    .filter((template) => !deletedExternalIds.has(template.id))
+    .map((template) => ({
+      organization_id: organizationId,
+      organization_address: organizationAddress,
+      external_id: template.id,
+      name: template.name,
+      language: template.language,
+      category: template.category.toLowerCase(),
+      status: template.status.toLowerCase(),
+      components: template.components as unknown as Json,
+      rejection_reason: template.rejected_reason || null,
+      synced_at: syncedAt,
+    }));
+
+  if (!rows.length) return { synced: 0 };
   const { error } = await client
     .from("message_templates")
     .upsert(rows, {

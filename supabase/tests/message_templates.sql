@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 
 set local search_path = extensions, public, auth;
 
-select plan(18);
+select plan(20);
 
 insert into public.organizations (id, name, extra)
 values
@@ -399,6 +399,33 @@ select throws_ok(
   '42501',
   'organization is not accessible to the authenticated user',
   'template listing denies inaccessible organizations'
+);
+
+update public.message_templates
+set status = 'deleted'
+where name = 'login_code';
+
+select is(
+  (
+    select count(*)::integer
+    from public.list_message_templates_page(
+      '15000000-0000-4000-8000-000000000001'
+    )
+  ),
+  3,
+  'deleted templates are hidden from the default listing'
+);
+
+select results_eq(
+  $$
+    select name
+    from public.list_message_templates_page(
+      '15000000-0000-4000-8000-000000000001',
+      p_status => 'deleted'
+    )
+  $$,
+  $$ values ('login_code'::text) $$,
+  'deleted templates remain queryable for audit'
 );
 
 select lives_ok(

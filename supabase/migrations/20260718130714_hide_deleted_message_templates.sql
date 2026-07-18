@@ -1,40 +1,4 @@
-create function public.enforce_message_template_rules() returns trigger
-language plpgsql
-set search_path to ''
-as $$
-begin
-  if not exists (
-    select 1
-    from public.organizations_addresses
-    where organization_id = new.organization_id
-      and address = new.organization_address
-      and service = 'whatsapp'::public.service
-  ) then
-    raise exception 'Template account must be a WhatsApp address in the same organization'
-      using errcode = '23514';
-  end if;
-
-  if new.created_by is not null and not exists (
-    select 1
-    from public.agents
-    where id = new.created_by
-      and organization_id = new.organization_id
-  ) then
-    raise exception 'Template creator must belong to the template organization'
-      using errcode = '23514';
-  end if;
-
-  return new;
-end;
-$$;
-
-create trigger enforce_message_template_rules
-before insert or update of organization_id, organization_address, created_by
-on public.message_templates
-for each row
-execute function public.enforce_message_template_rules();
-
-create function public.list_message_templates_page(
+create or replace function public.list_message_templates_page(
   p_organization_id uuid,
   p_page integer default 1,
   p_page_size integer default 10,
@@ -165,15 +129,3 @@ begin
   limit normalized_page_size;
 end;
 $$;
-
-grant execute
-on function public.list_message_templates_page(
-  uuid,
-  integer,
-  integer,
-  text,
-  text,
-  text,
-  text
-)
-to anon, authenticated, service_role;
