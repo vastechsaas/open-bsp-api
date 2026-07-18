@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 
 set local search_path = extensions, public, auth;
 
-select plan(14);
+select plan(15);
 
 insert into public.organizations (id, name, extra)
 values
@@ -182,6 +182,19 @@ select results_eq(
   $$,
   $$ values ('active'::text, 2::bigint), ('pending'::text, 1::bigint), ('rejected'::text, 1::bigint) $$,
   'member listing maps invitation states to active, pending, and rejected'
+);
+
+select results_eq(
+  $$
+    select name, is_last_owner
+    from public.list_members_page(
+      '17000000-0000-4000-8000-000000000001',
+      p_status => 'active'
+    )
+    order by name
+  $$,
+  $$ values ('Alice Owner'::text, true), ('Bob Admin'::text, false) $$,
+  'member listing identifies only the final active owner'
 );
 
 select is(
