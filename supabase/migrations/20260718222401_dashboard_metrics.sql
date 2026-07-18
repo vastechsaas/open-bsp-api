@@ -217,5 +217,3 @@ begin
 end;
 $function$
 ;
-
-
