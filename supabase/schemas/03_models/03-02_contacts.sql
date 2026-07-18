@@ -22,6 +22,10 @@ create index contacts_organization_id_idx
 on public.contacts
 using btree (organization_id);
 
+create index contacts_organization_id_created_at_idx
+on public.contacts
+using btree (organization_id, created_at desc);
+
 create trigger set_extra
 before update
 on public.contacts

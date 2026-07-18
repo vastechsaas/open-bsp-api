@@ -70,6 +70,10 @@ create index messages_organization_id_idx
 on public.messages
 using btree (organization_id);
 
+create index messages_organization_id_timestamp_idx
+on public.messages
+using btree (organization_id, timestamp desc);
+
 create index messages_conversation_id_idx
 on public.messages
 using btree (conversation_id);
