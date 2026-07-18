@@ -1,11 +1,9 @@
 name: Release
 
 on:
-  # Using Supabase GitHub integration instead
-  #push:
-  #  branches:
-  #    - main
-  #    - develop
+  push:
+    branches:
+      - meta_vista_backend
   workflow_dispatch:
 
 jobs:
