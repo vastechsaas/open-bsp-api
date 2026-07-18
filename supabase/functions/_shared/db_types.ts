@@ -1505,6 +1505,24 @@ export type Database = {
           order: number
         }[]
       }
+      get_dashboard_metrics: {
+        Args: { p_days?: number; p_organization_id: string }
+        Returns: {
+          active_last_30_days: number
+          active_last_7_days: number
+          active_today: number
+          closed_conversations: number
+          contact_activity: Json
+          message_activity: Json
+          new_contacts: number
+          open_conversations: number
+          period_end: string
+          period_start: string
+          team_snapshot: Json
+          total_contacts: number
+          unassigned_conversations: number
+        }[]
+      }
       init_data: {
         Args: {
           p_limit?: number

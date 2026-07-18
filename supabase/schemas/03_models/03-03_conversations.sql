@@ -43,6 +43,10 @@ create index conversations_organization_id_assigned_agent_id_idx
 on public.conversations
 using btree (organization_id, assigned_agent_id);
 
+create index conversations_organization_id_status_idx
+on public.conversations
+using btree (organization_id, status);
+
 create index conversations_updated_at_idx
 on public.conversations
 using btree (updated_at);
