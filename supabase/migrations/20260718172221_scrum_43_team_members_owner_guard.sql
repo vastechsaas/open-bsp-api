@@ -1,3 +1,12 @@
+drop function if exists public.list_members_page(
+  uuid,
+  integer,
+  integer,
+  text,
+  public.role,
+  text
+);
+
 create function public.list_members_page(
   p_organization_id uuid,
   p_page integer default 1,
