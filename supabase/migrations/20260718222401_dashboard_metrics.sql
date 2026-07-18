@@ -1,4 +1,4 @@
-﻿CREATE INDEX contacts_organization_id_created_at_idx ON public.contacts USING btree (organization_id, created_at DESC);
+CREATE INDEX contacts_organization_id_created_at_idx ON public.contacts USING btree (organization_id, created_at DESC);
 
 CREATE INDEX conversations_organization_id_status_idx ON public.conversations USING btree (organization_id, status);
 
