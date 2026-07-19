@@ -63,6 +63,11 @@ type TemplateRecordMutationPayload = {
   template?: unknown;
 };
 
+type ParsedTemplateMutation = TemplateRecordMutationPayload & {
+  draft_id?: string;
+  media_file?: File;
+};
+
 type AppEnv = {
   Variables: {
     supabase: ReturnType<typeof createClient>;
@@ -247,6 +252,43 @@ function parseDraftInput(value: unknown, requireComplete = false) {
   }
 }
 
+async function parseTemplateMutation(
+  c: Context<AppEnv>,
+): Promise<ParsedTemplateMutation> {
+  if (!c.req.header("content-type")?.includes("multipart/form-data")) {
+    return await c.req.json<ParsedTemplateMutation>();
+  }
+
+  const form = await c.req.formData();
+  const organizationId = form.get("organization_id");
+  const draftId = form.get("draft_id");
+  const templateValue = form.get("template");
+  const fileValue = form.get("file");
+
+  if (typeof organizationId !== "string" || !organizationId) {
+    throw new HTTPException(400, { message: "Missing organization_id" });
+  }
+  if (typeof templateValue !== "string" || !templateValue) {
+    throw new HTTPException(400, { message: "Missing template" });
+  }
+
+  let template: unknown;
+  try {
+    template = JSON.parse(templateValue);
+  } catch {
+    throw new HTTPException(400, { message: "Template JSON is invalid" });
+  }
+
+  return {
+    organization_id: organizationId,
+    draft_id: typeof draftId === "string" && draftId ? draftId : undefined,
+    template,
+    media_file: fileValue instanceof File && fileValue.size > 0
+      ? fileValue
+      : undefined,
+  };
+}
+
 function getTemplateId(c: Context<AppEnv>) {
   const templateId = c.req.param("templateId");
   if (!templateId) {
@@ -377,13 +419,14 @@ app.patch(
   "/whatsapp-management/templates/:templateId",
   requireRoles(["admin", "owner"]),
   async (c) => {
-    const payload = await c.req.json<TemplateRecordMutationPayload>();
+    const payload = await parseTemplateMutation(c);
     return c.json(
       await editTemplateRecord(
         c.get("supabase"),
         payload.organization_id,
         getTemplateId(c),
         parseDraftInput(payload.template, true),
+        payload.media_file,
       ),
     );
   },
@@ -526,7 +569,7 @@ app.post(
   "/whatsapp-management/template-drafts/submit",
   requireRoles(["admin", "owner"]),
   async (c) => {
-    const payload = await c.req.json<TemplateDraftPayload>();
+    const payload = await parseTemplateMutation(c);
     if (!payload.draft_id) {
       throw new HTTPException(400, { message: "Missing draft_id" });
     }
@@ -537,6 +580,7 @@ app.post(
         payload.organization_id,
         payload.draft_id,
         parseDraftInput(payload.template, true),
+        payload.media_file,
       ),
     );
   },

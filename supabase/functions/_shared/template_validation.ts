@@ -8,6 +8,7 @@ const TEMPLATE_CATEGORIES = new Set([
   "MARKETING",
   "UTILITY",
 ]);
+const MEDIA_HEADER_FORMATS = new Set(["IMAGE", "VIDEO", "DOCUMENT"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -57,17 +58,29 @@ function validateComponent(component: unknown): TemplateComponent {
 
   switch (component.type) {
     case "HEADER": {
-      if (
-        component.format !== "TEXT" || typeof component.text !== "string" ||
-        !component.text.trim() || component.text.length > 60
-      ) {
-        throw new Error("template text header is invalid");
+      if (component.format === "TEXT") {
+        if (
+          typeof component.text !== "string" || !component.text.trim() ||
+          component.text.length > 60
+        ) {
+          throw new Error("template text header is invalid");
+        }
+
+        const headerText = isRecord(component.example)
+          ? component.example.header_text
+          : undefined;
+        requireSequentialVariables("header", component.text, headerText);
+        return component as TemplateComponent;
       }
 
-      const headerText = isRecord(component.example)
-        ? component.example.header_text
-        : undefined;
-      requireSequentialVariables("header", component.text, headerText);
+      if (!MEDIA_HEADER_FORMATS.has(String(component.format))) {
+        throw new Error("template media header format is invalid");
+      }
+      if ("text" in component || "example" in component) {
+        throw new Error(
+          "template media header must not contain text or a retained sample",
+        );
+      }
       return component as TemplateComponent;
     }
 
@@ -161,6 +174,13 @@ export function parseTemplateDraftInput(
 
   if (new Set(componentTypes).size !== componentTypes.length) {
     throw new Error("template components cannot be duplicated");
+  }
+
+  const mediaHeader = components.find((component) =>
+    component.type === "HEADER" && component.format !== "TEXT"
+  );
+  if (category === "AUTHENTICATION" && mediaHeader) {
+    throw new Error("authentication templates cannot use media headers");
   }
 
   return {

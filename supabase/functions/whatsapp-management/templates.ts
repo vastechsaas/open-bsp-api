@@ -8,8 +8,18 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import * as log from "../_shared/logger.ts";
 import { HTTPException } from "jsr:@hono/hono/http-exception";
 import { ContentfulStatusCode } from "jsr:@hono/hono/utils/http-status";
+import type { WhatsAppOrganizationAddressExtra } from "../_shared/types/extra_types.ts";
+import {
+  getTemplateMediaHeaderFormat,
+  META_GRAPH_API_VERSION,
+  resolveMetaApplicationId,
+  stripTemplateMediaHandles,
+  uploadMetaResumableMedia,
+  validateTemplateMediaSample,
+  withTemplateMediaHandle,
+} from "../_shared/meta_media.ts";
 
-const API_VERSION = "v24.0";
+const API_VERSION = META_GRAPH_API_VERSION;
 const DEFAULT_ACCESS_TOKEN = Deno.env.get("META_SYSTEM_USER_ACCESS_TOKEN") ||
   "";
 
@@ -58,10 +68,14 @@ async function getBusinessCredentials(
   client: SupabaseClient<Database>,
   organization_id: string,
   organization_address: string,
-): Promise<{ waba_id: string; access_token: string }> {
+): Promise<{
+  waba_id: string;
+  access_token: string;
+  extra: WhatsAppOrganizationAddressExtra;
+}> {
   const { data, error } = await client
     .from("organizations_addresses")
-    .select("extra->>waba_id, extra->>access_token")
+    .select("extra")
     .eq("organization_id", organization_id)
     .eq("address", organization_address)
     .eq("service", "whatsapp")
@@ -75,15 +89,40 @@ async function getBusinessCredentials(
     });
   }
 
-  const access_token = data.access_token || DEFAULT_ACCESS_TOKEN;
+  const extra = (data.extra as WhatsAppOrganizationAddressExtra | null) || {};
+  const access_token = extra.access_token || DEFAULT_ACCESS_TOKEN;
 
-  if (!data.waba_id || !access_token) {
+  if (!extra.waba_id || !access_token) {
     throw new HTTPException(422, {
       message: "WhatsApp account credentials are not configured",
     });
   }
 
-  return { waba_id: data.waba_id, access_token };
+  return { waba_id: extra.waba_id, access_token, extra };
+}
+
+async function prepareTemplateForMeta(
+  template: TemplateDraftInput,
+  mediaFile: File | undefined,
+  credentials: Awaited<ReturnType<typeof getBusinessCredentials>>,
+) {
+  const mediaFormat = getTemplateMediaHeaderFormat(template);
+  if (!mediaFormat) {
+    if (mediaFile) {
+      throw new HTTPException(400, {
+        message: "A media sample can only be used with a media header",
+      });
+    }
+    return template;
+  }
+
+  const file = validateTemplateMediaSample(mediaFile, mediaFormat);
+  const handle = await uploadMetaResumableMedia(
+    resolveMetaApplicationId(credentials.extra),
+    credentials.access_token,
+    file,
+  );
+  return withTemplateMediaHandle(template, handle);
 }
 
 async function readMetaResponse<T>(
@@ -216,26 +255,32 @@ async function submitTemplateToMeta(
   organization_id: string,
   organization_address: string,
   template: TemplateDraftInput,
+  mediaFile?: File,
 ): Promise<{ id: string; status: string; category: string }> {
-  const { waba_id, access_token } = await getBusinessCredentials(
+  const credentials = await getBusinessCredentials(
     client,
     organization_id,
     organization_address,
   );
+  const metaTemplate = await prepareTemplateForMeta(
+    template,
+    mediaFile,
+    credentials,
+  );
 
   const response = await fetch(
-    `https://graph.facebook.com/${API_VERSION}/${waba_id}/message_templates`,
+    `https://graph.facebook.com/${API_VERSION}/${credentials.waba_id}/message_templates`,
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${access_token}`,
+        Authorization: `Bearer ${credentials.access_token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        name: template.name,
-        category: template.category,
-        language: template.language,
-        components: template.components,
+        name: metaTemplate.name,
+        category: metaTemplate.category,
+        language: metaTemplate.language,
+        components: metaTemplate.components,
         allow_category_change: true,
       }),
     },
@@ -252,12 +297,14 @@ export async function createTemplate(
   organization_id: string,
   organization_address: string,
   template: TemplateData,
+  mediaFile?: File,
 ): Promise<{ id: string; status: string; category: string }> {
   return await submitTemplateToMeta(
     client,
     organization_id,
     organization_address,
     template,
+    mediaFile,
   );
 }
 
@@ -266,20 +313,26 @@ export async function editTemplate(
   organization_id: string,
   organization_address: string,
   template: TemplateData,
+  mediaFile?: File,
 ): Promise<{ success: boolean }> {
-  const { access_token } = await getBusinessCredentials(
+  const credentials = await getBusinessCredentials(
     client,
     organization_id,
     organization_address,
   );
+  const metaTemplate = await prepareTemplateForMeta(
+    template,
+    mediaFile,
+    credentials,
+  );
 
-  const { category, components } = template;
+  const { category, components } = metaTemplate;
   const response = await fetch(
     `https://graph.facebook.com/${API_VERSION}/${template.id}`,
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${access_token}`,
+        Authorization: `Bearer ${credentials.access_token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ category, components }),
@@ -354,6 +407,7 @@ export async function editTemplateRecord(
   organizationId: string,
   templateId: string,
   template: TemplateDraftInput,
+  mediaFile?: File,
 ) {
   const record = await loadTemplateRecord(client, organizationId, templateId);
 
@@ -372,6 +426,7 @@ export async function editTemplateRecord(
     organizationId,
     record.organization_address,
     metaTemplate,
+    mediaFile,
   );
 
   let remoteTemplate: TemplateData | null = null;
@@ -392,12 +447,16 @@ export async function editTemplateRecord(
     });
   }
 
+  const canonicalTemplate = stripTemplateMediaHandles(template);
+  const canonicalRemoteTemplate = remoteTemplate
+    ? stripTemplateMediaHandles(remoteTemplate)
+    : null;
   const { data, error } = await client
     .from("message_templates")
     .update({
       category: (remoteTemplate?.category || template.category).toLowerCase(),
-      components:
-        (remoteTemplate?.components || template.components) as unknown as Json,
+      components: (canonicalRemoteTemplate?.components ||
+        canonicalTemplate.components) as unknown as Json,
       ...(remoteTemplate
         ? {
           status: remoteTemplate.status.toLowerCase(),
@@ -520,6 +579,7 @@ export async function createTemplateDraft(
   createdBy: string | null,
   template: TemplateDraftInput,
 ) {
+  const canonicalTemplate = stripTemplateMediaHandles(template);
   const { data, error } = await client
     .from("message_templates")
     .insert({
@@ -529,7 +589,7 @@ export async function createTemplateDraft(
       name: template.name,
       language: template.language,
       category: template.category.toLowerCase(),
-      components: template.components as unknown as Json,
+      components: canonicalTemplate.components as unknown as Json,
       status: "draft",
     })
     .select()
@@ -552,6 +612,7 @@ export async function updateTemplateDraft(
   organizationAddress: string,
   template: TemplateDraftInput,
 ) {
+  const canonicalTemplate = stripTemplateMediaHandles(template);
   const { data, error } = await client
     .from("message_templates")
     .update({
@@ -559,7 +620,7 @@ export async function updateTemplateDraft(
       name: template.name,
       language: template.language,
       category: template.category.toLowerCase(),
-      components: template.components as unknown as Json,
+      components: canonicalTemplate.components as unknown as Json,
     })
     .eq("organization_id", organizationId)
     .eq("id", draftId)
@@ -612,6 +673,7 @@ export async function submitTemplateDraft(
   organizationId: string,
   draftId: string,
   template: TemplateDraftInput,
+  mediaFile?: File,
 ) {
   const { data: draft, error: draftError } = await client
     .from("message_templates")
@@ -636,17 +698,19 @@ export async function submitTemplateDraft(
     organizationId,
     draft.organization_address,
     template,
+    mediaFile,
   );
   const now = new Date().toISOString();
   const status = metaTemplate.status.toLowerCase();
 
+  const canonicalTemplate = stripTemplateMediaHandles(template);
   const { data, error } = await client
     .from("message_templates")
     .update({
       name: template.name,
       language: template.language,
       category: metaTemplate.category.toLowerCase(),
-      components: template.components as unknown as Json,
+      components: canonicalTemplate.components as unknown as Json,
       external_id: metaTemplate.id,
       status,
       rejection_reason: null,
