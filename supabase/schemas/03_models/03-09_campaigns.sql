@@ -7,6 +7,7 @@ create table public.campaigns (
   organization_address text not null,
   template jsonb not null,
   template_variable_mapping jsonb default '{}'::jsonb not null,
+  header_media jsonb,
   audience_type public.campaign_audience_type not null,
   status text default 'draft'::text not null,
   queued_count integer default 0 not null,
@@ -77,6 +78,20 @@ check (
 alter table only public.campaigns
 add constraint campaigns_template_variable_mapping_check
 check (jsonb_typeof(template_variable_mapping) = 'object');
+
+alter table only public.campaigns
+add constraint campaigns_header_media_check
+check (
+  header_media is null
+  or (
+    jsonb_typeof(header_media) = 'object'
+    and header_media->>'format' in ('IMAGE', 'VIDEO', 'DOCUMENT')
+    and length(coalesce(header_media->>'media_id', '')) > 0
+    and length(coalesce(header_media->>'file_name', '')) > 0
+    and length(coalesce(header_media->>'mime_type', '')) > 0
+    and (header_media->>'size')::bigint > 0
+  )
+);
 
 create index campaigns_organization_id_idx
 on public.campaigns

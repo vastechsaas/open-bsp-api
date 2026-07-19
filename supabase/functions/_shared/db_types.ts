@@ -762,6 +762,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           failed_count: number
+          header_media: Json | null
           id: string
           name: string
           organization_address: string
@@ -780,6 +781,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           failed_count?: number
+          header_media?: Json | null
           id?: string
           name: string
           organization_address: string
@@ -798,6 +800,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           failed_count?: number
+          header_media?: Json | null
           id?: string
           name?: string
           organization_address?: string
@@ -1431,6 +1434,7 @@ export type Database = {
           contact_address: string
           contact_name: string
           delivery_id: string
+          header_media: Json
           organization_address: string
           organization_id: string
           template: Json
@@ -1549,6 +1553,7 @@ export type Database = {
           created_at: string
           created_by: string
           failed_count: number
+          header_media: Json
           id: string
           name: string
           organization_address: string

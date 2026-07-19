@@ -238,6 +238,7 @@ create function public.list_campaigns_page(
   organization_address text,
   template jsonb,
   template_variable_mapping jsonb,
+  header_media jsonb,
   audience_type public.campaign_audience_type,
   status text,
   queued_count integer,
@@ -344,6 +345,20 @@ begin
           and not exists (
             select 1
             from jsonb_array_elements(
+              case when jsonb_typeof(counted.template->'components') = 'array'
+                then counted.template->'components' else '[]'::jsonb end
+            ) as media_component(value)
+            where media_component.value->>'type' = 'HEADER'
+              and media_component.value->>'format' in ('IMAGE', 'VIDEO', 'DOCUMENT')
+              and (
+                counted.header_media is null
+                or counted.header_media->>'format' <> media_component.value->>'format'
+                or coalesce(counted.header_media->>'media_id', '') = ''
+              )
+          )
+          and not exists (
+            select 1
+            from jsonb_array_elements(
               case
                 when jsonb_typeof(counted.template->'components') = 'array'
                   then counted.template->'components'
@@ -381,6 +396,7 @@ begin
     classified.organization_address,
     classified.template,
     classified.template_variable_mapping,
+    classified.header_media,
     classified.audience_type,
     classified.status,
     classified.queued_count,
@@ -464,6 +480,25 @@ begin
     raise exception using
       errcode = '23514',
       message = 'campaign template is not approved';
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_array_elements(
+      case when jsonb_typeof(campaign.template->'components') = 'array'
+        then campaign.template->'components' else '[]'::jsonb end
+    ) component(value)
+    where component.value->>'type' = 'HEADER'
+      and component.value->>'format' in ('IMAGE', 'VIDEO', 'DOCUMENT')
+      and (
+        campaign.header_media is null
+        or campaign.header_media->>'format' <> component.value->>'format'
+        or coalesce(campaign.header_media->>'media_id', '') = ''
+      )
+  ) then
+    raise exception using
+      errcode = '23514',
+      message = 'campaign media is missing or does not match the template header';
   end if;
 
   if jsonb_typeof(campaign.template->'components') = 'array' then
@@ -627,6 +662,7 @@ create function public.claim_campaign_deliveries(
   variables jsonb,
   template jsonb,
   template_variable_mapping jsonb,
+  header_media jsonb,
   attempts integer
 )
 language plpgsql
@@ -692,7 +728,8 @@ begin
       c.organization_id,
       c.organization_address,
       c.template,
-      c.template_variable_mapping
+      c.template_variable_mapping,
+      c.header_media
   )
   select
     d.id,
@@ -704,6 +741,7 @@ begin
     d.variables,
     c.template,
     c.template_variable_mapping,
+    c.header_media,
     d.attempts
   from claimed d
   cross join campaign_update c
