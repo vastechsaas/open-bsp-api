@@ -74,3 +74,53 @@ Deno.test("buildCampaignTemplatePayload rejects missing recipient values", () =>
     "Campaign variable contact.name has no value",
   );
 });
+
+for (
+  const media of [
+    { format: "IMAGE", type: "image", value: { id: "media-image" } },
+    { format: "VIDEO", type: "video", value: { id: "media-video" } },
+    {
+      format: "DOCUMENT",
+      type: "document",
+      value: { id: "media-pdf", filename: "offer.pdf" },
+    },
+  ] as const
+) {
+  Deno.test(`buildCampaignTemplatePayload adds ${media.type} header media`, () => {
+    const mediaId = `media-${media.type === "document" ? "pdf" : media.type}`;
+    const payload = buildCampaignTemplatePayload({
+      template: {
+        id: "template-media",
+        name: "promotion",
+        language: "en_US",
+        status: "APPROVED",
+        components: [
+          { type: "HEADER", format: media.format },
+          { type: "BODY", text: "Hello" },
+        ],
+      },
+      mapping: {},
+      headerMedia: {
+        format: media.format,
+        media_id: mediaId,
+        file_name: media.format === "DOCUMENT" ? "offer.pdf" : "asset",
+        mime_type: "test/type",
+        size: 1,
+      },
+      delivery: {
+        contactAddress: "15551110001",
+        contactName: "Alice",
+        variables: {},
+      },
+      to: "15551110001",
+    });
+
+    if (payload.type !== "template") {
+      throw new Error("Expected template payload");
+    }
+    assertEquals(payload.template.components?.[0], {
+      type: "header",
+      parameters: [{ type: media.type, [media.type]: media.value }],
+    });
+  });
+}

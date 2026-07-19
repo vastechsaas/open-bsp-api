@@ -66,6 +66,7 @@ Deno.serve(async (req) => {
       const payload = buildCampaignTemplatePayload({
         template: delivery.template,
         mapping: delivery.template_variable_mapping,
+        headerMedia: delivery.header_media,
         delivery: {
           contactAddress: delivery.contact_address,
           contactName: delivery.contact_name,

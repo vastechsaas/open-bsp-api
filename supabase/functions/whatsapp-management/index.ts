@@ -34,6 +34,13 @@ import {
 } from "./embedded_signup.ts";
 import { syncWhatsAppProfile, updateWhatsAppProfile } from "./profile.ts";
 import { type User } from "@supabase/supabase-js";
+import {
+  deleteCampaignMedia,
+  proxyCampaignMedia,
+  startCampaignWithMediaValidation,
+  uploadCampaignMedia,
+} from "./campaign_media.ts";
+import type { MediaHeaderFormat } from "../_shared/types/whatsapp_template_types.ts";
 
 type TemplatePayload = {
   organization_id: string;
@@ -177,7 +184,9 @@ function requireRoles(
     // because c.req.json() consumes the stream.
     const request = c.req.raw.clone();
     const contentType = request.headers.get("content-type") || "";
-    const organization_id = contentType.includes("multipart/form-data")
+    const organization_id = request.method === "GET"
+      ? new URL(request.url).searchParams.get("organization_id")
+      : contentType.includes("multipart/form-data")
       ? (await request.formData()).get("organization_id")
       : (await request.json()).organization_id;
 
@@ -581,6 +590,90 @@ app.post(
         payload.draft_id,
         parseDraftInput(payload.template, true),
         payload.media_file,
+      ),
+    );
+  },
+);
+
+// Business profile routes
+
+app.post(
+  "/whatsapp-management/campaign-media",
+  requireRoles(["admin", "owner"]),
+  async (c) => {
+    const form = await c.req.formData();
+    const organizationId = String(form.get("organization_id") || "");
+    const organizationAddress = String(form.get("organization_address") || "");
+    const format = String(form.get("format") || "") as MediaHeaderFormat;
+    const file = form.get("file");
+    if (
+      !organizationAddress || !["IMAGE", "VIDEO", "DOCUMENT"].includes(format)
+    ) {
+      throw new HTTPException(400, {
+        message: "Campaign media account or format is invalid",
+      });
+    }
+    if (!(file instanceof File)) {
+      throw new HTTPException(400, {
+        message: "Campaign media file is required",
+      });
+    }
+    return c.json(
+      await uploadCampaignMedia(
+        c.get("supabase"),
+        organizationId,
+        organizationAddress,
+        format,
+        file,
+      ),
+      201,
+    );
+  },
+);
+
+app.get(
+  "/whatsapp-management/campaign-media/:mediaId",
+  requireRoles(["member", "admin", "owner"]),
+  async (c) => {
+    const organizationId = c.req.query("organization_id") || "";
+    const organizationAddress = c.req.query("organization_address") || "";
+    return await proxyCampaignMedia(
+      c.get("supabase"),
+      organizationId,
+      organizationAddress,
+      c.req.param("mediaId")!,
+    );
+  },
+);
+
+app.delete(
+  "/whatsapp-management/campaign-media/:mediaId",
+  requireRoles(["admin", "owner"]),
+  async (c) => {
+    const payload = await c.req.json<
+      { organization_id: string; organization_address: string }
+    >();
+    return c.json(
+      await deleteCampaignMedia(
+        c.get("supabase"),
+        payload.organization_id,
+        payload.organization_address,
+        c.req.param("mediaId")!,
+      ),
+    );
+  },
+);
+
+app.post(
+  "/whatsapp-management/campaigns/:campaignId/start",
+  requireRoles(["admin", "owner"]),
+  async (c) => {
+    const { organization_id } = await c.req.json<{ organization_id: string }>();
+    return c.json(
+      await startCampaignWithMediaValidation(
+        c.get("supabase"),
+        organization_id,
+        c.req.param("campaignId")!,
       ),
     );
   },

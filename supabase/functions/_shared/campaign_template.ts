@@ -1,5 +1,6 @@
 import type { Json } from "./db_types.ts";
 import type { EndpointMessage } from "./types/whatsapp_endpoint_types.ts";
+import type { Template } from "./types/whatsapp_template_types.ts";
 
 type JsonRecord = Record<string, Json | undefined>;
 
@@ -50,12 +51,14 @@ function placeholderIndexes(text: string): number[] {
 export function buildCampaignTemplatePayload({
   template,
   mapping,
+  headerMedia,
   delivery,
   to,
   recipient,
 }: {
   template: Json;
   mapping: Json;
+  headerMedia?: Json;
   delivery: CampaignTemplateDelivery;
   to?: string;
   recipient?: string;
@@ -74,10 +77,37 @@ export function buildCampaignTemplatePayload({
     throw new Error("Campaign recipient is missing");
   }
 
-  const components: Array<{
-    type: "header" | "body";
-    parameters: Array<{ type: "text"; text: string }>;
-  }> = [];
+  const components: NonNullable<Template["components"]> = [];
+
+  const media = asRecord(headerMedia ?? null);
+  if (Array.isArray(rawComponents)) {
+    const mediaHeader = rawComponents.map(asRecord).find((component) =>
+      component.type === "HEADER" &&
+      ["IMAGE", "VIDEO", "DOCUMENT"].includes(String(component.format))
+    );
+    if (mediaHeader) {
+      const format = mediaHeader.format;
+      if (media.format !== format || typeof media.media_id !== "string") {
+        throw new Error(
+          "Campaign media is missing or does not match the template header",
+        );
+      }
+      const parameter = format === "IMAGE"
+        ? { type: "image" as const, image: { id: media.media_id } }
+        : format === "VIDEO"
+        ? { type: "video" as const, video: { id: media.media_id } }
+        : {
+          type: "document" as const,
+          document: {
+            id: media.media_id,
+            ...(typeof media.file_name === "string"
+              ? { filename: media.file_name }
+              : {}),
+          },
+        };
+      components.push({ type: "header", parameters: [parameter] });
+    }
+  }
 
   if (Array.isArray(rawComponents)) {
     for (const rawComponent of rawComponents) {
