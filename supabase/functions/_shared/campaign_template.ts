@@ -138,6 +138,41 @@ export function buildCampaignTemplatePayload({
 
       if (parameters.length) components.push({ type: section, parameters });
     }
+
+    for (const rawComponent of rawComponents) {
+      const component = asRecord(rawComponent);
+      if (component.type !== "BUTTONS" || !Array.isArray(component.buttons)) {
+        continue;
+      }
+
+      component.buttons.forEach((rawButton, buttonIndex) => {
+        const button = asRecord(rawButton);
+        if (
+          button.type !== "URL" || typeof button.url !== "string" ||
+          !button.url.endsWith("{{1}}")
+        ) {
+          return;
+        }
+
+        const mappingKey = `button.${buttonIndex}.1`;
+        const source = mappingRecord[mappingKey];
+        if (typeof source !== "string") {
+          throw new Error(
+            `Campaign template variable ${mappingKey} is not mapped`,
+          );
+        }
+
+        components.push({
+          type: "button",
+          sub_type: "url",
+          index: String(buttonIndex),
+          parameters: [{
+            type: "text",
+            text: mappedValue(source, delivery),
+          }],
+        });
+      });
+    }
   }
 
   return {

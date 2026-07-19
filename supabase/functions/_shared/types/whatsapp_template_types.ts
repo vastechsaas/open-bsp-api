@@ -73,13 +73,31 @@ export type FooterComponent = {
 
 export type ButtonsComponent = {
   type: "BUTTONS";
-  buttons: QuickReply[];
+  buttons: TemplateButtonDefinition[];
 };
 
 export type QuickReply = {
   type: "QUICK_REPLY";
   text: string;
 };
+
+export type UrlButton = {
+  type: "URL";
+  text: string;
+  url: string;
+  example?: [string];
+};
+
+export type PhoneNumberButton = {
+  type: "PHONE_NUMBER";
+  text: string;
+  phone_number: string;
+};
+
+export type TemplateButtonDefinition =
+  | QuickReply
+  | UrlButton
+  | PhoneNumberButton;
 
 export type TemplateComponent =
   | BodyComponent
@@ -145,7 +163,7 @@ type TemplateButton =
     | {
       sub_type: "url";
       parameters: {
-        type: "url";
+        type: "text";
         text: string;
       }[];
     }

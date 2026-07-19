@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 
 set local search_path = extensions, public, auth;
 
-select plan(36);
+select plan(38);
 
 insert into public.organizations (id, name, extra)
 values
@@ -737,6 +737,45 @@ select throws_ok(
   '23514',
   'campaign template variable body.1 is not mapped',
   'campaign start requires every template variable mapping'
+);
+
+update public.campaigns
+set
+  template = jsonb_set(
+    template,
+    '{components}',
+    '[
+      {"type":"BODY","text":"Hello {{1}}"},
+      {"type":"BUTTONS","buttons":[
+        {"type":"URL","text":"View order","url":"https://example.com/orders/{{1}}","example":["https://example.com/orders/ORD-2048"]}
+      ]}
+    ]'::jsonb
+  ),
+  template_variable_mapping = '{"body.1":"contact.name"}'::jsonb
+where id = '63000000-0000-4000-8000-000000000005';
+
+select is(
+  (
+    select readiness
+    from public.list_campaigns_page(
+      '13000000-0000-4000-8000-000000000001',
+      p_search => 'missing mapping'
+    )
+  ),
+  'needs_attention'::text,
+  'campaign readiness requires dynamic website button mapping'
+);
+
+select throws_ok(
+  $$
+    select public.start_campaign(
+      '13000000-0000-4000-8000-000000000001',
+      '63000000-0000-4000-8000-000000000005'
+    )
+  $$,
+  '23514',
+  'campaign template variable button.0.1 is not mapped',
+  'campaign start requires dynamic website button mapping'
 );
 
 select throws_ok(

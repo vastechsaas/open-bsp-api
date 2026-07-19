@@ -75,6 +75,83 @@ Deno.test("buildCampaignTemplatePayload rejects missing recipient values", () =>
   );
 });
 
+Deno.test("buildCampaignTemplatePayload maps dynamic website button values", () => {
+  const payload = buildCampaignTemplatePayload({
+    template: {
+      id: "template-cta",
+      name: "order_update",
+      language: "en_US",
+      status: "APPROVED",
+      components: [
+        { type: "BODY", text: "Your order is ready." },
+        {
+          type: "BUTTONS",
+          buttons: [
+            { type: "QUICK_REPLY", text: "Help" },
+            {
+              type: "URL",
+              text: "Track order",
+              url: "https://example.com/orders/{{1}}",
+              example: ["https://example.com/orders/ORD-2048"],
+            },
+            {
+              type: "PHONE_NUMBER",
+              text: "Call",
+              phone_number: "+15551234567",
+            },
+          ],
+        },
+      ],
+    },
+    mapping: { "button.1.1": "csv.order_id" },
+    delivery: {
+      contactAddress: "15551110001",
+      contactName: "Alice",
+      variables: { order_id: "ORD-2048" },
+    },
+    to: "15551110001",
+  });
+
+  if (payload.type !== "template") throw new Error("Expected template payload");
+  assertEquals(payload.template.components, [{
+    type: "button",
+    sub_type: "url",
+    index: "1",
+    parameters: [{ type: "text", text: "ORD-2048" }],
+  }]);
+});
+
+Deno.test("buildCampaignTemplatePayload rejects an unmapped dynamic website button", () => {
+  assertThrows(
+    () =>
+      buildCampaignTemplatePayload({
+        template: {
+          id: "template-cta",
+          name: "order_update",
+          language: "en_US",
+          status: "APPROVED",
+          components: [{
+            type: "BUTTONS",
+            buttons: [{
+              type: "URL",
+              text: "Track order",
+              url: "https://example.com/orders/{{1}}",
+              example: ["https://example.com/orders/ORD-2048"],
+            }],
+          }],
+        },
+        mapping: {},
+        delivery: {
+          contactAddress: "15551110001",
+          contactName: "Alice",
+          variables: {},
+        },
+        to: "15551110001",
+      }),
+    "Campaign template variable button.0.1 is not mapped",
+  );
+});
+
 for (
   const media of [
     { format: "IMAGE", type: "image", value: { id: "media-image" } },

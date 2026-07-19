@@ -9,6 +9,8 @@ const TEMPLATE_CATEGORIES = new Set([
   "UTILITY",
 ]);
 const MEDIA_HEADER_FORMATS = new Set(["IMAGE", "VIDEO", "DOCUMENT"]);
+const E164_PHONE_NUMBER = /^\+[1-9]\d{4,14}$/;
+const DYNAMIC_URL_VARIABLE = "{{1}}";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -49,6 +51,47 @@ function requireSequentialVariables(
   ) {
     throw new Error(`${section} variable samples cannot be empty`);
   }
+}
+
+function isHttpsUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value.replace(DYNAMIC_URL_VARIABLE, "sample"));
+    return parsed.protocol === "https:" && !!parsed.hostname;
+  } catch {
+    return false;
+  }
+}
+
+function validateButton(button: unknown): boolean {
+  if (
+    !isRecord(button) || typeof button.text !== "string" ||
+    !button.text.trim() || button.text.length > 25
+  ) {
+    return false;
+  }
+
+  if (button.type === "QUICK_REPLY") return true;
+
+  if (button.type === "PHONE_NUMBER") {
+    return typeof button.phone_number === "string" &&
+      E164_PHONE_NUMBER.test(button.phone_number);
+  }
+
+  if (button.type !== "URL" || typeof button.url !== "string") return false;
+
+  const occurrences = button.url.match(/\{\{1\}\}/g)?.length ?? 0;
+  if (
+    button.url.length > 2000 || !isHttpsUrl(button.url) || occurrences > 1 ||
+    (occurrences === 1 && !button.url.endsWith(DYNAMIC_URL_VARIABLE))
+  ) {
+    return false;
+  }
+
+  if (occurrences === 0) return button.example === undefined;
+
+  return Array.isArray(button.example) && button.example.length === 1 &&
+    typeof button.example[0] === "string" && !!button.example[0].trim() &&
+    isHttpsUrl(button.example[0]) && !button.example[0].includes("{{");
 }
 
 function validateComponent(component: unknown): TemplateComponent {
@@ -113,13 +156,9 @@ function validateComponent(component: unknown): TemplateComponent {
       if (
         !Array.isArray(component.buttons) || component.buttons.length < 1 ||
         component.buttons.length > 3 ||
-        component.buttons.some((button) =>
-          !isRecord(button) || button.type !== "QUICK_REPLY" ||
-          typeof button.text !== "string" || !button.text.trim() ||
-          button.text.length > 25
-        )
+        component.buttons.some((button) => !validateButton(button))
       ) {
-        throw new Error("template quick-reply buttons are invalid");
+        throw new Error("template buttons are invalid");
       }
       return component as TemplateComponent;
 
@@ -181,6 +220,16 @@ export function parseTemplateDraftInput(
   );
   if (category === "AUTHENTICATION" && mediaHeader) {
     throw new Error("authentication templates cannot use media headers");
+  }
+
+  const buttons = components.find((component) => component.type === "BUTTONS");
+  if (
+    category === "AUTHENTICATION" &&
+    buttons?.buttons.some((button) =>
+      button.type === "URL" || button.type === "PHONE_NUMBER"
+    )
+  ) {
+    throw new Error("authentication templates cannot use CTA buttons");
   }
 
   return {
