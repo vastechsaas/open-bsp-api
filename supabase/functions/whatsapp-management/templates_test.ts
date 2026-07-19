@@ -1,7 +1,9 @@
 import { assertEquals } from "../_shared/test_assert.ts";
 import {
   buildMetaTemplateDeleteUrl,
+  createTemplate,
   deleteTemplateRecord,
+  editTemplate,
   isEditableSubmittedTemplateStatus,
 } from "./templates.ts";
 
@@ -28,7 +30,13 @@ class FakeTemplateClient {
   resolve(query: FakeQuery): FakeResult {
     if (query.table === "organizations_addresses") {
       return {
-        data: { waba_id: "waba-1", access_token: "token-1" },
+        data: {
+          extra: {
+            waba_id: "waba-1",
+            access_token: "token-1",
+            application_id: "app-1",
+          },
+        },
         error: null,
       };
     }
@@ -159,4 +167,107 @@ Deno.test("failed Meta deletion restores the previous local status", async () =>
     true,
   );
   assertEquals(requestedUrl.includes("hsm_id=meta-template-1"), true);
+});
+
+Deno.test("media template creation uploads a sample and sends only the temporary handle", async () => {
+  const client = new FakeTemplateClient();
+  const originalFetch = globalThis.fetch;
+  let templateRequest: Record<string, unknown> | undefined;
+  globalThis.fetch = (input, init) => {
+    const url = String(input);
+    if (url.includes("/app-1/uploads")) {
+      return Promise.resolve(Response.json({ id: "upload-session-1" }));
+    }
+    if (url.endsWith("/upload-session-1")) {
+      return Promise.resolve(Response.json({ h: "meta-handle-1" }));
+    }
+    templateRequest = JSON.parse(String(init?.body));
+    return Promise.resolve(
+      Response.json({
+        id: "meta-template-1",
+        status: "PENDING",
+        category: "UTILITY",
+      }),
+    );
+  };
+
+  try {
+    await createTemplate(
+      client as never,
+      "org-1",
+      "account-1",
+      {
+        id: "",
+        name: "monthly_statement",
+        status: "PENDING",
+        language: "en_US",
+        category: "UTILITY",
+        components: [
+          { type: "HEADER", format: "DOCUMENT" },
+          { type: "BODY", text: "Your statement is ready." },
+        ],
+      },
+      new File([new Uint8Array([1])], "statement.pdf", {
+        type: "application/pdf",
+      }),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assertEquals(
+    (templateRequest?.components as Array<unknown>)[0],
+    {
+      type: "HEADER",
+      format: "DOCUMENT",
+      example: { header_handle: ["meta-handle-1"] },
+    },
+  );
+});
+
+Deno.test("submitted media template editing uploads a fresh sample", async () => {
+  const client = new FakeTemplateClient();
+  const originalFetch = globalThis.fetch;
+  let editRequest: Record<string, unknown> | undefined;
+  globalThis.fetch = (input, init) => {
+    const url = String(input);
+    if (url.includes("/app-1/uploads")) {
+      return Promise.resolve(Response.json({ id: "upload-session-2" }));
+    }
+    if (url.endsWith("/upload-session-2")) {
+      return Promise.resolve(Response.json({ h: "meta-handle-2" }));
+    }
+    editRequest = JSON.parse(String(init?.body));
+    return Promise.resolve(Response.json({ success: true }));
+  };
+
+  try {
+    await editTemplate(
+      client as never,
+      "org-1",
+      "account-1",
+      {
+        id: "meta-template-1",
+        name: "promotion",
+        status: "APPROVED",
+        language: "en_US",
+        category: "MARKETING",
+        components: [
+          { type: "HEADER", format: "IMAGE" },
+          { type: "BODY", text: "See our latest promotion." },
+        ],
+      },
+      new File([new Uint8Array([1])], "promotion.png", {
+        type: "image/png",
+      }),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assertEquals((editRequest?.components as Array<unknown>)[0], {
+    type: "HEADER",
+    format: "IMAGE",
+    example: { header_handle: ["meta-handle-2"] },
+  });
 });

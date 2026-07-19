@@ -37,7 +37,7 @@ export type TemplateDraftInput = Pick<
   "name" | "language" | "category" | "components"
 >;
 
-export type HeaderComponent = {
+export type TextHeaderComponent = {
   type: "HEADER";
   text: string;
   format: "TEXT";
@@ -45,6 +45,18 @@ export type HeaderComponent = {
     header_text: [string];
   };
 };
+
+export type MediaHeaderFormat = "IMAGE" | "VIDEO" | "DOCUMENT";
+
+export type MediaHeaderComponent = {
+  type: "HEADER";
+  format: MediaHeaderFormat;
+  example?: {
+    header_handle: [string];
+  };
+};
+
+export type HeaderComponent = TextHeaderComponent | MediaHeaderComponent;
 
 export type BodyComponent = {
   type: "BODY";

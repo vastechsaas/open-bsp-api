@@ -59,6 +59,7 @@ export type {
   WhatsAppReferral,
 } from "./types/whatsapp_webhook_message_types.ts";
 export type {
+  MediaHeaderFormat,
   Template,
   TemplateCategory,
   TemplateComponent,
