@@ -595,11 +595,11 @@ app.post(
   },
 );
 
-// Business profile routes
+// Campaign media routes
 
 app.post(
   "/whatsapp-management/campaign-media",
-  requireRoles(["admin", "owner"]),
+  requireRoles(["member", "admin", "owner"]),
   async (c) => {
     const form = await c.req.formData();
     const organizationId = String(form.get("organization_id") || "");
@@ -648,7 +648,7 @@ app.get(
 
 app.delete(
   "/whatsapp-management/campaign-media/:mediaId",
-  requireRoles(["admin", "owner"]),
+  requireRoles(["member", "admin", "owner"]),
   async (c) => {
     const payload = await c.req.json<
       { organization_id: string; organization_address: string }
@@ -666,7 +666,7 @@ app.delete(
 
 app.post(
   "/whatsapp-management/campaigns/:campaignId/start",
-  requireRoles(["admin", "owner"]),
+  requireRoles(["member", "admin", "owner"]),
   async (c) => {
     const { organization_id } = await c.req.json<{ organization_id: string }>();
     return c.json(
