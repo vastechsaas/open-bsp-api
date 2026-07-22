@@ -185,6 +185,11 @@ with HTTP and AI nodes in Phase 5 rather than included in the MVP contract.
 
 ## Phase 3 — Build the deterministic engine
 
+The database concurrency boundary is recorded in
+[ADR 0004](decisions/0004-chatbot-optimistic-run-commits.md). Execution prepares
+a versioned run snapshot, computes without side effects, and then atomically
+commits only if the run's optimistic lock version still matches.
+
 For each inbound message, the engine should:
 
 1. Resolve the organization, contact and active published flow.

@@ -839,6 +839,7 @@ export type Database = {
       }
       chatbot_flow_runs: {
         Row: {
+          agent_id: string
           conversation_id: string
           created_at: string
           current_node_id: string | null
@@ -848,6 +849,7 @@ export type Database = {
           flow_version_id: string
           id: string
           last_processed_message_id: string | null
+          lock_version: number
           organization_id: string
           started_at: string
           status: string
@@ -856,6 +858,7 @@ export type Database = {
           waiting_for: string | null
         }
         Insert: {
+          agent_id: string
           conversation_id: string
           created_at?: string
           current_node_id?: string | null
@@ -865,6 +868,7 @@ export type Database = {
           flow_version_id: string
           id?: string
           last_processed_message_id?: string | null
+          lock_version?: number
           organization_id: string
           started_at?: string
           status?: string
@@ -873,6 +877,7 @@ export type Database = {
           waiting_for?: string | null
         }
         Update: {
+          agent_id?: string
           conversation_id?: string
           created_at?: string
           current_node_id?: string | null
@@ -882,6 +887,7 @@ export type Database = {
           flow_version_id?: string
           id?: string
           last_processed_message_id?: string | null
+          lock_version?: number
           organization_id?: string
           started_at?: string
           status?: string
@@ -890,6 +896,13 @@ export type Database = {
           waiting_for?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "chatbot_flow_runs_agent_fkey"
+            columns: ["organization_id", "agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["organization_id", "id"]
+          },
           {
             foreignKeyName: "chatbot_flow_runs_conversation_fkey"
             columns: ["conversation_id"]
@@ -1630,6 +1643,24 @@ export type Database = {
           variables: Json
         }[]
       }
+      commit_chatbot_flow_execution: {
+        Args: {
+          p_current_node_id: string
+          p_error: Json
+          p_expected_lock_version: number
+          p_message_id: string
+          p_outgoing_texts: string[]
+          p_run_id: string
+          p_status: string
+          p_variables: Json
+          p_waiting_for: string
+        }
+        Returns: {
+          message_ids: string[]
+          outcome: string
+          run_lock_version: number
+        }[]
+      }
       contact_address_update_rules: {
         Args: {
           p_address: string
@@ -1827,6 +1858,24 @@ export type Database = {
       org_update_by_admin_rules: {
         Args: { p_id: string; p_name: string }
         Returns: boolean
+      }
+      prepare_chatbot_flow_execution: {
+        Args: {
+          p_agent_id?: string
+          p_flow_version_id?: string
+          p_message_id: string
+        }
+        Returns: {
+          flow_definition: Json
+          outcome: string
+          run_current_node_id: string
+          run_id: string
+          run_is_new: boolean
+          run_lock_version: number
+          run_status: string
+          run_variables: Json
+          run_waiting_for: string
+        }[]
       }
       record_campaign_delivery_result: {
         Args: {

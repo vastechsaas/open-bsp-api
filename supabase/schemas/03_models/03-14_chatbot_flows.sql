@@ -163,11 +163,13 @@ create table public.chatbot_flow_runs (
   organization_id uuid not null,
   conversation_id uuid not null,
   flow_version_id uuid not null,
+  agent_id uuid not null,
   id uuid default gen_random_uuid() not null,
   current_node_id text,
   status text default 'running'::text not null,
   waiting_for text,
   variables jsonb default '{}'::jsonb not null,
+  lock_version bigint default 0 not null,
   last_processed_message_id uuid,
   error jsonb,
   started_at timestamp with time zone default now() not null,
@@ -201,6 +203,12 @@ alter table only public.chatbot_flow_runs
 add constraint chatbot_flow_runs_flow_version_fkey
 foreign key (organization_id, flow_version_id)
 references public.chatbot_flow_versions(organization_id, id)
+on delete restrict;
+
+alter table only public.chatbot_flow_runs
+add constraint chatbot_flow_runs_agent_fkey
+foreign key (organization_id, agent_id)
+references public.agents(organization_id, id)
 on delete restrict;
 
 alter table only public.chatbot_flow_runs
@@ -246,6 +254,10 @@ check (
 alter table only public.chatbot_flow_runs
 add constraint chatbot_flow_runs_variables_check
 check (jsonb_typeof(variables) = 'object');
+
+alter table only public.chatbot_flow_runs
+add constraint chatbot_flow_runs_lock_version_check
+check (lock_version >= 0);
 
 alter table only public.chatbot_flow_runs
 add constraint chatbot_flow_runs_error_check
