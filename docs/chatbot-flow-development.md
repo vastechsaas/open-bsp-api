@@ -1,7 +1,7 @@
 # Chatbot flow development
 
-- **Status:** Phase 1 complete; Phase 2 proposed
-- **Last updated:** 2026-07-22
+- **Status:** Phase 1 complete; Phase 2 in progress
+- **Last updated:** 2026-07-23
 - **Jira:** SCRUM-52
 
 ## Purpose
@@ -149,8 +149,9 @@ Complete this phase in order:
 
 ## Phase 2 — Define the execution contract
 
-Document the runtime choice in an Architecture Decision Record before writing
-the engine. The contract should define only these MVP node types:
+The runtime choice is recorded in
+[ADR 0003](decisions/0003-chatbot-flow-execution-contract.md). The contract
+defines only these MVP node types:
 
 - `start`
 - `send_message`
@@ -170,13 +171,13 @@ type NodeResult =
   | { type: "advance"; nextNodeId: string; variables?: Record<string, unknown> }
   | { type: "wait_for_input"; input: InputExpectation }
   | { type: "emit_message"; message: OutgoingMessage; nextNodeId: string }
-  | { type: "request_effect"; effect: EffectCommand }
   | { type: "complete" }
   | { type: "fail"; code: string; message: string };
 ```
 
 The engine interprets this result, persists the transition, and emits any
-outgoing command through a single controlled path.
+outgoing command through a single controlled path. Effect requests are added
+with HTTP and AI nodes in Phase 5 rather than included in the MVP contract.
 
 ## Phase 3 — Build the deterministic engine
 
