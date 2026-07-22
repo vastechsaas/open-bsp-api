@@ -224,6 +224,7 @@ export type CollectInputNodeV1 = z.infer<typeof collectInputNodeSchema>;
 export type ConditionNodeV1 = z.infer<typeof conditionNodeSchema>;
 export type EndNodeV1 = z.infer<typeof endNodeSchema>;
 export type FlowEdgeV1 = z.infer<typeof flowEdgeV1Schema>;
+export type ConditionOperatorV1 = z.infer<typeof conditionOperatorV1Schema>;
 export type FlowDefinitionV1 = z.infer<typeof flowDefinitionV1Schema>;
 export interface ExecutionContextV1 {
   readonly variables: Readonly<Record<string, JsonValue>>;
