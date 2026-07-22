@@ -1,8 +1,8 @@
 # Chatbot flow development
 
-- **Status:** Phase 1 complete; Phase 2 in progress
+- **Status:** Phases 1 and 2 complete; Phase 3 planned
 - **Last updated:** 2026-07-23
-- **Jira:** SCRUM-52
+- **Jira:** SCRUM-52, SCRUM-53, SCRUM-54, SCRUM-55, SCRUM-56
 
 ## Purpose
 
@@ -26,8 +26,9 @@ The first schema draft exists in the following files:
 The schema foundation was generated as
 [`20260721200322_chatbot_flows.sql`](../supabase/migrations/20260721200322_chatbot_flows.sql),
 applied to local Supabase, and verified with all 27 database tests. Backend
-database types include the three chatbot tables. No runtime flow compiler or
-execution engine exists yet.
+database types include the three chatbot tables. The shared Phase 2 module now
+contains the version 1 executable contracts and editor-graph compiler. No
+runtime execution engine exists yet.
 
 ## Architecture at a glance
 
@@ -90,15 +91,13 @@ coordinate multiple flows or channels.
 stateDiagram-v2
     [*] --> running: Start published flow
     running --> running: Execute automatic node
-    running --> waiting_input: collect_input
-    waiting_input --> running: Valid customer response
-    waiting_input --> waiting_input: Invalid response and retry allowed
-    running --> pending_effect: HTTP or AI command
-    pending_effect --> running: Effect succeeds
-    pending_effect --> failed: Retry policy exhausted
+    running --> waiting: collect_input
+    waiting --> running: Valid customer response
+    waiting --> waiting: Invalid response and retry allowed
     running --> completed: end
+    running --> failed: Terminal execution error
     running --> handed_off: handoff
-    waiting_input --> expired: Session timeout
+    waiting --> expired: Session timeout
     completed --> [*]
     handed_off --> [*]
     failed --> [*]
@@ -163,14 +162,19 @@ The persisted editor graph may contain positions, colors, labels and collapsed
 panels. The executable definition must contain only validated runtime data and
 stable node/edge IDs.
 
+The implementation lives in the shared
+[`_shared/chatbot`](../supabase/functions/_shared/chatbot) module. Its compiler
+returns either the stripped `FlowDefinitionV1` or deterministic, structured
+issues that the editor can display.
+
 Each strategy handler should return data rather than directly calling WhatsApp
 or mutating several tables:
 
 ```ts
 type NodeResult =
-  | { type: "advance"; nextNodeId: string; variables?: Record<string, unknown> }
-  | { type: "wait_for_input"; input: InputExpectation }
-  | { type: "emit_message"; message: OutgoingMessage; nextNodeId: string }
+  | { type: "advance"; route: Route; variable_updates?: Variables }
+  | { type: "wait_for_input"; prompt: string; expectation: InputExpectation }
+  | { type: "emit_message"; message: TextMessage; route: DefaultRoute }
   | { type: "complete" }
   | { type: "fail"; code: string; message: string };
 ```
@@ -188,7 +192,7 @@ For each inbound message, the engine should:
 3. Lock the run row inside a short database transaction.
 4. Ignore an inbound message already recorded as processed.
 5. Validate the response expected by the current node.
-6. Execute automatic nodes until reaching an input, effect or terminal node.
+6. Execute automatic nodes until reaching an input or terminal node.
 7. Persist the new state and outgoing message commands atomically.
 8. Release the lock before performing remote network work.
 
