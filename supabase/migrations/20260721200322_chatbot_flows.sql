@@ -488,4 +488,3 @@ CREATE TRIGGER protect_published_chatbot_flow_version BEFORE UPDATE ON public.ch
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.chatbot_flow_versions FOR EACH ROW EXECUTE FUNCTION moddatetime('updated_at');
 
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.chatbot_flows FOR EACH ROW EXECUTE FUNCTION moddatetime('updated_at');
-
