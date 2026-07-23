@@ -1,4 +1,4 @@
-drop function if exists "public"."claim_campaign_deliveries"(p_limit integer);
+﻿drop function if exists "public"."claim_campaign_deliveries"(p_limit integer);
 
 drop function if exists "public"."list_campaigns_page"(p_organization_id uuid, p_page integer, p_page_size integer, p_search text, p_audience_type public.campaign_audience_type, p_readiness text);
 
