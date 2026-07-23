@@ -837,6 +837,207 @@ export type Database = {
           },
         ]
       }
+      chatbot_flow_runs: {
+        Row: {
+          agent_id: string
+          conversation_id: string
+          created_at: string
+          current_node_id: string | null
+          ended_at: string | null
+          error: Json | null
+          expires_at: string | null
+          flow_version_id: string
+          id: string
+          last_processed_message_id: string | null
+          lock_version: number
+          organization_id: string
+          started_at: string
+          status: string
+          updated_at: string
+          variables: Json
+          waiting_for: string | null
+        }
+        Insert: {
+          agent_id: string
+          conversation_id: string
+          created_at?: string
+          current_node_id?: string | null
+          ended_at?: string | null
+          error?: Json | null
+          expires_at?: string | null
+          flow_version_id: string
+          id?: string
+          last_processed_message_id?: string | null
+          lock_version?: number
+          organization_id: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+          variables?: Json
+          waiting_for?: string | null
+        }
+        Update: {
+          agent_id?: string
+          conversation_id?: string
+          created_at?: string
+          current_node_id?: string | null
+          ended_at?: string | null
+          error?: Json | null
+          expires_at?: string | null
+          flow_version_id?: string
+          id?: string
+          last_processed_message_id?: string | null
+          lock_version?: number
+          organization_id?: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+          variables?: Json
+          waiting_for?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chatbot_flow_runs_agent_fkey"
+            columns: ["organization_id", "agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "chatbot_flow_runs_conversation_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chatbot_flow_runs_flow_version_fkey"
+            columns: ["organization_id", "flow_version_id"]
+            isOneToOne: false
+            referencedRelation: "chatbot_flow_versions"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "chatbot_flow_runs_last_processed_message_fkey"
+            columns: ["last_processed_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chatbot_flow_runs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chatbot_flow_versions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          definition: Json | null
+          editor_graph: Json
+          flow_id: string
+          id: string
+          organization_id: string
+          published_at: string | null
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          definition?: Json | null
+          editor_graph?: Json
+          flow_id: string
+          id?: string
+          organization_id: string
+          published_at?: string | null
+          status?: string
+          updated_at?: string
+          version: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          definition?: Json | null
+          editor_graph?: Json
+          flow_id?: string
+          id?: string
+          organization_id?: string
+          published_at?: string | null
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chatbot_flow_versions_created_by_fkey"
+            columns: ["organization_id", "created_by"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "chatbot_flow_versions_flow_fkey"
+            columns: ["organization_id", "flow_id"]
+            isOneToOne: false
+            referencedRelation: "chatbot_flows"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
+      chatbot_flows: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          organization_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chatbot_flows_created_by_fkey"
+            columns: ["organization_id", "created_by"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "chatbot_flows_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           created_at: string
@@ -1442,6 +1643,24 @@ export type Database = {
           variables: Json
         }[]
       }
+      commit_chatbot_flow_execution: {
+        Args: {
+          p_current_node_id: string
+          p_error: Json
+          p_expected_lock_version: number
+          p_message_id: string
+          p_outgoing_texts: string[]
+          p_run_id: string
+          p_status: string
+          p_variables: Json
+          p_waiting_for: string
+        }
+        Returns: {
+          message_ids: string[]
+          outcome: string
+          run_lock_version: number
+        }[]
+      }
       contact_address_update_rules: {
         Args: {
           p_address: string
@@ -1639,6 +1858,24 @@ export type Database = {
       org_update_by_admin_rules: {
         Args: { p_id: string; p_name: string }
         Returns: boolean
+      }
+      prepare_chatbot_flow_execution: {
+        Args: {
+          p_agent_id?: string
+          p_flow_version_id?: string
+          p_message_id: string
+        }
+        Returns: {
+          flow_definition: Json
+          outcome: string
+          run_current_node_id: string
+          run_id: string
+          run_is_new: boolean
+          run_lock_version: number
+          run_status: string
+          run_variables: Json
+          run_waiting_for: string
+        }[]
       }
       record_campaign_delivery_result: {
         Args: {
