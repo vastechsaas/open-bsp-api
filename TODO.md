@@ -52,7 +52,9 @@ Planned builder work
 - [x] SCRUM-74 - Implement Collect Input, Condition, and conditional edges
   - Frontend branch: `scrum-74-input-condition-nodes`
   - Status: first frontend version merged into `meta_vista_frontend`
-- [ ] Add draft saving and unsaved-change protection
+- [x] SCRUM-75 - Add draft saving and unsaved-change protection
+  - Frontend branch: `scrum-75-draft-saving-protection`
+  - Status: first frontend version merged into `meta_vista_frontend`
 - [ ] Add validation, publishing, and version viewing
 - [ ] Complete builder UX and end-to-end coverage
 
