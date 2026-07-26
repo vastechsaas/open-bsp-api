@@ -40,7 +40,9 @@ Planned builder work
 - [x] SCRUM-70 - Add Chatbot Builder navigation and flow listing UI
   - Frontend branch: `scrum-70-chatbot-flow-listing-ui`
   - Status: first frontend version merged into `meta_vista_frontend`
-- [ ] Build the React Flow editor canvas
+- [x] SCRUM-71 - Build the React Flow editor canvas foundation
+  - Frontend branch: `scrum-71-react-flow-canvas-foundation`
+  - Status: first frontend version merged into `meta_vista_frontend`
 - [ ] Implement Start, Send Message, and End nodes
 - [ ] Implement Collect Input, Condition, and conditional edges
 - [ ] Add draft saving and unsaved-change protection
