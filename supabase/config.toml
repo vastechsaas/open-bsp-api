@@ -60,3 +60,8 @@ entrypoint = "./functions/mcp/index.ts"
 verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/storage-gc/index.ts"
+
+[functions.chatbot-management]
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/chatbot-management/index.ts"

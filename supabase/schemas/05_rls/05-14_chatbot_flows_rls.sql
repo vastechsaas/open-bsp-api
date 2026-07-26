@@ -88,6 +88,7 @@ with check (
   organization_id in (
     select public.get_authorized_orgs('admin')
   )
+  and status = 'draft'
 );
 
 create policy "admins can delete chatbot flow drafts"

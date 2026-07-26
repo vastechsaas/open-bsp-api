@@ -1671,6 +1671,33 @@ export type Database = {
         }
         Returns: boolean
       }
+      create_chatbot_flow_draft: {
+        Args: {
+          p_created_by?: string
+          p_name: string
+          p_organization_id: string
+        }
+        Returns: {
+          draft_id: string
+          draft_updated_at: string
+          draft_version: number
+          flow_id: string
+        }[]
+      }
+      duplicate_chatbot_flow_draft: {
+        Args: {
+          p_created_by?: string
+          p_name: string
+          p_organization_id: string
+          p_source_flow_id: string
+        }
+        Returns: {
+          draft_id: string
+          draft_updated_at: string
+          draft_version: number
+          flow_id: string
+        }[]
+      }
       get_authorized_orgs: {
         Args: { role?: Database["public"]["Enums"]["role"] }
         Returns: string[]
@@ -1875,6 +1902,24 @@ export type Database = {
           run_status: string
           run_variables: Json
           run_waiting_for: string
+        }[]
+      }
+      publish_chatbot_flow_draft: {
+        Args: {
+          p_created_by?: string
+          p_definition: Json
+          p_expected_updated_at: string
+          p_flow_id: string
+          p_organization_id: string
+          p_version_id: string
+        }
+        Returns: {
+          draft_id: string
+          draft_updated_at: string
+          draft_version: number
+          outcome: string
+          published_version: number
+          published_version_id: string
         }[]
       }
       record_campaign_delivery_result: {
