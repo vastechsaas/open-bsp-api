@@ -49,7 +49,9 @@ Planned builder work
 - [x] SCRUM-73 - Correct the chatbot editor to use the full viewport
   - Frontend branch: `scrum-73-full-width-chatbot-editor`
   - Status: sidebar-free editor layout merged into `meta_vista_frontend`
-- [ ] Implement Collect Input, Condition, and conditional edges
+- [x] SCRUM-74 - Implement Collect Input, Condition, and conditional edges
+  - Frontend branch: `scrum-74-input-condition-nodes`
+  - Status: first frontend version merged into `meta_vista_frontend`
 - [ ] Add draft saving and unsaved-change protection
 - [ ] Add validation, publishing, and version viewing
 - [ ] Complete builder UX and end-to-end coverage
