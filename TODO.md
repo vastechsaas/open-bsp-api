@@ -37,7 +37,9 @@ Current backend work
 
 Planned builder work
 
-- [ ] Add Chatbot Builder navigation and flow listing UI
+- [x] SCRUM-70 - Add Chatbot Builder navigation and flow listing UI
+  - Frontend branch: `scrum-70-chatbot-flow-listing-ui`
+  - Status: first frontend version merged into `meta_vista_frontend`
 - [ ] Build the React Flow editor canvas
 - [ ] Implement Start, Send Message, and End nodes
 - [ ] Implement Collect Input, Condition, and conditional edges
