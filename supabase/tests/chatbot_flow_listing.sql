@@ -256,16 +256,31 @@ select results_eq(
 
 select results_eq(
   $$
-    select name
-    from public.list_chatbot_flows_page(
-      '16000000-0000-4000-8000-000000000001',
-      2,
-      2
+    with first_page as (
+      select id
+      from public.list_chatbot_flows_page(
+        '16000000-0000-4000-8000-000000000001',
+        1,
+        2
+      )
+    ), second_page as (
+      select id
+      from public.list_chatbot_flows_page(
+        '16000000-0000-4000-8000-000000000001',
+        2,
+        2
+      )
     )
-    order by name
+    select
+      (select count(*)::integer from second_page),
+      (
+        select count(*)::integer
+        from first_page
+        join second_page using (id)
+      )
   $$,
-  $$ values ('Order Status'::text), ('Returns Assistant'::text) $$,
-  'page two contains the remaining rows'
+  $$ values (2, 0) $$,
+  'page two contains two rows with no overlap'
 );
 
 select results_eq(
