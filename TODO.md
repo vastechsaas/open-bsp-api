@@ -22,6 +22,38 @@ Monetization (medium-term)
 - [ ] Payment integration — Stripe checkout for paid plans, webhooks for payment
       success/failure/refunds
 
+## Chatbot Builder V1
+
+Epic: SCRUM-67
+
+Current backend work
+
+- [x] SCRUM-68 - Add chatbot builder management API
+  - Branch: `scrum-68-chatbot-management-api`
+  - Status: first backend version complete; pending review and staging merge
+- [x] SCRUM-69 - Add paginated chatbot flow listing API
+  - Branch: `scrum-69-chatbot-flow-list-api`
+  - Status: first backend version complete; pending review and staging merge
+
+Planned builder work
+
+- [ ] Add Chatbot Builder navigation and flow listing UI
+- [ ] Build the React Flow editor canvas
+- [ ] Implement Start, Send Message, and End nodes
+- [ ] Implement Collect Input, Condition, and conditional edges
+- [ ] Add draft saving and unsaved-change protection
+- [ ] Add validation, publishing, and version viewing
+- [ ] Complete builder UX and end-to-end coverage
+
+Deferred beyond V1
+
+- [ ] Flow deployment or activation
+- [ ] Side-effect-free simulator
+- [ ] Button and list message nodes
+- [ ] Webhook/API nodes
+- [ ] Loops and subflows
+- [ ] Agent assignment and AI processing
+
 ## General
 
 - [ ] Improve routing of organization accounts and members
