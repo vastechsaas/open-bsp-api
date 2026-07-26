@@ -46,6 +46,9 @@ Planned builder work
 - [x] SCRUM-72 - Implement Start, Send Message, and End nodes
   - Frontend branch: `scrum-72-core-chatbot-nodes`
   - Status: first frontend version merged into `meta_vista_frontend`
+- [x] SCRUM-73 - Correct the chatbot editor to use the full viewport
+  - Frontend branch: `scrum-73-full-width-chatbot-editor`
+  - Status: sidebar-free editor layout merged into `meta_vista_frontend`
 - [ ] Implement Collect Input, Condition, and conditional edges
 - [ ] Add draft saving and unsaved-change protection
 - [ ] Add validation, publishing, and version viewing
