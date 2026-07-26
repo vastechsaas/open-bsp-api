@@ -1815,6 +1815,33 @@ export type Database = {
           updated_at: string
         }[]
       }
+      list_chatbot_flows_page: {
+        Args: {
+          p_organization_id: string
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+          p_status?: string
+        }
+        Returns: {
+          created_at: string
+          created_by: string
+          created_by_name: string
+          draft_id: string
+          draft_updated_at: string
+          draft_version: number
+          has_unpublished_changes: boolean
+          id: string
+          name: string
+          organization_id: string
+          published_at: string
+          published_version: number
+          published_version_id: string
+          status: string
+          total_count: number
+          updated_at: string
+        }[]
+      }
       list_members_page: {
         Args: {
           p_organization_id: string
