@@ -55,7 +55,9 @@ Planned builder work
 - [x] SCRUM-75 - Add draft saving and unsaved-change protection
   - Frontend branch: `scrum-75-draft-saving-protection`
   - Status: first frontend version merged into `meta_vista_frontend`
-- [ ] Add validation, publishing, and version viewing
+- [x] SCRUM-76 - Add validation, publishing, and version viewing
+  - Frontend branch: `scrum-76-validation-publishing-versions`
+  - Status: first frontend version merged into `meta_vista_frontend`
 - [ ] Complete builder UX and end-to-end coverage
 
 Deferred beyond V1
