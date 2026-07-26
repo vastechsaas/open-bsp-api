@@ -31,8 +31,9 @@ Current backend work
 - [x] SCRUM-68 - Add chatbot builder management API
   - Branch: `scrum-68-chatbot-management-api`
   - Status: first backend version complete; pending review and staging merge
-- [ ] SCRUM-69 - Add paginated chatbot flow listing API
+- [x] SCRUM-69 - Add paginated chatbot flow listing API
   - Branch: `scrum-69-chatbot-flow-list-api`
+  - Status: first backend version complete; pending review and staging merge
 
 Planned builder work
 
