@@ -58,7 +58,10 @@ Planned builder work
 - [x] SCRUM-76 - Add validation, publishing, and version viewing
   - Frontend branch: `scrum-76-validation-publishing-versions`
   - Status: first frontend version merged into `meta_vista_frontend`
-- [ ] Complete builder UX and end-to-end coverage
+- [x] SCRUM-77 - Complete builder UX and end-to-end coverage
+  - Frontend branch: `scrum-77-builder-ux-e2e`
+  - Status: V1 keyboard UX and workflow-contract coverage merged into
+    `meta_vista_frontend`
 
 Deferred beyond V1
 
