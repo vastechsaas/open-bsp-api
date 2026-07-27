@@ -11,13 +11,42 @@ import type {
   SendMessageNodeV1,
   StartNodeV1,
 } from "./flow_definition.ts";
+import {
+  CHATBOT_INTERACTIVE_BODY_MAX_LENGTH,
+  CHATBOT_TEXT_MAX_LENGTH,
+} from "./flow_definition.ts";
+import {
+  type ChatbotTemplateRenderResult,
+  renderChatbotTemplate,
+} from "./template.ts";
 
 const defaultRoute = { kind: "default" } as const;
 
-function waitForInput(node: Readonly<CollectInputNodeV1>): NodeResultV1 {
+function templateFailure(
+  result: Exclude<ChatbotTemplateRenderResult, { ok: true }>,
+): NodeResultV1 {
+  return {
+    type: "fail",
+    code: result.code,
+    message: result.message,
+    details: { ...result.details },
+  };
+}
+
+function waitForInput(
+  node: Readonly<CollectInputNodeV1>,
+  context: ExecutionContextV1,
+): NodeResultV1 {
+  const prompt = renderChatbotTemplate(
+    node.config.prompt,
+    context.variables,
+    CHATBOT_TEXT_MAX_LENGTH,
+  );
+  if (!prompt.ok) return templateFailure(prompt);
+
   return {
     type: "wait_for_input",
-    prompt: node.config.prompt,
+    prompt: prompt.text,
     expectation: {
       kind: "free_text",
       variable: node.config.variable,
@@ -35,10 +64,17 @@ export const startNodeStrategy: NodeStrategy<StartNodeV1> = {
 };
 
 export const sendMessageNodeStrategy: NodeStrategy<SendMessageNodeV1> = {
-  execute(node): Promise<NodeResultV1> {
+  execute(node, context): Promise<NodeResultV1> {
+    const text = renderChatbotTemplate(
+      node.config.text,
+      context.variables,
+      CHATBOT_TEXT_MAX_LENGTH,
+    );
+    if (!text.ok) return Promise.resolve(templateFailure(text));
+
     return Promise.resolve({
       type: "emit_message",
-      message: { type: "text", text: node.config.text },
+      message: { type: "text", text: text.text },
       route: defaultRoute,
     });
   },
@@ -59,13 +95,20 @@ export const interactiveButtonsNodeStrategy: NodeStrategy<
       });
     }
 
+    const body = renderChatbotTemplate(
+      node.config.body,
+      context.variables,
+      CHATBOT_INTERACTIVE_BODY_MAX_LENGTH,
+    );
+    if (!body.ok) return Promise.resolve(templateFailure(body));
+
     return Promise.resolve({
       type: "wait_for_input",
       message: {
         type: "interactive",
         interactive: {
           type: "button",
-          body: { text: node.config.body },
+          body: { text: body.text },
           action: {
             buttons: node.config.buttons.map((button) => ({
               type: "reply",
@@ -94,13 +137,20 @@ export const listMessageNodeStrategy: NodeStrategy<ListMessageNodeV1> = {
       });
     }
 
+    const body = renderChatbotTemplate(
+      node.config.body,
+      context.variables,
+      CHATBOT_INTERACTIVE_BODY_MAX_LENGTH,
+    );
+    if (!body.ok) return Promise.resolve(templateFailure(body));
+
     return Promise.resolve({
       type: "wait_for_input",
       message: {
         type: "interactive",
         interactive: {
           type: "list",
-          body: { text: node.config.body },
+          body: { text: body.text },
           action: {
             button: node.config.button_text,
             sections: node.config.sections.map((section) => ({
@@ -122,7 +172,7 @@ export const listMessageNodeStrategy: NodeStrategy<ListMessageNodeV1> = {
 export const collectInputNodeStrategy: NodeStrategy<CollectInputNodeV1> = {
   execute(node, context): Promise<NodeResultV1> {
     if (context.free_text_input === undefined) {
-      return Promise.resolve(waitForInput(node));
+      return Promise.resolve(waitForInput(node, context));
     }
 
     const value = context.free_text_input.trim();
@@ -133,7 +183,7 @@ export const collectInputNodeStrategy: NodeStrategy<CollectInputNodeV1> = {
       value.length > node.config.max_length;
 
     if ((node.config.required && isEmpty) || isTooShort || isTooLong) {
-      return Promise.resolve(waitForInput(node));
+      return Promise.resolve(waitForInput(node, context));
     }
 
     return Promise.resolve({

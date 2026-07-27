@@ -125,6 +125,29 @@ Deno.test("interpreter resumes input and completes a matching branch", async () 
   });
 });
 
+Deno.test("interpreter renders a value collected earlier in the flow", async () => {
+  const flow: FlowDefinitionV1 = {
+    ...customerFlow,
+    nodes: customerFlow.nodes.map((node) =>
+      node.type === "send_message" && node.id === "lahore-message"
+        ? {
+          ...node,
+          config: { text: "We deliver to {{customer_city}}" },
+        }
+        : node
+    ),
+  };
+
+  const result = await interpretFlowDefinitionV1(flow, {
+    current_node_id: "collect-city",
+    variables: {},
+    free_text_input: "Lahore",
+  });
+
+  assertEquals(result.outgoing_texts, ["We deliver to Lahore"]);
+  assertEquals(result.status, "completed");
+});
+
 Deno.test("condition matching trims and ignores case for every operator", () => {
   assertEquals(conditionMatchesV1("equals", " Lahore ", "lahore"), true);
   assertEquals(conditionMatchesV1("not_equals", " Lahore ", "karachi"), true);
