@@ -34,6 +34,10 @@ export const simulateFlowPayloadSchema = validateDraftPayloadSchema.extend({
   current_node_id: z.string().trim().min(1).optional(),
   variables: z.record(z.string(), z.unknown()).default({}),
   free_text_input: z.string().max(4096).optional(),
+  option_input: z.object({
+    kind: z.enum(["button", "list_selection"]),
+    id: z.string().trim().min(1).max(128),
+  }).strict().optional(),
 });
 
 export const publishDraftPayloadSchema = organizationPayloadSchema.extend({

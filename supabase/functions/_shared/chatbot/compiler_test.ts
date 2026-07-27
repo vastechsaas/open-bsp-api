@@ -204,6 +204,71 @@ Deno.test("reports invalid node routing and conditional edge origins", () => {
   );
 });
 
+Deno.test("interactive options compile to exact option edges", () => {
+  const graph = {
+    nodes: [
+      editorNode("start", "start"),
+      editorNode("buttons", "interactive_buttons", {
+        body: "Choose",
+        buttons: [
+          { id: "sales", title: "Sales" },
+          { id: "support", title: "Support" },
+        ],
+      }),
+      editorNode("sales-end", "end"),
+      editorNode("support-end", "end"),
+    ],
+    edges: [
+      editorEdge("start-edge", "start", "buttons"),
+      editorEdge("sales-edge", "buttons", "sales-end", {
+        kind: "option",
+        option_id: "sales",
+      }),
+      editorEdge("support-edge", "buttons", "support-end", {
+        kind: "option",
+        option_id: "support",
+      }),
+    ],
+  };
+
+  const result = compileFlowDefinition(graph);
+  if (!result.ok) throw new Error(JSON.stringify(result.issues));
+  assertEquals(result.definition.edges[1], {
+    id: "sales-edge",
+    source: "buttons",
+    target: "sales-end",
+    kind: "option",
+    option_id: "sales",
+  });
+});
+
+Deno.test("interactive nodes require one known edge per unique option", () => {
+  const graph = {
+    nodes: [
+      editorNode("start", "start"),
+      editorNode("buttons", "interactive_buttons", {
+        body: "Choose",
+        buttons: [
+          { id: "sales", title: "Sales" },
+          { id: "sales", title: "Support" },
+        ],
+      }),
+      editorNode("end", "end"),
+    ],
+    edges: [
+      editorEdge("start-edge", "start", "buttons"),
+      editorEdge("unknown-edge", "buttons", "end", {
+        kind: "option",
+        option_id: "unknown",
+      }),
+    ],
+  };
+
+  const codes = issueCodes(graph);
+  assertEquals(codes.includes("duplicate_option_id"), true);
+  assertEquals(codes.includes("invalid_option_routing"), true);
+});
+
 Deno.test("reports unreachable nodes", () => {
   const graph = representativeGraph();
   (graph.nodes as Record<string, unknown>[]).push(

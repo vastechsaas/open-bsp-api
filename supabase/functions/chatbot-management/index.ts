@@ -433,6 +433,7 @@ app.post(
       current_node_id: payload.current_node_id,
       variables: payload.variables,
       free_text_input: payload.free_text_input,
+      option_input: payload.option_input,
     });
 
     return c.json(result);

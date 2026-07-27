@@ -38,6 +38,27 @@ const nodes = [
     type: "condition",
     config: { variable: "customer_city" },
   },
+  {
+    id: "buttons-1",
+    type: "interactive_buttons",
+    config: {
+      body: "Choose",
+      buttons: [{ id: "support", title: "Support" }],
+    },
+  },
+  {
+    id: "list-1",
+    type: "list_message",
+    config: {
+      body: "Choose",
+      button_text: "Options",
+      sections: [{
+        id: "section-1",
+        title: "Teams",
+        rows: [{ id: "sales", title: "Sales" }],
+      }],
+    },
+  },
   { id: "end-1", type: "end", config: {} },
 ];
 
@@ -94,6 +115,14 @@ Deno.test("default and every condition edge predicate parse", () => {
       value: "expected",
     }));
   }
+
+  assertValid(flowEdgeV1Schema.safeParse({
+    id: "option-1",
+    source: "source-1",
+    target: "target-1",
+    kind: "option",
+    option_id: "sales",
+  }));
 });
 
 Deno.test("invalid identifiers, variables, predicates, and node fields fail", () => {
@@ -163,6 +192,38 @@ Deno.test("text is limited to WhatsApp text message length", () => {
   }));
 });
 
+Deno.test("interactive WhatsApp limits are enforced", () => {
+  assertInvalid(flowNodeV1Schema.safeParse({
+    id: "buttons-1",
+    type: "interactive_buttons",
+    config: {
+      body: "Choose",
+      buttons: [
+        { id: "one", title: "One" },
+        { id: "two", title: "Two" },
+        { id: "three", title: "Three" },
+        { id: "four", title: "Four" },
+      ],
+    },
+  }));
+  assertInvalid(flowNodeV1Schema.safeParse({
+    id: "list-1",
+    type: "list_message",
+    config: {
+      body: "Choose",
+      button_text: "Options",
+      sections: [{
+        id: "section-1",
+        title: "Teams",
+        rows: Array.from({ length: 11 }, (_, index) => ({
+          id: `row-${index}`,
+          title: `Row ${index}`,
+        })),
+      }],
+    },
+  }));
+});
+
 Deno.test("ExecutionContextV1 accepts immutable runtime data shape", () => {
   assertValid(executionContextV1Schema.safeParse({
     variables: {
@@ -202,6 +263,23 @@ Deno.test("every NodeResultV1 variant parses", () => {
         min_length: 2,
         max_length: 80,
       },
+    },
+    {
+      type: "wait_for_input",
+      message: {
+        type: "interactive",
+        interactive: {
+          type: "button",
+          body: { text: "Choose" },
+          action: {
+            buttons: [{
+              type: "reply",
+              reply: { id: "sales", title: "Sales" },
+            }],
+          },
+        },
+      },
+      expectation: { kind: "button", option_ids: ["sales"] },
     },
     { type: "complete" },
     {

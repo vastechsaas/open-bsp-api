@@ -114,10 +114,12 @@ Deno.test("simulation payload keeps local state optional and bounded", () => {
     current_node_id: " input-1 ",
     variables: { customer_city: "Lahore" },
     free_text_input: "Lahore",
+    option_input: { kind: "button", id: "support" },
   });
 
   assertEquals(payload.current_node_id, "input-1");
   assertEquals(payload.variables, { customer_city: "Lahore" });
+  assertEquals(payload.option_input, { kind: "button", id: "support" });
   assertThrows(
     () =>
       simulateFlowPayloadSchema.parse({

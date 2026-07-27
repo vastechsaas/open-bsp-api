@@ -72,10 +72,14 @@ Planned builder work
   - Frontend branch: `scrum-79-side-effect-free-simulator-ui`
   - Status: in-memory compiler/interpreter endpoint and builder simulator ready
     for staging
+- [x] SCRUM-80 - Add Interactive Button and List Message nodes
+  - Backend branch: `scrum-80-interactive-button-list-nodes`
+  - Frontend branch: `scrum-80-interactive-button-list-nodes-ui`
+  - Status: editor configuration, stable option routing, WhatsApp runtime
+    dispatch, and side-effect-free simulation ready for staging
 
 Deferred beyond V1
 
-- [ ] Button and list message nodes
 - [ ] Webhook/API nodes
 - [ ] Loops and subflows
 - [ ] Agent assignment and AI processing
