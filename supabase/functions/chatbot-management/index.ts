@@ -15,7 +15,9 @@ import {
   type Json,
 } from "../_shared/supabase.ts";
 import {
+  activateDeploymentPayloadSchema,
   createFlowPayloadSchema,
+  deploymentPayloadSchema,
   duplicateFlowPayloadSchema,
   organizationPayloadSchema,
   publishDraftPayloadSchema,
@@ -119,10 +121,17 @@ function requireAdmin(
   return authorizeOrganization(c, next, ["admin", "owner"]);
 }
 
+function requireMember(
+  c: Context<AppEnv>,
+  next: () => Promise<void>,
+): Promise<void> {
+  return authorizeOrganization(c, next, ["member", "admin", "owner"]);
+}
+
 async function authorizeOrganization(
   c: Context<AppEnv>,
   next: () => Promise<void>,
-  roles: Array<"admin" | "owner">,
+  roles: Array<"member" | "admin" | "owner">,
 ): Promise<void> {
   const organizationId = c.req.method === "GET"
     ? organizationPayloadSchema.parse({
@@ -464,6 +473,83 @@ app.post(
     }
 
     return c.json({ valid: true, ...result });
+  },
+);
+
+app.get(
+  "/chatbot-management/flows/:flowId/deployments",
+  requireMember,
+  async (c) => {
+    const payload = organizationPayloadSchema.parse({
+      organization_id: c.req.query("organization_id"),
+    });
+    const { data, error } = await serviceClient()
+      .from("chatbot_flow_deployments")
+      .select()
+      .eq("organization_id", payload.organization_id)
+      .eq("flow_id", flowId(c))
+      .order("organization_address");
+
+    if (error) {
+      throwDatabaseError(error, "Unable to load chatbot deployments");
+    }
+
+    return c.json({ deployments: data });
+  },
+);
+
+app.put(
+  "/chatbot-management/flows/:flowId/deployment",
+  requireAdmin,
+  async (c) => {
+    const payload = activateDeploymentPayloadSchema.parse(await c.req.json());
+    const activatedAt = new Date().toISOString();
+    const { data, error } = await serviceClient()
+      .from("chatbot_flow_deployments")
+      .upsert({
+        organization_id: payload.organization_id,
+        organization_address: payload.organization_address,
+        flow_id: flowId(c),
+        flow_version_id: payload.version_id,
+        agent_id: payload.agent_id,
+        activated_by: c.get("actorAgentId"),
+        activated_at: activatedAt,
+      }, { onConflict: "organization_id,organization_address" })
+      .select()
+      .single();
+
+    if (error) {
+      throwDatabaseError(error, "Unable to activate chatbot deployment");
+    }
+
+    return c.json({ deployment: data });
+  },
+);
+
+app.delete(
+  "/chatbot-management/flows/:flowId/deployment",
+  requireAdmin,
+  async (c) => {
+    const payload = deploymentPayloadSchema.parse(await c.req.json());
+    const { data, error } = await serviceClient()
+      .from("chatbot_flow_deployments")
+      .delete()
+      .eq("organization_id", payload.organization_id)
+      .eq("organization_address", payload.organization_address)
+      .eq("flow_id", flowId(c))
+      .select("organization_address")
+      .maybeSingle();
+
+    if (error) {
+      throwDatabaseError(error, "Unable to deactivate chatbot deployment");
+    }
+    if (!data) {
+      throw new HTTPException(404, {
+        message: "Chatbot deployment not found",
+      });
+    }
+
+    return c.json({ deactivated: true });
   },
 );
 
