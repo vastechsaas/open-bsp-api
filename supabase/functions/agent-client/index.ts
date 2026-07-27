@@ -23,6 +23,7 @@ import Ajv2020 from "ajv";
 import type { AgentRowWithExtra, ResponseContext } from "./protocols/base.ts";
 import { getFileMetadata } from "../_shared/media.ts";
 import { type MessageRowV0, toV1 } from "../_shared/messages-v0.ts";
+import { processChatbotMessage } from "./chatbot.ts";
 
 const sanitizeLabel = (label: string) => {
   return label
@@ -275,6 +276,15 @@ Deno.serve(async (req) => {
   }
 
   log.info("Contact request", messages.at(-1)?.content);
+
+  const chatbotResult = await processChatbotMessage(client, incoming);
+  if (chatbotResult.handled) {
+    log.info("Chatbot handled incoming message", {
+      message_id: incoming.id,
+      outcome: chatbotResult.outcome,
+    });
+    return new Response("ok", { headers: corsHeaders });
+  }
 
   // WELCOME MESSAGE
   // Note: The welcome message is affected by allowed contacts. This behavior

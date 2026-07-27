@@ -35,4 +35,13 @@ export const publishDraftPayloadSchema = organizationPayloadSchema.extend({
   expected_updated_at: timestampSchema,
 });
 
+export const deploymentPayloadSchema = organizationPayloadSchema.extend({
+  organization_address: z.string().trim().min(1),
+});
+
+export const activateDeploymentPayloadSchema = deploymentPayloadSchema.extend({
+  version_id: uuidSchema,
+  agent_id: uuidSchema,
+});
+
 export type EditorGraph = z.infer<typeof editorGraphSchema>;

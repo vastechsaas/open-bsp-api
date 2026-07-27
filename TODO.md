@@ -62,10 +62,14 @@ Planned builder work
   - Frontend branch: `scrum-77-builder-ux-e2e`
   - Status: V1 keyboard UX and workflow-contract coverage merged into
     `meta_vista_frontend`
+- [x] SCRUM-78 - Activate published chatbot flows for WhatsApp runtime
+  - Backend branch: `scrum-78-chatbot-activation`
+  - Frontend branch: `scrum-78-chatbot-activation-ui`
+  - Status: activation contract, runtime routing, and builder controls ready for
+    staging
 
 Deferred beyond V1
 
-- [ ] Flow deployment or activation
 - [ ] Side-effect-free simulator
 - [ ] Button and list message nodes
 - [ ] Webhook/API nodes

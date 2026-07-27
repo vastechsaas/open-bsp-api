@@ -1,6 +1,8 @@
 import { assertEquals, assertThrows } from "../_shared/test_assert.ts";
 import {
+  activateDeploymentPayloadSchema,
   createFlowPayloadSchema,
+  deploymentPayloadSchema,
   editorGraphSchema,
   publishDraftPayloadSchema,
   saveDraftPayloadSchema,
@@ -79,5 +81,27 @@ Deno.test("publish payload rejects invalid identifiers and timestamps", () => {
         expected_updated_at: "yesterday",
       }),
     "expected_updated_at",
+  );
+});
+
+Deno.test("deployment payloads require an address, published version, and agent", () => {
+  const agentId = "34000000-0000-4000-8000-000000000001";
+  const deployment = activateDeploymentPayloadSchema.parse({
+    organization_id: organizationId,
+    organization_address: " 15551234567 ",
+    version_id: versionId,
+    agent_id: agentId,
+  });
+
+  assertEquals(deployment.organization_address, "15551234567");
+  assertEquals(deployment.version_id, versionId);
+  assertEquals(deployment.agent_id, agentId);
+  assertThrows(
+    () =>
+      deploymentPayloadSchema.parse({
+        organization_id: organizationId,
+        organization_address: " ",
+      }),
+    "organization_address",
   );
 });
