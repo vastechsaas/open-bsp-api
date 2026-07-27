@@ -56,6 +56,116 @@ Deno.test("send_message emits its literal text", async () => {
   );
 });
 
+Deno.test("message, prompt, and interactive bodies render collected variables", async () => {
+  const context: ExecutionContextV1 = {
+    variables: { customer_city: "Lahore" },
+  };
+
+  const message = await sendMessageNodeStrategy.execute(
+    {
+      id: "welcome",
+      type: "send_message",
+      config: { text: "Hello from {{ customer_city }}" },
+    },
+    context,
+  );
+  assertEquals(
+    message.type === "emit_message" ? message.message : null,
+    { type: "text", text: "Hello from Lahore" },
+  );
+
+  const prompt = await collectInputNodeStrategy.execute(
+    {
+      id: "collect-name",
+      type: "collect_input",
+      config: {
+        prompt: "Who should we contact in {{customer_city}}?",
+        variable: "customer_name",
+        required: true,
+      },
+    },
+    context,
+  );
+  assertEquals(
+    prompt.type === "wait_for_input" ? prompt.prompt : null,
+    "Who should we contact in Lahore?",
+  );
+
+  const buttons = await interactiveButtonsNodeStrategy.execute(
+    {
+      id: "buttons",
+      type: "interactive_buttons",
+      config: {
+        body: "Choose a team in {{customer_city}}",
+        buttons: [{ id: "sales", title: "Sales" }],
+      },
+    },
+    context,
+  );
+  assertEquals(
+    buttons.type === "wait_for_input" &&
+      buttons.message?.interactive.type === "button"
+      ? buttons.message.interactive.body.text
+      : null,
+    "Choose a team in Lahore",
+  );
+
+  const list = await listMessageNodeStrategy.execute(
+    {
+      id: "list",
+      type: "list_message",
+      config: {
+        body: "Choose an office in {{customer_city}}",
+        button_text: "Offices",
+        sections: [{
+          id: "offices",
+          title: "Offices",
+          rows: [{ id: "main", title: "Main" }],
+        }],
+      },
+    },
+    context,
+  );
+  assertEquals(
+    list.type === "wait_for_input" &&
+      list.message?.interactive.type === "list"
+      ? list.message.interactive.body.text
+      : null,
+    "Choose an office in Lahore",
+  );
+});
+
+Deno.test("template rendering fails safely for missing and oversized values", async () => {
+  const missing = await sendMessageNodeStrategy.execute(
+    {
+      id: "welcome",
+      type: "send_message",
+      config: { text: "Hello {{customer_name}}" },
+    },
+    emptyContext,
+  );
+  assertEquals(
+    missing.type === "fail" ? missing.code : null,
+    "template_variable_missing",
+  );
+
+  const oversized = await interactiveButtonsNodeStrategy.execute(
+    {
+      id: "buttons",
+      type: "interactive_buttons",
+      config: {
+        body: "{{long_value}}",
+        buttons: [{ id: "continue", title: "Continue" }],
+      },
+    },
+    { variables: { long_value: "x".repeat(1025) } },
+  );
+  assertEquals(
+    oversized.type === "fail" ? oversized.code : null,
+    "rendered_template_too_long",
+  );
+});
+
 Deno.test("interactive button and list strategies wait then route by ID", async () => {
   const buttonNode = {
     id: "buttons",

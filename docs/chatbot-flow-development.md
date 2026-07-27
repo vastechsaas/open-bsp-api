@@ -231,10 +231,12 @@ WhatsApp reply payloads should carry `track_order`, not the label. For free
 text, `collect_input` defines validation, normalization, maximum retries and a
 fallback edge.
 
-Dynamic messages should use a deliberately small template grammar such as
-`Hello {{contact.name}}`. Resolve only allow-listed variables, escape output for
-the destination, define behavior for missing values, and never evaluate code
-stored in a flow.
+Dynamic messages use the restricted `{{variable_name}}` grammar, for example
+`Hello {{customer_name}}`. A variable must be collected on every path before the
+node that references it. Only string, number, and boolean values render; missing
+or non-scalar values fail safely. Rendered text is checked against the
+destination's WhatsApp length limit, and flow content is never evaluated as
+JavaScript or another expression language.
 
 ## Phase 5 — Add external HTTP and AI effects safely
 

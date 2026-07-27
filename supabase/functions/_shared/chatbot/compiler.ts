@@ -5,6 +5,7 @@ import {
   type FlowNodeV1,
   flowNodeV1Schema,
 } from "./flow_definition.ts";
+import { parseChatbotTemplate } from "./template.ts";
 
 export interface CompileIssue {
   readonly code: string;
@@ -176,7 +177,7 @@ function intersectSets(sets: ReadonlyArray<ReadonlySet<string>>): Set<string> {
   return intersection;
 }
 
-function validateConditionVariables(
+function validateAvailableVariables(
   nodes: ReadonlyArray<FlowNodeV1>,
   nodeSourceIndexes: ReadonlyMap<FlowNodeV1, number>,
   edges: ReadonlyArray<FlowEdgeV1>,
@@ -217,6 +218,47 @@ function validateConditionVariables(
     const available = nodeId === startNodeId
       ? new Set<string>()
       : intersectSets(predecessorSets);
+
+    const templateFields: ReadonlyArray<
+      readonly [field: string, template: string]
+    > = node.type === "send_message"
+      ? [["text", node.config.text]]
+      : node.type === "collect_input"
+      ? [["prompt", node.config.prompt]]
+      : node.type === "interactive_buttons" || node.type === "list_message"
+      ? [["body", node.config.body]]
+      : [];
+
+    for (const [field, template] of templateFields) {
+      const parsedTemplate = parseChatbotTemplate(template);
+      const path = [
+        "nodes",
+        nodeSourceIndexes.get(node)!,
+        "data",
+        "config",
+        field,
+      ];
+      if (!parsedTemplate.ok) {
+        issues.push({
+          code: "invalid_template_syntax",
+          path,
+          message: parsedTemplate.message,
+          node_id: node.id,
+        });
+        continue;
+      }
+      for (const variable of parsedTemplate.variables) {
+        if (!available.has(variable)) {
+          issues.push({
+            code: "template_variable_unavailable",
+            path,
+            message:
+              `Variable '${variable}' is not collected on every path to this node`,
+            node_id: node.id,
+          });
+        }
+      }
+    }
 
     if (node.type === "condition" && !available.has(node.config.variable)) {
       issues.push({
@@ -590,7 +632,7 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
     startNodes.length === 1 && cycleNode === undefined &&
     !hasDuplicateNodes && !hasDuplicateEdges
   ) {
-    validateConditionVariables(
+    validateAvailableVariables(
       nodes,
       nodeSourceIndexes,
       validEdges,

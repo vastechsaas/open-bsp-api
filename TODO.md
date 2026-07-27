@@ -77,6 +77,14 @@ Planned builder work
   - Frontend branch: `scrum-80-interactive-button-list-nodes-ui`
   - Status: editor configuration, stable option routing, WhatsApp runtime
     dispatch, and side-effect-free simulation ready for staging
+- [x] SCRUM-81 - Add safe dynamic variable interpolation
+  - Backend branch: `scrum-81-dynamic-interpolation`
+  - Frontend branch: `scrum-81-dynamic-interpolation-ui`
+  - Status: restricted templates, path-aware validation, runtime rendering, and
+    editor insertion controls ready for staging
+- [ ] SCRUM-82 - Render WhatsApp-style list interactions in the simulator
+  - Frontend branch: `scrum-82-whatsapp-list-simulator`
+  - Status: planned after SCRUM-81
 
 Deferred beyond V1
 
