@@ -6,6 +6,7 @@ import {
   editorGraphSchema,
   publishDraftPayloadSchema,
   saveDraftPayloadSchema,
+  simulateFlowPayloadSchema,
 } from "./payload.ts";
 
 const organizationId = "14000000-0000-4000-8000-000000000001";
@@ -103,5 +104,27 @@ Deno.test("deployment payloads require an address, published version, and agent"
         organization_address: " ",
       }),
     "organization_address",
+  );
+});
+
+Deno.test("simulation payload keeps local state optional and bounded", () => {
+  const payload = simulateFlowPayloadSchema.parse({
+    organization_id: organizationId,
+    editor_graph: { nodes: [], edges: [] },
+    current_node_id: " input-1 ",
+    variables: { customer_city: "Lahore" },
+    free_text_input: "Lahore",
+  });
+
+  assertEquals(payload.current_node_id, "input-1");
+  assertEquals(payload.variables, { customer_city: "Lahore" });
+  assertThrows(
+    () =>
+      simulateFlowPayloadSchema.parse({
+        organization_id: organizationId,
+        editor_graph: { nodes: [], edges: [] },
+        free_text_input: "x".repeat(4097),
+      }),
+    "free_text_input",
   );
 });

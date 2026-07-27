@@ -30,6 +30,12 @@ export const validateDraftPayloadSchema = organizationPayloadSchema.extend({
   editor_graph: editorGraphSchema,
 });
 
+export const simulateFlowPayloadSchema = validateDraftPayloadSchema.extend({
+  current_node_id: z.string().trim().min(1).optional(),
+  variables: z.record(z.string(), z.unknown()).default({}),
+  free_text_input: z.string().max(4096).optional(),
+});
+
 export const publishDraftPayloadSchema = organizationPayloadSchema.extend({
   version_id: uuidSchema,
   expected_updated_at: timestampSchema,

@@ -23,8 +23,10 @@ import {
   publishDraftPayloadSchema,
   renameFlowPayloadSchema,
   saveDraftPayloadSchema,
+  simulateFlowPayloadSchema,
   validateDraftPayloadSchema,
 } from "./payload.ts";
+import { simulateChatbotFlow } from "./simulation.ts";
 
 type AppEnv = {
   Variables: {
@@ -405,6 +407,35 @@ app.post(
     return result.ok
       ? c.json({ valid: true, definition: result.definition })
       : c.json({ valid: false, issues: result.issues });
+  },
+);
+
+app.post(
+  "/chatbot-management/flows/:flowId/simulate",
+  requireAdmin,
+  async (c) => {
+    const payload = simulateFlowPayloadSchema.parse(await c.req.json());
+    const { data: flow, error } = await serviceClient()
+      .from("chatbot_flows")
+      .select("id")
+      .eq("organization_id", payload.organization_id)
+      .eq("id", flowId(c))
+      .maybeSingle();
+
+    if (error) {
+      throwDatabaseError(error, "Unable to verify chatbot flow");
+    }
+    if (!flow) {
+      throw new HTTPException(404, { message: "Chatbot flow not found" });
+    }
+
+    const result = await simulateChatbotFlow(payload.editor_graph, {
+      current_node_id: payload.current_node_id,
+      variables: payload.variables,
+      free_text_input: payload.free_text_input,
+    });
+
+    return c.json(result);
   },
 );
 
