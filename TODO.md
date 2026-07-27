@@ -67,10 +67,14 @@ Planned builder work
   - Frontend branch: `scrum-78-chatbot-activation-ui`
   - Status: activation contract, runtime routing, and builder controls ready for
     staging
+- [x] SCRUM-79 - Run chatbot flows in a side-effect-free simulator
+  - Backend branch: `scrum-79-side-effect-free-simulator`
+  - Frontend branch: `scrum-79-side-effect-free-simulator-ui`
+  - Status: in-memory compiler/interpreter endpoint and builder simulator ready
+    for staging
 
 Deferred beyond V1
 
-- [ ] Side-effect-free simulator
 - [ ] Button and list message nodes
 - [ ] Webhook/API nodes
 - [ ] Loops and subflows
