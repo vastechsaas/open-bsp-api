@@ -288,6 +288,13 @@ function outgoingMessageToEndpointMessage({
         template: content.data,
       };
     }
+    case "interactive": {
+      return {
+        ...baseMessage,
+        type: "interactive",
+        interactive: content.data,
+      };
+    }
     default: {
       throw new Error(
         `Cannot convert outgoing message of type ${content.type} and kind ${content.kind}`,

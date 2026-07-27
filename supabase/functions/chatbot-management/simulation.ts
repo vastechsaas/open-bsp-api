@@ -9,6 +9,10 @@ export type ChatbotSimulationInput = {
   current_node_id?: string;
   variables: Record<string, unknown>;
   free_text_input?: string;
+  option_input?: {
+    kind: "button" | "list_selection";
+    id: string;
+  };
 };
 
 export async function simulateChatbotFlow(
@@ -29,6 +33,9 @@ export async function simulateChatbotFlow(
     ...(input.free_text_input === undefined
       ? {}
       : { free_text_input: input.free_text_input }),
+    ...(input.option_input === undefined
+      ? {}
+      : { option_input: input.option_input }),
   });
 
   return {

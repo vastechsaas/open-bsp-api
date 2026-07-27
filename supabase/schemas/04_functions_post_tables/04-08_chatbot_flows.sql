@@ -322,7 +322,8 @@ create function public.commit_chatbot_flow_execution(
   p_waiting_for text,
   p_variables jsonb,
   p_error jsonb,
-  p_outgoing_texts text[]
+  p_outgoing_texts text[],
+  p_outgoing_messages jsonb default '[]'::jsonb
 ) returns table (
   outcome text,
   run_lock_version bigint,
@@ -339,6 +340,7 @@ declare
   previous_message public.messages;
   target_conversation public.conversations;
   outgoing_text text;
+  outgoing_message jsonb;
   inserted_message_id uuid;
   inserted_message_ids uuid[] := array[]::uuid[];
 begin
@@ -428,10 +430,12 @@ begin
       message = 'committed chatbot variables must be a JSON object';
   end if;
 
-  if p_status = 'waiting' and p_waiting_for is distinct from 'free_text' then
+  if p_status = 'waiting'
+    and p_waiting_for not in ('free_text', 'button', 'list_selection')
+  then
     raise exception using
       errcode = '23514',
-      message = 'MVP waiting runs must wait for free text';
+      message = 'waiting chatbot runs require a supported input type';
   end if;
 
   if p_status <> 'waiting' and p_waiting_for is not null then
@@ -461,6 +465,43 @@ begin
       raise exception using
         errcode = '23514',
         message = 'outgoing chatbot text must contain 1 to 4096 characters';
+    end if;
+  end loop;
+
+  if jsonb_typeof(coalesce(p_outgoing_messages, '[]'::jsonb)) <> 'array' then
+    raise exception using
+      errcode = '23514',
+      message = 'outgoing chatbot messages must be a JSON array';
+  end if;
+
+  for outgoing_message in
+    select value
+    from jsonb_array_elements(coalesce(p_outgoing_messages, '[]'::jsonb))
+  loop
+    if jsonb_typeof(outgoing_message) <> 'object'
+      or outgoing_message->>'type' not in ('text', 'interactive')
+      or (
+        outgoing_message->>'type' = 'text'
+        and (
+          outgoing_message->>'text' is null
+          or length(btrim(outgoing_message->>'text')) = 0
+          or length(outgoing_message->>'text') > 4096
+        )
+      )
+      or (
+        outgoing_message->>'type' = 'interactive'
+        and (
+          jsonb_typeof(outgoing_message->'interactive') <> 'object'
+          or outgoing_message->'interactive'->>'type' not in ('button', 'list')
+          or outgoing_message->'interactive'->'body'->>'text' is null
+          or length(btrim(outgoing_message->'interactive'->'body'->>'text')) = 0
+          or jsonb_typeof(outgoing_message->'interactive'->'action') <> 'object'
+        )
+      )
+    then
+      raise exception using
+        errcode = '23514',
+        message = 'outgoing chatbot message has an invalid shape';
     end if;
   end loop;
 
@@ -524,6 +565,52 @@ begin
     );
   end loop;
 
+  for outgoing_message in
+    select value
+    from jsonb_array_elements(coalesce(p_outgoing_messages, '[]'::jsonb))
+  loop
+    insert into public.messages (
+      organization_id,
+      conversation_id,
+      direction,
+      agent_id,
+      service,
+      organization_address,
+      contact_address,
+      group_address,
+      content
+    ) values (
+      target_run.organization_id,
+      target_run.conversation_id,
+      'outgoing'::public.direction,
+      target_run.agent_id,
+      target_conversation.service,
+      target_conversation.organization_address,
+      target_conversation.contact_address,
+      target_conversation.group_address,
+      case outgoing_message->>'type'
+        when 'text' then jsonb_build_object(
+          'version', '1',
+          'type', 'text',
+          'kind', 'text',
+          'text', outgoing_message->>'text'
+        )
+        else jsonb_build_object(
+          'version', '1',
+          'type', 'data',
+          'kind', 'interactive',
+          'data', outgoing_message->'interactive'
+        )
+      end
+    )
+    returning id into inserted_message_id;
+
+    inserted_message_ids := array_append(
+      inserted_message_ids,
+      inserted_message_id
+    );
+  end loop;
+
   return query select
     'committed'::text,
     target_run.lock_version,
@@ -540,7 +627,8 @@ revoke execute on function public.commit_chatbot_flow_execution(
   text,
   jsonb,
   jsonb,
-  text[]
+  text[],
+  jsonb
 ) from public, anon, authenticated;
 grant execute on function public.commit_chatbot_flow_execution(
   uuid,
@@ -551,5 +639,6 @@ grant execute on function public.commit_chatbot_flow_execution(
   text,
   jsonb,
   jsonb,
-  text[]
+  text[],
+  jsonb
 ) to service_role;

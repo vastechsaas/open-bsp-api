@@ -8,6 +8,8 @@ import {
   collectInputNodeStrategy,
   conditionNodeStrategy,
   endNodeStrategy,
+  interactiveButtonsNodeStrategy,
+  listMessageNodeStrategy,
   sendMessageNodeStrategy,
   startNodeStrategy,
 } from "./strategies.ts";
@@ -50,6 +52,61 @@ Deno.test("send_message emits its literal text", async () => {
       type: "emit_message",
       message: { type: "text", text: "Welcome" },
       route: { kind: "default" },
+    },
+  );
+});
+
+Deno.test("interactive button and list strategies wait then route by ID", async () => {
+  const buttonNode = {
+    id: "buttons",
+    type: "interactive_buttons" as const,
+    config: {
+      body: "Choose",
+      buttons: [{ id: "sales", title: "Sales" }],
+    },
+  };
+  const buttonWait = await interactiveButtonsNodeStrategy.execute(
+    buttonNode,
+    emptyContext,
+  );
+  assertEquals(buttonWait.type, "wait_for_input");
+  assertEquals(
+    await interactiveButtonsNodeStrategy.execute(buttonNode, {
+      variables: {},
+      option_input: { kind: "button", id: "sales" },
+    }),
+    {
+      type: "advance",
+      route: { kind: "option", option_id: "sales" },
+    },
+  );
+
+  const listNode = {
+    id: "list",
+    type: "list_message" as const,
+    config: {
+      body: "Choose",
+      button_text: "Options",
+      sections: [{
+        id: "teams",
+        title: "Teams",
+        rows: [{ id: "support", title: "Support" }],
+      }],
+    },
+  };
+  const listWait = await listMessageNodeStrategy.execute(
+    listNode,
+    emptyContext,
+  );
+  assertEquals(listWait.type, "wait_for_input");
+  assertEquals(
+    await listMessageNodeStrategy.execute(listNode, {
+      variables: {},
+      option_input: { kind: "list_selection", id: "support" },
+    }),
+    {
+      type: "advance",
+      route: { kind: "option", option_id: "support" },
     },
   );
 });

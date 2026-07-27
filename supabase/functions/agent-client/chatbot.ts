@@ -33,6 +33,40 @@ function freeTextInput(
   return incoming.content.text;
 }
 
+function optionInput(
+  incoming: MessageRow,
+  runIsNew: boolean,
+  runStatus: string | null,
+  runWaitingFor: string | null,
+) {
+  if (
+    runIsNew ||
+    runStatus !== "waiting" ||
+    incoming.content.kind !== "interactive"
+  ) {
+    return undefined;
+  }
+
+  const interactive = incoming.content.data;
+  if (
+    runWaitingFor === "button" &&
+    interactive.type === "button_reply"
+  ) {
+    return { kind: "button" as const, id: interactive.button_reply.id };
+  }
+  if (
+    runWaitingFor === "list_selection" &&
+    interactive.type === "list_reply"
+  ) {
+    return {
+      kind: "list_selection" as const,
+      id: interactive.list_reply.id,
+    };
+  }
+
+  return undefined;
+}
+
 export async function processChatbotMessage(
   client: SupabaseClient<Database>,
   incoming: MessageRow,
@@ -88,6 +122,12 @@ export async function processChatbotMessage(
         prepared.run_is_new,
         prepared.run_status,
       ),
+      option_input: optionInput(
+        incoming,
+        prepared.run_is_new,
+        prepared.run_status,
+        prepared.run_waiting_for,
+      ),
     },
   );
 
@@ -104,7 +144,10 @@ export async function processChatbotMessage(
       p_waiting_for: interpreted.waiting_for as string,
       p_variables: interpreted.variables as Json,
       p_error: interpreted.error as Json | null,
-      p_outgoing_texts: [...interpreted.outgoing_texts],
+      p_outgoing_texts: [],
+      p_outgoing_messages: [
+        ...interpreted.outgoing_messages,
+      ] as unknown as Json,
     },
   );
 
@@ -117,4 +160,4 @@ export async function processChatbotMessage(
   };
 }
 
-export const chatbotRuntimeTestables = { freeTextInput };
+export const chatbotRuntimeTestables = { freeTextInput, optionInput };

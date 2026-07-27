@@ -90,3 +90,40 @@ Deno.test("simulator returns structured compiler issues for an invalid graph", a
     true,
   );
 });
+
+Deno.test("simulator selects an interactive option without side effects", async () => {
+  const interactiveGraph = {
+    nodes: [
+      node("start", "start"),
+      node("buttons", "interactive_buttons", {
+        body: "Choose",
+        buttons: [{ id: "support", title: "Support" }],
+      }),
+      node("end", "end"),
+    ],
+    edges: [
+      edge("start-edge", "start", "buttons"),
+      edge("support-edge", "buttons", "end", {
+        kind: "option",
+        option_id: "support",
+      }),
+    ],
+  };
+
+  const waiting = await simulateChatbotFlow(interactiveGraph, {
+    variables: {},
+  });
+  assertEquals(waiting.valid, true);
+  if (!waiting.valid) return;
+  assertEquals(waiting.waiting_for, "button");
+  assertEquals(waiting.outgoing_messages[0]?.type, "interactive");
+
+  const completed = await simulateChatbotFlow(interactiveGraph, {
+    current_node_id: "buttons",
+    variables: {},
+    option_input: { kind: "button", id: "support" },
+  });
+  assertEquals(completed.valid, true);
+  if (!completed.valid) return;
+  assertEquals(completed.status, "completed");
+});

@@ -50,7 +50,7 @@ continue to distinguish automated and human responses.
 - live inbound routing and agent fallback ownership;
 - durable per-transition run events and replay;
 - crash recovery beyond normal Edge Function delivery retries;
-- buttons, lists, HTTP, AI effects, and human handoff.
+- HTTP, AI effects, and human handoff.
 
 ## Alternatives considered
 

@@ -4,6 +4,8 @@ import type {
   EndNodeV1,
   ExecutionContextV1,
   FlowNodeV1,
+  InteractiveButtonsNodeV1,
+  ListMessageNodeV1,
   NodeResultV1,
   NodeStrategy,
   SendMessageNodeV1,
@@ -38,6 +40,81 @@ export const sendMessageNodeStrategy: NodeStrategy<SendMessageNodeV1> = {
       type: "emit_message",
       message: { type: "text", text: node.config.text },
       route: defaultRoute,
+    });
+  },
+};
+
+export const interactiveButtonsNodeStrategy: NodeStrategy<
+  InteractiveButtonsNodeV1
+> = {
+  execute(node, context): Promise<NodeResultV1> {
+    const optionIds = node.config.buttons.map((button) => button.id);
+    if (
+      context.option_input?.kind === "button" &&
+      optionIds.includes(context.option_input.id)
+    ) {
+      return Promise.resolve({
+        type: "advance",
+        route: { kind: "option", option_id: context.option_input.id },
+      });
+    }
+
+    return Promise.resolve({
+      type: "wait_for_input",
+      message: {
+        type: "interactive",
+        interactive: {
+          type: "button",
+          body: { text: node.config.body },
+          action: {
+            buttons: node.config.buttons.map((button) => ({
+              type: "reply",
+              reply: button,
+            })),
+          },
+        },
+      },
+      expectation: { kind: "button", option_ids: optionIds },
+    });
+  },
+};
+
+export const listMessageNodeStrategy: NodeStrategy<ListMessageNodeV1> = {
+  execute(node, context): Promise<NodeResultV1> {
+    const optionIds = node.config.sections.flatMap((section) =>
+      section.rows.map((row) => row.id)
+    );
+    if (
+      context.option_input?.kind === "list_selection" &&
+      optionIds.includes(context.option_input.id)
+    ) {
+      return Promise.resolve({
+        type: "advance",
+        route: { kind: "option", option_id: context.option_input.id },
+      });
+    }
+
+    return Promise.resolve({
+      type: "wait_for_input",
+      message: {
+        type: "interactive",
+        interactive: {
+          type: "list",
+          body: { text: node.config.body },
+          action: {
+            button: node.config.button_text,
+            sections: node.config.sections.map((section) => ({
+              title: section.title,
+              rows: section.rows.map(({ id, title, description }) => ({
+                id,
+                title,
+                ...(description ? { description } : {}),
+              })),
+            })),
+          },
+        },
+      },
+      expectation: { kind: "list_selection", option_ids: optionIds },
     });
   },
 };
@@ -103,6 +180,10 @@ export function executeNodeStrategy(
       return startNodeStrategy.execute(node, context);
     case "send_message":
       return sendMessageNodeStrategy.execute(node, context);
+    case "interactive_buttons":
+      return interactiveButtonsNodeStrategy.execute(node, context);
+    case "list_message":
+      return listMessageNodeStrategy.execute(node, context);
     case "collect_input":
       return collectInputNodeStrategy.execute(node, context);
     case "condition":

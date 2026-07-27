@@ -1,4 +1,5 @@
 import type {
+  ChatbotOutgoingMessageV1,
   ConditionOperatorV1,
   FlowDefinitionV1,
   FlowEdgeV1,
@@ -14,6 +15,10 @@ export interface InterpretFlowInputV1 {
   readonly current_node_id: string;
   readonly variables: Readonly<Record<string, JsonValue>>;
   readonly free_text_input?: string;
+  readonly option_input?: {
+    readonly kind: "button" | "list_selection";
+    readonly id: string;
+  };
 }
 
 export interface InterpretationErrorV1 {
@@ -25,9 +30,10 @@ export interface InterpretationErrorV1 {
 export interface InterpretationResultV1 {
   readonly status: "waiting" | "completed" | "failed";
   readonly current_node_id: string;
-  readonly waiting_for: "free_text" | null;
+  readonly waiting_for: "free_text" | "button" | "list_selection" | null;
   readonly variables: Readonly<Record<string, JsonValue>>;
   readonly outgoing_texts: readonly string[];
+  readonly outgoing_messages: readonly ChatbotOutgoingMessageV1[];
   readonly error: InterpretationErrorV1 | null;
   readonly transition_count: number;
 }
@@ -62,6 +68,7 @@ function failedResult(
   currentNodeId: string,
   variables: Readonly<Record<string, JsonValue>>,
   outgoingTexts: readonly string[],
+  outgoingMessages: readonly ChatbotOutgoingMessageV1[],
   transitionCount: number,
   error: InterpretationErrorV1,
 ): InterpretationResultV1 {
@@ -71,6 +78,7 @@ function failedResult(
     waiting_for: null,
     variables,
     outgoing_texts: outgoingTexts,
+    outgoing_messages: outgoingMessages,
     error,
     transition_count: transitionCount,
   };
@@ -89,6 +97,12 @@ function resolveTarget(
 
   if (route.kind === "default") {
     return sourceEdges.find((edge) => edge.kind === "default")?.target;
+  }
+
+  if (route.kind === "option") {
+    return sourceEdges.find((edge) =>
+      edge.kind === "option" && edge.option_id === route.option_id
+    )?.target;
   }
 
   const matchedEdge = sourceEdges.find((edge): edge is Extract<
@@ -110,12 +124,14 @@ export async function interpretFlowDefinitionV1(
   const parsedDefinition = flowDefinitionV1Schema.safeParse(storedDefinition);
   const variables: Record<string, JsonValue> = { ...input.variables };
   const outgoingTexts: string[] = [];
+  const outgoingMessages: ChatbotOutgoingMessageV1[] = [];
 
   if (!parsedDefinition.success) {
     return failedResult(
       input.current_node_id,
       variables,
       outgoingTexts,
+      outgoingMessages,
       0,
       {
         code: "invalid_definition",
@@ -139,6 +155,7 @@ export async function interpretFlowDefinitionV1(
         currentNodeId,
         variables,
         outgoingTexts,
+        outgoingMessages,
         transitionCount,
         {
           code: "node_not_found",
@@ -150,12 +167,16 @@ export async function interpretFlowDefinitionV1(
 
     const offersInput = node.type === "collect_input" &&
       !inputConsumed && input.free_text_input !== undefined;
+    const offersOptionInput =
+      (node.type === "interactive_buttons" || node.type === "list_message") &&
+      !inputConsumed && input.option_input !== undefined;
     const result = await executeNodeStrategy(node, {
       variables,
       free_text_input: offersInput ? input.free_text_input : undefined,
+      option_input: offersOptionInput ? input.option_input : undefined,
     });
 
-    if (offersInput) {
+    if (offersInput || offersOptionInput) {
       inputConsumed = true;
     }
 
@@ -166,6 +187,7 @@ export async function interpretFlowDefinitionV1(
         currentNodeId,
         variables,
         outgoingTexts,
+        outgoingMessages,
         transitionCount,
         {
           code: result.code,
@@ -182,26 +204,37 @@ export async function interpretFlowDefinitionV1(
         waiting_for: null,
         variables,
         outgoing_texts: outgoingTexts,
+        outgoing_messages: outgoingMessages,
         error: null,
         transition_count: transitionCount,
       };
     }
 
     if (result.type === "wait_for_input") {
-      outgoingTexts.push(result.prompt);
+      if (result.prompt) {
+        outgoingTexts.push(result.prompt);
+        outgoingMessages.push({ type: "text", text: result.prompt });
+      }
+      if (result.message) {
+        outgoingMessages.push(result.message);
+      }
       return {
         status: "waiting",
         current_node_id: currentNodeId,
-        waiting_for: "free_text",
+        waiting_for: result.expectation.kind,
         variables,
         outgoing_texts: outgoingTexts,
+        outgoing_messages: outgoingMessages,
         error: null,
         transition_count: transitionCount,
       };
     }
 
     if (result.type === "emit_message") {
-      outgoingTexts.push(result.message.text);
+      outgoingMessages.push(result.message);
+      if (result.message.type === "text") {
+        outgoingTexts.push(result.message.text);
+      }
     }
 
     if (result.type === "advance" && result.variable_updates) {
@@ -215,6 +248,7 @@ export async function interpretFlowDefinitionV1(
         currentNodeId,
         variables,
         outgoingTexts,
+        outgoingMessages,
         transitionCount,
         {
           code: "missing_route",
@@ -231,6 +265,7 @@ export async function interpretFlowDefinitionV1(
     currentNodeId,
     variables,
     outgoingTexts,
+    outgoingMessages,
     transitionCount,
     {
       code: "transition_limit_exceeded",

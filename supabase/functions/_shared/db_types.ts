@@ -1718,6 +1718,7 @@ export type Database = {
           p_error: Json
           p_expected_lock_version: number
           p_message_id: string
+          p_outgoing_messages?: Json
           p_outgoing_texts: string[]
           p_run_id: string
           p_status: string

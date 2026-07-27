@@ -2,6 +2,14 @@ import { z } from "zod";
 
 export const CHATBOT_TEXT_MAX_LENGTH = 4096;
 export const CHATBOT_INPUT_MAX_LENGTH = 4096;
+export const CHATBOT_INTERACTIVE_BODY_MAX_LENGTH = 1024;
+export const CHATBOT_REPLY_BUTTON_MAX_COUNT = 3;
+export const CHATBOT_REPLY_BUTTON_TITLE_MAX_LENGTH = 20;
+export const CHATBOT_LIST_BUTTON_TEXT_MAX_LENGTH = 20;
+export const CHATBOT_LIST_MAX_ROWS = 10;
+export const CHATBOT_LIST_SECTION_TITLE_MAX_LENGTH = 24;
+export const CHATBOT_LIST_ROW_TITLE_MAX_LENGTH = 24;
+export const CHATBOT_LIST_ROW_DESCRIPTION_MAX_LENGTH = 72;
 
 const stableIdSchema = z.string().min(1).max(128).regex(
   /^[A-Za-z0-9][A-Za-z0-9_-]*$/,
@@ -30,6 +38,65 @@ const sendMessageNodeSchema = z.object({
   config: z.object({
     text: nonblankTextSchema,
   }).strict(),
+}).strict();
+
+const interactiveBodySchema = z.string().min(1).max(
+  CHATBOT_INTERACTIVE_BODY_MAX_LENGTH,
+).refine((value) => value.trim().length > 0, "Must not be blank");
+
+const replyButtonSchema = z.object({
+  id: stableIdSchema,
+  title: z.string().min(1).max(CHATBOT_REPLY_BUTTON_TITLE_MAX_LENGTH)
+    .refine((value) => value.trim().length > 0, "Must not be blank"),
+}).strict();
+
+const interactiveButtonsNodeSchema = z.object({
+  id: stableIdSchema,
+  type: z.literal("interactive_buttons"),
+  config: z.object({
+    body: interactiveBodySchema,
+    buttons: z.array(replyButtonSchema).min(1).max(
+      CHATBOT_REPLY_BUTTON_MAX_COUNT,
+    ),
+  }).strict(),
+}).strict();
+
+const listRowSchema = z.object({
+  id: stableIdSchema,
+  title: z.string().min(1).max(CHATBOT_LIST_ROW_TITLE_MAX_LENGTH)
+    .refine((value) => value.trim().length > 0, "Must not be blank"),
+  description: z.string().max(CHATBOT_LIST_ROW_DESCRIPTION_MAX_LENGTH)
+    .optional(),
+}).strict();
+
+const listSectionSchema = z.object({
+  id: stableIdSchema,
+  title: z.string().min(1).max(CHATBOT_LIST_SECTION_TITLE_MAX_LENGTH)
+    .refine((value) => value.trim().length > 0, "Must not be blank"),
+  rows: z.array(listRowSchema).min(1),
+}).strict();
+
+const listMessageNodeSchema = z.object({
+  id: stableIdSchema,
+  type: z.literal("list_message"),
+  config: z.object({
+    body: interactiveBodySchema,
+    button_text: z.string().min(1).max(CHATBOT_LIST_BUTTON_TEXT_MAX_LENGTH)
+      .refine((value) => value.trim().length > 0, "Must not be blank"),
+    sections: z.array(listSectionSchema).min(1).max(CHATBOT_LIST_MAX_ROWS),
+  }).strict().superRefine((config, context) => {
+    const rowCount = config.sections.reduce(
+      (total, section) => total + section.rows.length,
+      0,
+    );
+    if (rowCount > CHATBOT_LIST_MAX_ROWS) {
+      context.addIssue({
+        code: "custom",
+        path: ["sections"],
+        message: `Must contain no more than ${CHATBOT_LIST_MAX_ROWS} rows`,
+      });
+    }
+  }),
 }).strict();
 
 const inputLengthSchema = z.number().int().min(0).max(
@@ -78,6 +145,8 @@ const endNodeSchema = z.object({
 export const flowNodeV1Schema = z.discriminatedUnion("type", [
   startNodeSchema,
   sendMessageNodeSchema,
+  interactiveButtonsNodeSchema,
+  listMessageNodeSchema,
   collectInputNodeSchema,
   conditionNodeSchema,
   endNodeSchema,
@@ -107,9 +176,18 @@ const conditionEdgeSchema = z.object({
   value: z.string(),
 }).strict();
 
+const optionEdgeSchema = z.object({
+  id: stableIdSchema,
+  source: stableIdSchema,
+  target: stableIdSchema,
+  kind: z.literal("option"),
+  option_id: stableIdSchema,
+}).strict();
+
 export const flowEdgeV1Schema = z.discriminatedUnion("kind", [
   defaultEdgeSchema,
   conditionEdgeSchema,
+  optionEdgeSchema,
 ]);
 
 export const flowDefinitionV1Schema = z.object({
@@ -141,6 +219,10 @@ export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 export const executionContextV1Schema = z.object({
   variables: z.record(variableKeySchema, jsonValueSchema),
   free_text_input: z.string().optional(),
+  option_input: z.object({
+    kind: z.enum(["button", "list_selection"]),
+    id: stableIdSchema,
+  }).strict().optional(),
 }).strict();
 
 const defaultRouteSchema = z.object({
@@ -152,9 +234,15 @@ const conditionRouteSchema = z.object({
   value: z.string(),
 }).strict();
 
+const optionRouteSchema = z.object({
+  kind: z.literal("option"),
+  option_id: stableIdSchema,
+}).strict();
+
 const routeSchema = z.discriminatedUnion("kind", [
   defaultRouteSchema,
   conditionRouteSchema,
+  optionRouteSchema,
 ]);
 
 const variableUpdatesSchema = z.record(variableKeySchema, jsonValueSchema);
@@ -165,25 +253,84 @@ const advanceResultSchema = z.object({
   variable_updates: variableUpdatesSchema.optional(),
 }).strict();
 
+const outgoingTextMessageSchema = z.object({
+  type: z.literal("text"),
+  text: nonblankTextSchema,
+}).strict();
+
+const outgoingInteractiveMessageSchema = z.object({
+  type: z.literal("interactive"),
+  interactive: z.discriminatedUnion("type", [
+    z.object({
+      type: z.literal("button"),
+      body: z.object({ text: interactiveBodySchema }).strict(),
+      action: z.object({
+        buttons: z.array(
+          z.object({
+            type: z.literal("reply"),
+            reply: replyButtonSchema,
+          }).strict(),
+        ).min(1).max(CHATBOT_REPLY_BUTTON_MAX_COUNT),
+      }).strict(),
+    }).strict(),
+    z.object({
+      type: z.literal("list"),
+      body: z.object({ text: interactiveBodySchema }).strict(),
+      action: z.object({
+        button: z.string().min(1).max(CHATBOT_LIST_BUTTON_TEXT_MAX_LENGTH),
+        sections: z.array(
+          z.object({
+            title: z.string().min(1).max(
+              CHATBOT_LIST_SECTION_TITLE_MAX_LENGTH,
+            ),
+            rows: z.array(
+              z.object({
+                id: stableIdSchema,
+                title: z.string().min(1).max(CHATBOT_LIST_ROW_TITLE_MAX_LENGTH),
+                description: z.string().max(
+                  CHATBOT_LIST_ROW_DESCRIPTION_MAX_LENGTH,
+                ).optional(),
+              }).strict(),
+            ).min(1),
+          }).strict(),
+        ).min(1).max(CHATBOT_LIST_MAX_ROWS),
+      }).strict(),
+    }).strict(),
+  ]),
+}).strict();
+
+export const chatbotOutgoingMessageV1Schema = z.discriminatedUnion("type", [
+  outgoingTextMessageSchema,
+  outgoingInteractiveMessageSchema,
+]);
+
 const emitMessageResultSchema = z.object({
   type: z.literal("emit_message"),
-  message: z.object({
-    type: z.literal("text"),
-    text: nonblankTextSchema,
-  }).strict(),
+  message: chatbotOutgoingMessageV1Schema,
   route: defaultRouteSchema,
 }).strict();
 
 const waitForInputResultSchema = z.object({
   type: z.literal("wait_for_input"),
-  prompt: nonblankTextSchema,
-  expectation: z.object({
-    kind: z.literal("free_text"),
-    variable: variableKeySchema,
-    required: z.boolean(),
-    min_length: inputLengthSchema.optional(),
-    max_length: inputLengthSchema.optional(),
-  }).strict().superRefine((expectation, context) => {
+  prompt: nonblankTextSchema.optional(),
+  message: outgoingInteractiveMessageSchema.optional(),
+  expectation: z.discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("free_text"),
+      variable: variableKeySchema,
+      required: z.boolean(),
+      min_length: inputLengthSchema.optional(),
+      max_length: inputLengthSchema.optional(),
+    }).strict(),
+    z.object({
+      kind: z.enum(["button", "list_selection"]),
+      option_ids: z.array(stableIdSchema).min(1),
+    }).strict(),
+  ]),
+}).strict().superRefine((result, context) => {
+  const freeText = result.expectation.kind === "free_text";
+  if (result.expectation.kind === "free_text") {
+    const expectation = result.expectation;
     if (
       expectation.min_length !== undefined &&
       expectation.max_length !== undefined &&
@@ -191,12 +338,26 @@ const waitForInputResultSchema = z.object({
     ) {
       context.addIssue({
         code: "custom",
-        path: ["max_length"],
+        path: ["expectation", "max_length"],
         message: "Must be greater than or equal to min_length",
       });
     }
-  }),
-}).strict();
+  }
+  if (freeText && !result.prompt) {
+    context.addIssue({
+      code: "custom",
+      path: ["prompt"],
+      message: "Free-text input requires a prompt",
+    });
+  }
+  if (!freeText && !result.message) {
+    context.addIssue({
+      code: "custom",
+      path: ["message"],
+      message: "Option input requires an interactive message",
+    });
+  }
+});
 
 const completeResultSchema = z.object({
   type: z.literal("complete"),
@@ -220,6 +381,10 @@ export const nodeResultV1Schema = z.discriminatedUnion("type", [
 export type FlowNodeV1 = z.infer<typeof flowNodeV1Schema>;
 export type StartNodeV1 = z.infer<typeof startNodeSchema>;
 export type SendMessageNodeV1 = z.infer<typeof sendMessageNodeSchema>;
+export type InteractiveButtonsNodeV1 = z.infer<
+  typeof interactiveButtonsNodeSchema
+>;
+export type ListMessageNodeV1 = z.infer<typeof listMessageNodeSchema>;
 export type CollectInputNodeV1 = z.infer<typeof collectInputNodeSchema>;
 export type ConditionNodeV1 = z.infer<typeof conditionNodeSchema>;
 export type EndNodeV1 = z.infer<typeof endNodeSchema>;
@@ -229,8 +394,15 @@ export type FlowDefinitionV1 = z.infer<typeof flowDefinitionV1Schema>;
 export interface ExecutionContextV1 {
   readonly variables: Readonly<Record<string, JsonValue>>;
   readonly free_text_input?: string;
+  readonly option_input?: {
+    readonly kind: "button" | "list_selection";
+    readonly id: string;
+  };
 }
 export type NodeResultV1 = z.infer<typeof nodeResultV1Schema>;
+export type ChatbotOutgoingMessageV1 = z.infer<
+  typeof chatbotOutgoingMessageV1Schema
+>;
 
 export interface NodeStrategy<TNode extends FlowNodeV1 = FlowNodeV1> {
   execute(
