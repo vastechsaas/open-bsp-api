@@ -5,6 +5,7 @@ import type {
   FlowEdgeV1,
   JsonValue,
   NodeResultV1,
+  WebhookExecutorV1,
 } from "./flow_definition.ts";
 import { flowDefinitionV1Schema } from "./flow_definition.ts";
 import { executeNodeStrategy } from "./strategies.ts";
@@ -19,6 +20,7 @@ export interface InterpretFlowInputV1 {
     readonly kind: "button" | "list_selection";
     readonly id: string;
   };
+  readonly webhook_executor?: WebhookExecutorV1;
 }
 
 export interface InterpretationErrorV1 {
@@ -106,6 +108,12 @@ function resolveTarget(
     )?.target;
   }
 
+  if (route.kind === "webhook") {
+    return sourceEdges.find((edge) =>
+      edge.kind === "webhook" && edge.outcome === route.outcome
+    )?.target;
+  }
+
   const matchedEdge = sourceEdges.find((edge): edge is Extract<
     FlowEdgeV1,
     { kind: "condition" }
@@ -175,6 +183,7 @@ export async function interpretFlowDefinitionV1(
       variables,
       free_text_input: offersInput ? input.free_text_input : undefined,
       option_input: offersOptionInput ? input.option_input : undefined,
+      webhook_executor: input.webhook_executor,
     });
 
     if (offersInput || offersOptionInput) {

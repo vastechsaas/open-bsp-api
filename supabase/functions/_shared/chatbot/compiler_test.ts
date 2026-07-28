@@ -426,3 +426,53 @@ Deno.test("issue ordering is deterministic", () => {
 
   assertEquals(compileIssues(graph), compileIssues(graph));
 });
+
+Deno.test("webhook response variables are available only on the success route", () => {
+  const baseNodes = [
+    editorNode("start", "start"),
+    editorNode("webhook", "webhook", {
+      method: "GET",
+      url: "https://api.example.com/customer",
+      headers: [],
+      timeout_ms: 1000,
+      retry_count: 0,
+      response_mappings: [{ variable: "customer_tier", path: "data.tier" }],
+    }),
+    editorNode("success", "send_message", { text: "{{customer_tier}}" }),
+    editorNode("error", "send_message", { text: "Lookup failed" }),
+    editorNode("end", "end"),
+  ];
+  const edges = [
+    editorEdge("e1", "start", "webhook"),
+    editorEdge("e2", "webhook", "success", {
+      kind: "webhook",
+      outcome: "success",
+    }),
+    editorEdge("e3", "webhook", "error", {
+      kind: "webhook",
+      outcome: "error",
+    }),
+    editorEdge("e4", "success", "end"),
+    editorEdge("e5", "error", "end"),
+  ];
+
+  const valid = compileFlowDefinition({ nodes: baseNodes, edges });
+  assertEquals(valid.ok, true);
+
+  const invalid = compileFlowDefinition({
+    nodes: baseNodes.map((node) =>
+      node.id === "error"
+        ? editorNode("error", "send_message", { text: "{{customer_tier}}" })
+        : node
+    ),
+    edges,
+  });
+  assertEquals(invalid.ok, false);
+  if (invalid.ok) return;
+  assertEquals(
+    invalid.issues.some((issue) =>
+      issue.code === "template_variable_unavailable"
+    ),
+    true,
+  );
+});

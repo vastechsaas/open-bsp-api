@@ -2,6 +2,7 @@ import {
   compileFlowDefinition,
   interpretFlowDefinitionV1,
   type JsonValue,
+  mapWebhookResponse,
 } from "../_shared/chatbot/mod.ts";
 import type { EditorGraph } from "./payload.ts";
 
@@ -13,6 +14,10 @@ export type ChatbotSimulationInput = {
     kind: "button" | "list_selection";
     id: string;
   };
+  webhook_mocks?: Record<
+    string,
+    { outcome: "success" | "error"; status_code: number; body: unknown }
+  >;
 };
 
 export async function simulateChatbotFlow(
@@ -36,6 +41,24 @@ export async function simulateChatbotFlow(
     ...(input.option_input === undefined
       ? {}
       : { option_input: input.option_input }),
+    webhook_executor: (node) => {
+      const mock = input.webhook_mocks?.[node.id] ?? {
+        outcome: "success" as const,
+        status_code: 200,
+        body: {},
+      };
+      if (mock.outcome === "error") {
+        return Promise.resolve({
+          ok: false,
+          status_code: mock.status_code,
+          error_code: "simulated_webhook_error",
+        });
+      }
+      return Promise.resolve({
+        ...mapWebhookResponse(node, mock.body),
+        status_code: mock.status_code,
+      });
+    },
   });
 
   return {

@@ -92,14 +92,15 @@ Planned builder work
   - Backend branch: `scrum-84-chatbot-runtime-identity`
   - Frontend branch: `scrum-84-chatbot-runtime-identity-ui`
   - Status: merged into both staging branches
-- [ ] SCRUM-85 - Add Assign Agent and human handoff node
+- [x] SCRUM-85 - Add Assign Agent and human handoff node
   - Backend branch: `scrum-85-assign-agent-handoff`
   - Frontend branch: `scrum-85-assign-agent-handoff-ui`
-  - Status: implementation and validation complete; staging merge pending
-- [ ] SCRUM-86 - Add secured Webhook/API node
+  - Status: merged into both staging branches
+- [x] SCRUM-86 - Add secured Webhook/API node
   - Backend branch: `scrum-86-secure-webhook-node`
   - Frontend branch: `scrum-86-secure-webhook-node-ui`
-  - Status: planned after SCRUM-85
+  - Status: secured runtime, protected credentials, builder controls, and
+    mock-only simulation implemented and validated; staging merge pending
 
 Deferred beyond V1
 

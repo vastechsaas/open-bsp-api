@@ -1107,6 +1107,51 @@ export type Database = {
           },
         ]
       }
+      chatbot_webhook_credentials: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          organization_id: string
+          updated_at: string
+          vault_secret_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          updated_at?: string
+          vault_secret_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          updated_at?: string
+          vault_secret_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chatbot_webhook_credentials_created_by_fkey"
+            columns: ["organization_id", "created_by"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "chatbot_webhook_credentials_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           created_at: string
@@ -1755,6 +1800,20 @@ export type Database = {
           flow_id: string
         }[]
       }
+      create_chatbot_webhook_credential: {
+        Args: {
+          p_created_by?: string
+          p_headers: Json
+          p_name: string
+          p_organization_id: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+        }[]
+      }
       duplicate_chatbot_flow_draft: {
         Args: {
           p_created_by?: string
@@ -2032,6 +2091,10 @@ export type Database = {
           p_retryable?: boolean
         }
         Returns: string
+      }
+      resolve_chatbot_webhook_credential: {
+        Args: { p_credential_id: string; p_organization_id: string }
+        Returns: Json
       }
       start_campaign: {
         Args: { p_campaign_id: string; p_organization_id: string }

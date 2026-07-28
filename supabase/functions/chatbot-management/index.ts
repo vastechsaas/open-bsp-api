@@ -20,6 +20,7 @@ import {
 import {
   activateDeploymentPayloadSchema,
   createFlowPayloadSchema,
+  createWebhookCredentialPayloadSchema,
   deploymentPayloadSchema,
   duplicateFlowPayloadSchema,
   organizationPayloadSchema,
@@ -256,6 +257,61 @@ async function unavailableAgentIssues(
   return findUnavailableAgentIssues(definition, availableIds);
 }
 
+async function unavailableWebhookCredentialIssues(
+  client: SupabaseClient<Database>,
+  organizationId: string,
+  definition: FlowDefinitionV1,
+) {
+  const references = [
+    ...new Set(
+      definition.nodes.flatMap((node) =>
+        node.type === "webhook" && node.config.secret_id
+          ? [node.config.secret_id]
+          : []
+      ),
+    ),
+  ];
+  if (references.length === 0) return [];
+
+  const { data, error } = await client
+    .from("chatbot_webhook_credentials")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .in("id", references);
+  if (error) {
+    throwDatabaseError(error, "Unable to validate webhook credentials");
+  }
+
+  const available = new Set(data.map((credential) => credential.id));
+  return definition.nodes.flatMap((node, index) =>
+    node.type === "webhook" &&
+      node.config.secret_id &&
+      !available.has(node.config.secret_id)
+      ? [{
+        code: "webhook_credential_unavailable",
+        path: ["nodes", index, "data", "config", "secret_id"],
+        message: "The selected webhook credential is unavailable",
+        node_id: node.id,
+      }]
+      : []
+  );
+}
+
+async function externalReferenceIssues(
+  client: SupabaseClient<Database>,
+  organizationId: string,
+  definition: FlowDefinitionV1,
+) {
+  return [
+    ...await unavailableAgentIssues(client, organizationId, definition),
+    ...await unavailableWebhookCredentialIssues(
+      client,
+      organizationId,
+      definition,
+    ),
+  ];
+}
+
 function flowId(c: Context<AppEnv>): string {
   const value = c.req.param("flowId");
 
@@ -283,6 +339,75 @@ app.post("/chatbot-management/flows", requireAdmin, async (c) => {
 
   return c.json(data[0], 201);
 });
+
+app.get(
+  "/chatbot-management/webhook-credentials",
+  requireAdmin,
+  async (c) => {
+    const organizationId = c.req.query("organization_id")!;
+    const { data, error } = await serviceClient()
+      .from("chatbot_webhook_credentials")
+      .select("id, name, created_at, updated_at")
+      .eq("organization_id", organizationId)
+      .order("name");
+    if (error) {
+      throwDatabaseError(error, "Unable to load webhook credentials");
+    }
+    return c.json({ credentials: data });
+  },
+);
+
+app.post(
+  "/chatbot-management/webhook-credentials",
+  requireAdmin,
+  async (c) => {
+    const payload = createWebhookCredentialPayloadSchema.parse(
+      await c.req.json(),
+    );
+    const { data, error } = await serviceClient().rpc(
+      "create_chatbot_webhook_credential",
+      {
+        p_organization_id: payload.organization_id,
+        p_name: payload.name,
+        p_headers: payload.headers,
+        ...(c.get("actorAgentId")
+          ? { p_created_by: c.get("actorAgentId")! }
+          : {}),
+      },
+    );
+    if (error) {
+      throwDatabaseError(error, "Unable to create webhook credential");
+    }
+    return c.json({ credential: data[0] }, 201);
+  },
+);
+
+app.delete(
+  "/chatbot-management/webhook-credentials/:credentialId",
+  requireAdmin,
+  async (c) => {
+    const organizationId = organizationPayloadSchema.parse(
+      await c.req.json(),
+    ).organization_id;
+    const credentialId = z.string().uuid().parse(c.req.param("credentialId"));
+    const { data, error } = await serviceClient()
+      .from("chatbot_webhook_credentials")
+      .delete()
+      .eq("organization_id", organizationId)
+      .eq("id", credentialId)
+      .select("id")
+      .maybeSingle();
+    if (error) {
+      throwDatabaseError(error, "Unable to delete webhook credential");
+    }
+    if (!data) {
+      throw new HTTPException(404, {
+        message: "Webhook credential not found",
+      });
+    }
+    return c.json({ deleted: true });
+  },
+);
 
 app.patch("/chatbot-management/flows/:flowId", requireAdmin, async (c) => {
   const payload = renameFlowPayloadSchema.parse(await c.req.json());
@@ -452,7 +577,7 @@ app.post(
       return c.json({ valid: false, issues: result.issues });
     }
 
-    const issues = await unavailableAgentIssues(
+    const issues = await externalReferenceIssues(
       serviceClient(),
       payload.organization_id,
       result.definition,
@@ -486,7 +611,7 @@ app.post(
     if (!compiled.ok) {
       return c.json({ valid: false, issues: compiled.issues });
     }
-    const agentIssues = await unavailableAgentIssues(
+    const agentIssues = await externalReferenceIssues(
       serviceClient(),
       payload.organization_id,
       compiled.definition,
@@ -500,6 +625,7 @@ app.post(
       variables: payload.variables,
       free_text_input: payload.free_text_input,
       option_input: payload.option_input,
+      webhook_mocks: payload.webhook_mocks,
     });
 
     return c.json(result);
@@ -543,7 +669,7 @@ app.post(
       }, 422);
     }
 
-    const agentIssues = await unavailableAgentIssues(
+    const agentIssues = await externalReferenceIssues(
       client,
       payload.organization_id,
       compiled.definition,

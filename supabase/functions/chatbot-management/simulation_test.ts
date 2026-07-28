@@ -127,3 +127,54 @@ Deno.test("simulator selects an interactive option without side effects", async 
   if (!completed.valid) return;
   assertEquals(completed.status, "completed");
 });
+
+Deno.test("simulator uses webhook mocks and never performs an external request", async () => {
+  const webhookGraph = {
+    nodes: [
+      node("start", "start"),
+      node("lookup", "webhook", {
+        method: "GET",
+        url: "https://api.example.com/customers",
+        headers: [],
+        timeout_ms: 1000,
+        retry_count: 0,
+        response_mappings: [
+          { variable: "customer_tier", path: "data.tier" },
+        ],
+      }),
+      node("success", "send_message", { text: "Tier {{customer_tier}}" }),
+      node("error", "send_message", { text: "Lookup failed" }),
+      node("end", "end"),
+    ],
+    edges: [
+      edge("e1", "start", "lookup"),
+      edge("e2", "lookup", "success", {
+        kind: "webhook",
+        outcome: "success",
+      }),
+      edge("e3", "lookup", "error", {
+        kind: "webhook",
+        outcome: "error",
+      }),
+      edge("e4", "success", "end"),
+      edge("e5", "error", "end"),
+    ],
+  };
+
+  const result = await simulateChatbotFlow(webhookGraph, {
+    variables: {},
+    webhook_mocks: {
+      lookup: {
+        outcome: "success",
+        status_code: 200,
+        body: { data: { tier: "gold" } },
+      },
+    },
+  });
+
+  assertEquals(result.valid, true);
+  if (!result.valid) return;
+  assertEquals(result.status, "completed");
+  assertEquals(result.outgoing_texts, ["Tier gold"]);
+  assertEquals(result.variables, { customer_tier: "gold" });
+});
