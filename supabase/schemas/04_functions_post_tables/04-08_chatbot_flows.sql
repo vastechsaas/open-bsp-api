@@ -338,6 +338,123 @@ grant execute on function public.prepare_chatbot_flow_execution(
   uuid
 ) to service_role;
 
+create or replace function public.create_chatbot_webhook_credential(
+  p_organization_id uuid,
+  p_name text,
+  p_headers jsonb,
+  p_created_by uuid default null
+)
+returns table (
+  id uuid,
+  name text,
+  created_at timestamp with time zone,
+  updated_at timestamp with time zone
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  credential_id uuid := gen_random_uuid();
+  vault_id uuid;
+begin
+  if jsonb_typeof(p_headers) <> 'object'
+    or exists (
+      select 1
+      from jsonb_each(p_headers)
+      where jsonb_typeof(value) <> 'string'
+    )
+  then
+    raise exception using
+      errcode = '22023',
+      message = 'Credential headers must be a JSON object of string values';
+  end if;
+
+  vault_id := vault.create_secret(
+    p_headers::text,
+    'chatbot_webhook_' || credential_id::text,
+    'Protected chatbot webhook headers'
+  );
+
+  return query
+  insert into public.chatbot_webhook_credentials (
+    organization_id,
+    id,
+    created_by,
+    name,
+    vault_secret_id
+  )
+  values (
+    p_organization_id,
+    credential_id,
+    p_created_by,
+    btrim(p_name),
+    vault_id
+  )
+  returning
+    chatbot_webhook_credentials.id,
+    chatbot_webhook_credentials.name,
+    chatbot_webhook_credentials.created_at,
+    chatbot_webhook_credentials.updated_at;
+end;
+$$;
+
+create or replace function public.resolve_chatbot_webhook_credential(
+  p_organization_id uuid,
+  p_credential_id uuid
+)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select decrypted_secret::jsonb
+  from public.chatbot_webhook_credentials
+  join vault.decrypted_secrets
+    on decrypted_secrets.id = chatbot_webhook_credentials.vault_secret_id
+  where chatbot_webhook_credentials.organization_id = p_organization_id
+    and chatbot_webhook_credentials.id = p_credential_id;
+$$;
+
+create or replace function public.delete_chatbot_webhook_vault_secret()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  delete from vault.secrets where id = old.vault_secret_id;
+  return old;
+end;
+$$;
+
+create trigger delete_chatbot_webhook_vault_secret
+after delete
+on public.chatbot_webhook_credentials
+for each row
+execute function public.delete_chatbot_webhook_vault_secret();
+
+revoke all
+on function public.create_chatbot_webhook_credential(uuid, text, jsonb, uuid)
+from public, anon, authenticated;
+
+revoke all
+on function public.resolve_chatbot_webhook_credential(uuid, uuid)
+from public, anon, authenticated;
+
+revoke all
+on function public.delete_chatbot_webhook_vault_secret()
+from public, anon, authenticated;
+
+grant execute
+on function public.create_chatbot_webhook_credential(uuid, text, jsonb, uuid)
+to service_role;
+
+grant execute
+on function public.resolve_chatbot_webhook_credential(uuid, uuid)
+to service_role;
+
 create function public.commit_chatbot_flow_execution(
   p_run_id uuid,
   p_expected_lock_version bigint,

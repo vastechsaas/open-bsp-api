@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  createWebhookExecutor,
   interpretFlowDefinitionV1,
   type JsonValue,
 } from "../_shared/chatbot/mod.ts";
@@ -128,6 +129,28 @@ export async function processChatbotMessage(
         prepared.run_status,
         prepared.run_waiting_for,
       ),
+      webhook_executor: createWebhookExecutor({
+        idempotencyKey:
+          `chatbot:${prepared.run_id}:${incoming.id}:${prepared.run_lock_version}`,
+        resolveSecret: async (secretId) => {
+          const { data, error } = await client.rpc(
+            "resolve_chatbot_webhook_credential",
+            {
+              p_organization_id: incoming.organization_id,
+              p_credential_id: secretId,
+            },
+          );
+          if (
+            error || !data || typeof data !== "object" || Array.isArray(data)
+          ) {
+            return null;
+          }
+          const entries = Object.entries(data);
+          return entries.every(([, value]) => typeof value === "string")
+            ? Object.fromEntries(entries) as Record<string, string>
+            : null;
+        },
+      }),
     },
   );
 

@@ -10,6 +10,12 @@ export const CHATBOT_LIST_MAX_ROWS = 10;
 export const CHATBOT_LIST_SECTION_TITLE_MAX_LENGTH = 24;
 export const CHATBOT_LIST_ROW_TITLE_MAX_LENGTH = 24;
 export const CHATBOT_LIST_ROW_DESCRIPTION_MAX_LENGTH = 72;
+export const CHATBOT_WEBHOOK_URL_MAX_LENGTH = 2048;
+export const CHATBOT_WEBHOOK_BODY_MAX_LENGTH = 16384;
+export const CHATBOT_WEBHOOK_TIMEOUT_MIN_MS = 500;
+export const CHATBOT_WEBHOOK_TIMEOUT_MAX_MS = 10000;
+export const CHATBOT_WEBHOOK_MAX_RETRIES = 2;
+export const CHATBOT_WEBHOOK_MAX_MAPPINGS = 10;
 
 const stableIdSchema = z.string().min(1).max(128).regex(
   /^[A-Za-z0-9][A-Za-z0-9_-]*$/,
@@ -146,6 +152,61 @@ const assignAgentNodeSchema = z.object({
   }).strict(),
 }).strict();
 
+const webhookHeaderSchema = z.object({
+  name: z.string().min(1).max(128).regex(
+    /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/,
+    "Must be a valid HTTP header name",
+  ),
+  value: z.string().max(CHATBOT_TEXT_MAX_LENGTH),
+}).strict().refine(
+  (header) =>
+    !["authorization", "cookie", "proxy-authorization", "x-api-key"].includes(
+      header.name.toLowerCase(),
+    ),
+  "Sensitive headers must come from a protected credential",
+);
+
+const webhookResponseMappingSchema = z.object({
+  variable: variableKeySchema,
+  path: z.string().min(1).max(256).regex(
+    /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/,
+    "Must be a dot-separated JSON object path",
+  ),
+}).strict();
+
+const webhookNodeSchema = z.object({
+  id: stableIdSchema,
+  type: z.literal("webhook"),
+  config: z.object({
+    method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
+    url: z.string().url().max(CHATBOT_WEBHOOK_URL_MAX_LENGTH).refine(
+      (value) => value.startsWith("https://"),
+      "Only HTTPS URLs are supported",
+    ).refine((value) => {
+      try {
+        const authority = value.slice("https://".length).split(/[/?#]/, 1)[0];
+        const url = new URL(value);
+        return !authority.includes("{{") &&
+          !authority.includes("}}") &&
+          !url.username &&
+          !url.password;
+      } catch {
+        return false;
+      }
+    }, "The webhook origin must be static and must not contain credentials"),
+    headers: z.array(webhookHeaderSchema).max(20),
+    body_template: z.string().max(CHATBOT_WEBHOOK_BODY_MAX_LENGTH).optional(),
+    secret_id: agentIdSchema.optional(),
+    timeout_ms: z.number().int().min(CHATBOT_WEBHOOK_TIMEOUT_MIN_MS).max(
+      CHATBOT_WEBHOOK_TIMEOUT_MAX_MS,
+    ),
+    retry_count: z.number().int().min(0).max(CHATBOT_WEBHOOK_MAX_RETRIES),
+    response_mappings: z.array(webhookResponseMappingSchema).max(
+      CHATBOT_WEBHOOK_MAX_MAPPINGS,
+    ),
+  }).strict(),
+}).strict();
+
 const endNodeSchema = z.object({
   id: stableIdSchema,
   type: z.literal("end"),
@@ -160,6 +221,7 @@ export const flowNodeV1Schema = z.discriminatedUnion("type", [
   collectInputNodeSchema,
   conditionNodeSchema,
   assignAgentNodeSchema,
+  webhookNodeSchema,
   endNodeSchema,
 ]);
 
@@ -195,10 +257,19 @@ const optionEdgeSchema = z.object({
   option_id: stableIdSchema,
 }).strict();
 
+const webhookEdgeSchema = z.object({
+  id: stableIdSchema,
+  source: stableIdSchema,
+  target: stableIdSchema,
+  kind: z.literal("webhook"),
+  outcome: z.enum(["success", "error"]),
+}).strict();
+
 export const flowEdgeV1Schema = z.discriminatedUnion("kind", [
   defaultEdgeSchema,
   conditionEdgeSchema,
   optionEdgeSchema,
+  webhookEdgeSchema,
 ]);
 
 export const flowDefinitionV1Schema = z.object({
@@ -250,10 +321,16 @@ const optionRouteSchema = z.object({
   option_id: stableIdSchema,
 }).strict();
 
+const webhookRouteSchema = z.object({
+  kind: z.literal("webhook"),
+  outcome: z.enum(["success", "error"]),
+}).strict();
+
 const routeSchema = z.discriminatedUnion("kind", [
   defaultRouteSchema,
   conditionRouteSchema,
   optionRouteSchema,
+  webhookRouteSchema,
 ]);
 
 const variableUpdatesSchema = z.record(variableKeySchema, jsonValueSchema);
@@ -405,6 +482,7 @@ export type ListMessageNodeV1 = z.infer<typeof listMessageNodeSchema>;
 export type CollectInputNodeV1 = z.infer<typeof collectInputNodeSchema>;
 export type ConditionNodeV1 = z.infer<typeof conditionNodeSchema>;
 export type AssignAgentNodeV1 = z.infer<typeof assignAgentNodeSchema>;
+export type WebhookNodeV1 = z.infer<typeof webhookNodeSchema>;
 export type EndNodeV1 = z.infer<typeof endNodeSchema>;
 export type FlowEdgeV1 = z.infer<typeof flowEdgeV1Schema>;
 export type ConditionOperatorV1 = z.infer<typeof conditionOperatorV1Schema>;
@@ -416,6 +494,7 @@ export interface ExecutionContextV1 {
     readonly kind: "button" | "list_selection";
     readonly id: string;
   };
+  readonly webhook_executor?: WebhookExecutorV1;
 }
 export type NodeResultV1 = z.infer<typeof nodeResultV1Schema>;
 export type ChatbotOutgoingMessageV1 = z.infer<
@@ -428,3 +507,15 @@ export interface NodeStrategy<TNode extends FlowNodeV1 = FlowNodeV1> {
     context: ExecutionContextV1,
   ): Promise<NodeResultV1>;
 }
+
+export interface WebhookExecutionResultV1 {
+  readonly ok: boolean;
+  readonly variable_updates?: Readonly<Record<string, JsonValue>>;
+  readonly status_code?: number;
+  readonly error_code?: string;
+}
+
+export type WebhookExecutorV1 = (
+  node: Readonly<WebhookNodeV1>,
+  variables: Readonly<Record<string, JsonValue>>,
+) => Promise<WebhookExecutionResultV1>;

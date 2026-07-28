@@ -11,6 +11,7 @@ import type {
   NodeStrategy,
   SendMessageNodeV1,
   StartNodeV1,
+  WebhookNodeV1,
 } from "./flow_definition.ts";
 import {
   CHATBOT_INTERACTIVE_BODY_MAX_LENGTH,
@@ -225,6 +226,31 @@ export const assignAgentNodeStrategy: NodeStrategy<AssignAgentNodeV1> = {
   },
 };
 
+export const webhookNodeStrategy: NodeStrategy<WebhookNodeV1> = {
+  async execute(node, context): Promise<NodeResultV1> {
+    if (!context.webhook_executor) {
+      return {
+        type: "fail",
+        code: "webhook_executor_unavailable",
+        message: "Webhook execution is unavailable",
+        details: { node_id: node.id },
+      };
+    }
+
+    const result = await context.webhook_executor(node, context.variables);
+    return {
+      type: "advance",
+      route: {
+        kind: "webhook",
+        outcome: result.ok ? "success" : "error",
+      },
+      ...(result.variable_updates
+        ? { variable_updates: { ...result.variable_updates } }
+        : {}),
+    };
+  },
+};
+
 export const endNodeStrategy: NodeStrategy<EndNodeV1> = {
   execute(): Promise<NodeResultV1> {
     return Promise.resolve({ type: "complete" });
@@ -250,6 +276,8 @@ export function executeNodeStrategy(
       return conditionNodeStrategy.execute(node, context);
     case "assign_agent":
       return assignAgentNodeStrategy.execute(node, context);
+    case "webhook":
+      return webhookNodeStrategy.execute(node, context);
     case "end":
       return endNodeStrategy.execute(node, context);
   }

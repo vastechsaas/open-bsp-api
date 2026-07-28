@@ -100,6 +100,16 @@ function editorEdgeToCandidate(edge: EditorEdge): unknown {
     };
   }
 
+  if (kind === "webhook") {
+    return {
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      kind,
+      outcome: data.outcome ?? edge.sourceHandle,
+    };
+  }
+
   return {
     id: edge.id,
     source: edge.source,
@@ -186,7 +196,7 @@ function validateAvailableVariables(
   issues: CompileIssue[],
 ): void {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
-  const incoming = new Map<string, string[]>();
+  const incoming = new Map<string, FlowEdgeV1[]>();
   const outgoing = new Map<string, string[]>();
   const indegree = new Map<string, number>();
 
@@ -199,7 +209,7 @@ function validateAvailableVariables(
 
   for (const edge of edges) {
     if (!reachable.has(edge.source) || !reachable.has(edge.target)) continue;
-    incoming.get(edge.target)?.push(edge.source);
+    incoming.get(edge.target)?.push(edge);
     outgoing.get(edge.source)?.push(edge.target);
     indegree.set(edge.target, (indegree.get(edge.target) ?? 0) + 1);
   }
@@ -212,9 +222,18 @@ function validateAvailableVariables(
   while (queue.length > 0) {
     const nodeId = queue.shift()!;
     const node = nodeById.get(nodeId)!;
-    const predecessorSets = (incoming.get(nodeId) ?? []).map((predecessor) =>
-      outputVariables.get(predecessor) ?? new Set<string>()
-    );
+    const predecessorSets = (incoming.get(nodeId) ?? []).map((edge) => {
+      const variables = new Set(outputVariables.get(edge.source) ?? []);
+      const sourceNode = nodeById.get(edge.source);
+      if (sourceNode?.type === "webhook" && edge.kind === "webhook") {
+        if (edge.outcome === "error") {
+          for (const mapping of sourceNode.config.response_mappings) {
+            variables.delete(mapping.variable);
+          }
+        }
+      }
+      return variables;
+    });
     const available = nodeId === startNodeId
       ? new Set<string>()
       : intersectSets(predecessorSets);
@@ -227,6 +246,16 @@ function validateAvailableVariables(
       ? [["prompt", node.config.prompt]]
       : node.type === "interactive_buttons" || node.type === "list_message"
       ? [["body", node.config.body]]
+      : node.type === "webhook"
+      ? [
+        ["url", node.config.url],
+        ...(node.config.body_template === undefined
+          ? []
+          : [["body_template", node.config.body_template] as const]),
+        ...node.config.headers.map((header, index) =>
+          [`headers.${index}.value`, header.value] as const
+        ),
+      ]
       : [];
 
     for (const [field, template] of templateFields) {
@@ -236,7 +265,7 @@ function validateAvailableVariables(
         nodeSourceIndexes.get(node)!,
         "data",
         "config",
-        field,
+        ...field.split("."),
       ];
       if (!parsedTemplate.ok) {
         issues.push({
@@ -278,6 +307,11 @@ function validateAvailableVariables(
 
     if (node.type === "collect_input") {
       available.add(node.config.variable);
+    }
+    if (node.type === "webhook") {
+      for (const mapping of node.config.response_mappings) {
+        available.add(mapping.variable);
+      }
     }
     outputVariables.set(nodeId, available);
 
@@ -486,6 +520,17 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
         edge_id: edge.id,
       });
     }
+    if (
+      edge.kind === "webhook" &&
+      nodeById.get(edge.source)?.type !== "webhook"
+    ) {
+      issues.push({
+        code: "webhook_edge_source",
+        path: ["edges", edgeSourceIndexes.get(edge)!, "data", "kind"],
+        message: "Webhook edges may originate only from webhook nodes",
+        edge_id: edge.id,
+      });
+    }
   });
 
   nodes.forEach((node) => {
@@ -495,6 +540,7 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
     const defaults = outgoing.filter((edge) => edge.kind === "default");
     const conditions = outgoing.filter((edge) => edge.kind === "condition");
     const options = outgoing.filter((edge) => edge.kind === "option");
+    const webhookRoutes = outgoing.filter((edge) => edge.kind === "webhook");
 
     if (node.type === "start") {
       if (incoming.length !== 0) {
@@ -576,6 +622,25 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
           path: ["nodes", nodeIndex],
           message:
             "Condition node must have exactly one default edge and at least one conditional edge",
+          node_id: node.id,
+        });
+      }
+    }
+
+    if (node.type === "webhook") {
+      const outcomes = webhookRoutes.map((edge) => edge.outcome);
+      if (
+        outgoing.length !== 2 ||
+        webhookRoutes.length !== 2 ||
+        new Set(outcomes).size !== 2 ||
+        !outcomes.includes("success") ||
+        !outcomes.includes("error")
+      ) {
+        issues.push({
+          code: "invalid_webhook_routing",
+          path: ["nodes", nodeIndex],
+          message:
+            "Webhook node must have exactly one success edge and one error edge",
           node_id: node.id,
         });
       }
