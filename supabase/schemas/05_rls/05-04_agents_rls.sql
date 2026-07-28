@@ -47,6 +47,7 @@ using (
   )
   and user_id is null
   and ai = true
+  and coalesce(extra->>'kind', '') <> 'chatbot_runtime'
 );
 
 create policy "admins can create their orgs ai agents"
@@ -58,6 +59,7 @@ with check (
     select public.get_authorized_orgs('admin')
   )
   and ai = true
+  and coalesce(extra->>'kind', '') <> 'chatbot_runtime'
 );
 
 create policy "owners can send invitations"
@@ -81,8 +83,11 @@ using (
   organization_id in (
     select public.get_authorized_orgs('owner')
   )
+  and coalesce(extra->>'kind', '') <> 'chatbot_runtime'
 )
 with check (
+  coalesce(extra->>'kind', '') <> 'chatbot_runtime'
+  and
   public.agent_update_by_owner_rules(id, user_id, organization_id, ai, extra)
 );
 
@@ -94,4 +99,5 @@ using (
   organization_id in (
     select public.get_authorized_orgs('owner')
   )
+  and coalesce(extra->>'kind', '') <> 'chatbot_runtime'
 );

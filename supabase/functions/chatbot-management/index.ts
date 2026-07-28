@@ -535,15 +535,28 @@ app.put(
   requireAdmin,
   async (c) => {
     const payload = activateDeploymentPayloadSchema.parse(await c.req.json());
+    const client = serviceClient();
+    const { data: runtimeAgentId, error: runtimeAgentError } = await client.rpc(
+      "ensure_chatbot_runtime_agent",
+      { p_organization_id: payload.organization_id },
+    );
+
+    if (runtimeAgentError || !runtimeAgentId) {
+      throwDatabaseError(
+        runtimeAgentError ?? {},
+        "Unable to resolve chatbot runtime identity",
+      );
+    }
+
     const activatedAt = new Date().toISOString();
-    const { data, error } = await serviceClient()
+    const { data, error } = await client
       .from("chatbot_flow_deployments")
       .upsert({
         organization_id: payload.organization_id,
         organization_address: payload.organization_address,
         flow_id: flowId(c),
         flow_version_id: payload.version_id,
-        agent_id: payload.agent_id,
+        agent_id: runtimeAgentId,
         activated_by: c.get("actorAgentId"),
         activated_at: activatedAt,
       }, { onConflict: "organization_id,organization_address" })

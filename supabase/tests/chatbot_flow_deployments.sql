@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 
 set local search_path = extensions, public, auth;
 
-select plan(11);
+select plan(15);
 
 insert into public.organizations (id, name, extra)
 values
@@ -16,9 +16,9 @@ values
   (
     '36000000-0000-4000-8000-000000000001',
     '16000000-0000-4000-8000-000000000001',
-    'Deployment Bot A',
+    'Chatbot Runtime',
     true,
-    '{"mode":"active"}'
+    '{"kind":"chatbot_runtime","mode":"active","system":true}'
   ),
   (
     '36000000-0000-4000-8000-000000000002',
@@ -38,6 +38,13 @@ values
     '36000000-0000-4000-8000-000000000004',
     '16000000-0000-4000-8000-000000000002',
     'Deployment Bot B',
+    true,
+    '{"mode":"active"}'
+  ),
+  (
+    '36000000-0000-4000-8000-000000000005',
+    '16000000-0000-4000-8000-000000000001',
+    'Regular AI Agent A',
     true,
     '{"mode":"active"}'
   );
@@ -168,6 +175,36 @@ select ok(
   'a published flow can be deployed to a connected WhatsApp address'
 );
 
+select is(
+  public.ensure_chatbot_runtime_agent(
+    '16000000-0000-4000-8000-000000000001'
+  ),
+  '36000000-0000-4000-8000-000000000001'::uuid,
+  'the existing organization runtime identity is reused'
+);
+
+select is(
+  public.ensure_chatbot_runtime_agent(
+    '16000000-0000-4000-8000-000000000002'
+  ),
+  public.ensure_chatbot_runtime_agent(
+    '16000000-0000-4000-8000-000000000002'
+  ),
+  'runtime identity creation is idempotent'
+);
+
+select is(
+  (
+    select count(*)
+    from public.agents
+    where organization_id = '16000000-0000-4000-8000-000000000002'
+      and ai = true
+      and extra->>'kind' = 'chatbot_runtime'
+  ),
+  1::bigint,
+  'an organization has exactly one chatbot runtime identity'
+);
+
 select throws_ok(
   $$
     insert into public.chatbot_flow_deployments
@@ -235,7 +272,7 @@ select throws_ok(
     where organization_address = 'deployment-whatsapp-connected'
   $$,
   '23514',
-  'chatbot deployments require an active AI agent from the same organization',
+  'chatbot deployments require the organization chatbot runtime identity',
   'a human agent is rejected'
 );
 
@@ -246,7 +283,7 @@ select throws_ok(
     where organization_address = 'deployment-whatsapp-connected'
   $$,
   '23514',
-  'chatbot deployments require an active AI agent from the same organization',
+  'chatbot deployments require the organization chatbot runtime identity',
   'an inactive AI agent is rejected'
 );
 
@@ -257,8 +294,19 @@ select throws_ok(
     where organization_address = 'deployment-whatsapp-connected'
   $$,
   '23514',
-  'chatbot deployments require an active AI agent from the same organization',
+  'chatbot deployments require the organization chatbot runtime identity',
   'an AI agent from another organization is rejected'
+);
+
+select throws_ok(
+  $$
+    update public.chatbot_flow_deployments
+    set agent_id = '36000000-0000-4000-8000-000000000005'
+    where organization_address = 'deployment-whatsapp-connected'
+  $$,
+  '23514',
+  'chatbot deployments require the organization chatbot runtime identity',
+  'a regular active AI agent is rejected'
 );
 
 select throws_ok(

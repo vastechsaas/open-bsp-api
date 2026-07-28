@@ -51,7 +51,6 @@ export const deploymentPayloadSchema = organizationPayloadSchema.extend({
 
 export const activateDeploymentPayloadSchema = deploymentPayloadSchema.extend({
   version_id: uuidSchema,
-  agent_id: uuidSchema,
 });
 
 export type EditorGraph = z.infer<typeof editorGraphSchema>;

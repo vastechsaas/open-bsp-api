@@ -1768,6 +1768,10 @@ export type Database = {
           flow_id: string
         }[]
       }
+      ensure_chatbot_runtime_agent: {
+        Args: { p_organization_id: string }
+        Returns: string
+      }
       get_authorized_orgs: {
         Args: { role?: Database["public"]["Enums"]["role"] }
         Returns: string[]

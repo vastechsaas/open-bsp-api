@@ -1,4 +1,24 @@
-create function public.ensure_chatbot_runtime_agent(
+drop policy "admins can create their orgs ai agents"
+on public.agents;
+
+drop policy "admins can manage their orgs ai agents"
+on public.agents;
+
+drop policy "owners can delete their orgs agents"
+on public.agents;
+
+drop policy "owners can update their orgs agents"
+on public.agents;
+
+create unique index agents_one_chatbot_runtime_per_organization_idx
+on public.agents
+using btree (organization_id)
+where (
+  ai = true
+  and extra->>'kind' = 'chatbot_runtime'
+);
+
+create or replace function public.ensure_chatbot_runtime_agent(
   p_organization_id uuid
 ) returns uuid
 language plpgsql
@@ -57,7 +77,13 @@ from public, anon, authenticated;
 grant execute on function public.ensure_chatbot_runtime_agent(uuid)
 to service_role;
 
-create function public.validate_chatbot_flow_deployment() returns trigger
+update public.chatbot_flow_deployments as deployment
+set agent_id = public.ensure_chatbot_runtime_agent(
+  deployment.organization_id
+);
+
+create or replace function public.validate_chatbot_flow_deployment()
+returns trigger
 language plpgsql
 set search_path = ''
 as $$
@@ -135,8 +161,63 @@ begin
 end;
 $$;
 
-create trigger validate_chatbot_flow_deployment
-before insert or update
-on public.chatbot_flow_deployments
-for each row
-execute function public.validate_chatbot_flow_deployment();
+create policy "admins can create their orgs ai agents"
+on public.agents
+as permissive
+for insert
+to authenticated, anon
+with check (
+  organization_id in (
+    select public.get_authorized_orgs('admin'::public.role)
+  )
+  and ai = true
+  and coalesce(extra->>'kind', '') <> 'chatbot_runtime'
+);
+
+create policy "admins can manage their orgs ai agents"
+on public.agents
+as permissive
+for all
+to authenticated, anon
+using (
+  organization_id in (
+    select public.get_authorized_orgs('admin'::public.role)
+  )
+  and user_id is null
+  and ai = true
+  and coalesce(extra->>'kind', '') <> 'chatbot_runtime'
+);
+
+create policy "owners can delete their orgs agents"
+on public.agents
+as permissive
+for delete
+to authenticated, anon
+using (
+  organization_id in (
+    select public.get_authorized_orgs('owner'::public.role)
+  )
+  and coalesce(extra->>'kind', '') <> 'chatbot_runtime'
+);
+
+create policy "owners can update their orgs agents"
+on public.agents
+as permissive
+for update
+to authenticated, anon
+using (
+  organization_id in (
+    select public.get_authorized_orgs('owner'::public.role)
+  )
+  and coalesce(extra->>'kind', '') <> 'chatbot_runtime'
+)
+with check (
+  coalesce(extra->>'kind', '') <> 'chatbot_runtime'
+  and public.agent_update_by_owner_rules(
+    id,
+    user_id,
+    organization_id,
+    ai,
+    extra
+  )
+);

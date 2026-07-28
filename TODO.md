@@ -82,15 +82,32 @@ Planned builder work
   - Frontend branch: `scrum-81-dynamic-interpolation-ui`
   - Status: restricted templates, path-aware validation, runtime rendering, and
     editor insertion controls ready for staging
-- [ ] SCRUM-82 - Render WhatsApp-style list interactions in the simulator
+- [x] SCRUM-82 - Render WhatsApp-style list interactions in the simulator
   - Frontend branch: `scrum-82-whatsapp-list-simulator`
-  - Status: planned after SCRUM-81
+  - Status: merged into `meta_vista_frontend` and verified on staging
+- [x] SCRUM-83 - Make chatbot builder activation language-consistent
+  - Frontend branch: `scrum-83-chatbot-localization`
+  - Status: merged into `meta_vista_frontend` and verified on staging
+- [ ] SCRUM-84 - Decouple chatbot activation from AI agents
+  - Backend branch: `scrum-84-chatbot-runtime-identity`
+  - Frontend branch: `scrum-84-chatbot-runtime-identity-ui`
+  - Status: in progress
+- [ ] SCRUM-85 - Add Assign Agent and human handoff node
+  - Backend branch: `scrum-85-assign-agent-handoff`
+  - Frontend branch: `scrum-85-assign-agent-handoff-ui`
+  - Status: planned after SCRUM-84
+- [ ] SCRUM-86 - Add secured Webhook/API node
+  - Backend branch: `scrum-86-secure-webhook-node`
+  - Frontend branch: `scrum-86-secure-webhook-node-ui`
+  - Status: planned after SCRUM-85
 
 Deferred beyond V1
 
-- [ ] Webhook/API nodes
-- [ ] Loops and subflows
-- [ ] Agent assignment and AI processing
+- [ ] Run real WhatsApp end-to-end activation coverage for messages, collected
+      values, conditions, buttons, lists, version changes, and deactivation; add
+      visible flow-run and runtime error diagnostics
+- [ ] AI Process node using OpenBSP's existing agent engine
+- [ ] Loops and subflows with bounded iteration and nesting
 
 ## General
 
