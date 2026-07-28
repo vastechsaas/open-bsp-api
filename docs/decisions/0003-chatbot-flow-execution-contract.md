@@ -63,8 +63,9 @@ Version 1 uses the states already enforced by `chatbot_flow_runs`:
 | `handed_off` | Automated execution yielded to a human or agent owner. |
 | `expired`    | The waiting session exceeded its allowed lifetime.     |
 
-For the MVP, `waiting_for` is `free_text`. Button and list input types are added
-in a later phase without changing the meaning of `waiting`.
+`waiting_for` distinguishes `free_text`, `button`, and `list_selection` input
+without changing the meaning of `waiting`. Interactive choices use stable option
+IDs, so editing or translating their visible labels does not alter routing.
 
 `pending_effect` is not a version 1 database status. External HTTP and AI work
 requires a later effect contract and, if necessary, a forward-only schema
@@ -74,13 +75,13 @@ migration.
 
 A strategy returns one of these result categories:
 
-| Result           | Engine responsibility                                        |
-| ---------------- | ------------------------------------------------------------ |
-| `advance`        | Persist variable updates and move to the next node.          |
-| `emit_message`   | Persist a text-message command and move to the next node.    |
-| `wait_for_input` | Persist the prompt and expected free-text input, then pause. |
-| `complete`       | Mark the run completed with an end timestamp.                |
-| `fail`           | Persist a safe error and mark the run failed.                |
+| Result           | Engine responsibility                                          |
+| ---------------- | -------------------------------------------------------------- |
+| `advance`        | Persist variable updates and move to the next node.            |
+| `emit_message`   | Persist an outgoing message command and move to the next node. |
+| `wait_for_input` | Persist the prompt and expected input type, then pause.        |
+| `complete`       | Mark the run completed with an end timestamp.                  |
+| `fail`           | Persist a safe error and mark the run failed.                  |
 
 The result describes intent only. The future engine converts that intent into
 database state and message records.
@@ -99,13 +100,9 @@ database state and message records.
 
 ## Deferred
 
-- button and list input;
-- dynamic template interpolation;
 - HTTP and AI effects;
 - circuit-breaker state;
 - subflows, loops, parallel branches, and joins;
-- the chatbot Edge Function and database transition RPCs;
-- WhatsApp webhook routing and interactive-message dispatch;
 - run event history, replay, and operational metrics.
 
 ## Consequences
@@ -116,6 +113,9 @@ database state and message records.
 - External side effects stay behind one engine-controlled boundary.
 - Adding a node type requires an explicit schema and strategy extension rather
   than another branch in a monolithic executor.
+- Dynamic message and prompt text supports only path-validated
+  `{{lowercase_snake_case}}` variables; the runtime rejects missing, non-scalar,
+  blank, and oversized rendered values.
 
 ## Alternatives considered
 

@@ -1,9 +1,12 @@
 import { assertEquals, assertThrows } from "../_shared/test_assert.ts";
 import {
+  activateDeploymentPayloadSchema,
   createFlowPayloadSchema,
+  deploymentPayloadSchema,
   editorGraphSchema,
   publishDraftPayloadSchema,
   saveDraftPayloadSchema,
+  simulateFlowPayloadSchema,
 } from "./payload.ts";
 
 const organizationId = "14000000-0000-4000-8000-000000000001";
@@ -79,5 +82,49 @@ Deno.test("publish payload rejects invalid identifiers and timestamps", () => {
         expected_updated_at: "yesterday",
       }),
     "expected_updated_at",
+  );
+});
+
+Deno.test("activation payload requires only an address and published version", () => {
+  const deployment = activateDeploymentPayloadSchema.parse({
+    organization_id: organizationId,
+    organization_address: " 15551234567 ",
+    version_id: versionId,
+  });
+
+  assertEquals(deployment.organization_address, "15551234567");
+  assertEquals(deployment.version_id, versionId);
+  assertEquals("agent_id" in deployment, false);
+  assertThrows(
+    () =>
+      deploymentPayloadSchema.parse({
+        organization_id: organizationId,
+        organization_address: " ",
+      }),
+    "organization_address",
+  );
+});
+
+Deno.test("simulation payload keeps local state optional and bounded", () => {
+  const payload = simulateFlowPayloadSchema.parse({
+    organization_id: organizationId,
+    editor_graph: { nodes: [], edges: [] },
+    current_node_id: " input-1 ",
+    variables: { customer_city: "Lahore" },
+    free_text_input: "Lahore",
+    option_input: { kind: "button", id: "support" },
+  });
+
+  assertEquals(payload.current_node_id, "input-1");
+  assertEquals(payload.variables, { customer_city: "Lahore" });
+  assertEquals(payload.option_input, { kind: "button", id: "support" });
+  assertThrows(
+    () =>
+      simulateFlowPayloadSchema.parse({
+        organization_id: organizationId,
+        editor_graph: { nodes: [], edges: [] },
+        free_text_input: "x".repeat(4097),
+      }),
+    "free_text_input",
   );
 });

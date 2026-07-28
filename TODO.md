@@ -62,15 +62,52 @@ Planned builder work
   - Frontend branch: `scrum-77-builder-ux-e2e`
   - Status: V1 keyboard UX and workflow-contract coverage merged into
     `meta_vista_frontend`
+- [x] SCRUM-78 - Activate published chatbot flows for WhatsApp runtime
+  - Backend branch: `scrum-78-chatbot-activation`
+  - Frontend branch: `scrum-78-chatbot-activation-ui`
+  - Status: activation contract, runtime routing, and builder controls ready for
+    staging
+- [x] SCRUM-79 - Run chatbot flows in a side-effect-free simulator
+  - Backend branch: `scrum-79-side-effect-free-simulator`
+  - Frontend branch: `scrum-79-side-effect-free-simulator-ui`
+  - Status: in-memory compiler/interpreter endpoint and builder simulator ready
+    for staging
+- [x] SCRUM-80 - Add Interactive Button and List Message nodes
+  - Backend branch: `scrum-80-interactive-button-list-nodes`
+  - Frontend branch: `scrum-80-interactive-button-list-nodes-ui`
+  - Status: editor configuration, stable option routing, WhatsApp runtime
+    dispatch, and side-effect-free simulation ready for staging
+- [x] SCRUM-81 - Add safe dynamic variable interpolation
+  - Backend branch: `scrum-81-dynamic-interpolation`
+  - Frontend branch: `scrum-81-dynamic-interpolation-ui`
+  - Status: restricted templates, path-aware validation, runtime rendering, and
+    editor insertion controls ready for staging
+- [x] SCRUM-82 - Render WhatsApp-style list interactions in the simulator
+  - Frontend branch: `scrum-82-whatsapp-list-simulator`
+  - Status: merged into `meta_vista_frontend` and verified on staging
+- [x] SCRUM-83 - Make chatbot builder activation language-consistent
+  - Frontend branch: `scrum-83-chatbot-localization`
+  - Status: merged into `meta_vista_frontend` and verified on staging
+- [ ] SCRUM-84 - Decouple chatbot activation from AI agents
+  - Backend branch: `scrum-84-chatbot-runtime-identity`
+  - Frontend branch: `scrum-84-chatbot-runtime-identity-ui`
+  - Status: in progress
+- [ ] SCRUM-85 - Add Assign Agent and human handoff node
+  - Backend branch: `scrum-85-assign-agent-handoff`
+  - Frontend branch: `scrum-85-assign-agent-handoff-ui`
+  - Status: planned after SCRUM-84
+- [ ] SCRUM-86 - Add secured Webhook/API node
+  - Backend branch: `scrum-86-secure-webhook-node`
+  - Frontend branch: `scrum-86-secure-webhook-node-ui`
+  - Status: planned after SCRUM-85
 
 Deferred beyond V1
 
-- [ ] Flow deployment or activation
-- [ ] Side-effect-free simulator
-- [ ] Button and list message nodes
-- [ ] Webhook/API nodes
-- [ ] Loops and subflows
-- [ ] Agent assignment and AI processing
+- [ ] Run real WhatsApp end-to-end activation coverage for messages, collected
+      values, conditions, buttons, lists, version changes, and deactivation; add
+      visible flow-run and runtime error diagnostics
+- [ ] AI Process node using OpenBSP's existing agent engine
+- [ ] Loops and subflows with bounded iteration and nesting
 
 ## General
 

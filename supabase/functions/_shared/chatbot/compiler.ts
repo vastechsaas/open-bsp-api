@@ -5,6 +5,7 @@ import {
   type FlowNodeV1,
   flowNodeV1Schema,
 } from "./flow_definition.ts";
+import { parseChatbotTemplate } from "./template.ts";
 
 export interface CompileIssue {
   readonly code: string;
@@ -28,6 +29,7 @@ interface EditorEdge {
   readonly id?: unknown;
   readonly source?: unknown;
   readonly target?: unknown;
+  readonly sourceHandle?: unknown;
   readonly data?: unknown;
 }
 
@@ -85,6 +87,16 @@ function editorEdgeToCandidate(edge: EditorEdge): unknown {
       kind,
       operator: data.operator,
       value: data.value,
+    };
+  }
+
+  if (kind === "option") {
+    return {
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      kind,
+      option_id: data.option_id ?? edge.sourceHandle,
     };
   }
 
@@ -165,7 +177,7 @@ function intersectSets(sets: ReadonlyArray<ReadonlySet<string>>): Set<string> {
   return intersection;
 }
 
-function validateConditionVariables(
+function validateAvailableVariables(
   nodes: ReadonlyArray<FlowNodeV1>,
   nodeSourceIndexes: ReadonlyMap<FlowNodeV1, number>,
   edges: ReadonlyArray<FlowEdgeV1>,
@@ -206,6 +218,47 @@ function validateConditionVariables(
     const available = nodeId === startNodeId
       ? new Set<string>()
       : intersectSets(predecessorSets);
+
+    const templateFields: ReadonlyArray<
+      readonly [field: string, template: string]
+    > = node.type === "send_message"
+      ? [["text", node.config.text]]
+      : node.type === "collect_input"
+      ? [["prompt", node.config.prompt]]
+      : node.type === "interactive_buttons" || node.type === "list_message"
+      ? [["body", node.config.body]]
+      : [];
+
+    for (const [field, template] of templateFields) {
+      const parsedTemplate = parseChatbotTemplate(template);
+      const path = [
+        "nodes",
+        nodeSourceIndexes.get(node)!,
+        "data",
+        "config",
+        field,
+      ];
+      if (!parsedTemplate.ok) {
+        issues.push({
+          code: "invalid_template_syntax",
+          path,
+          message: parsedTemplate.message,
+          node_id: node.id,
+        });
+        continue;
+      }
+      for (const variable of parsedTemplate.variables) {
+        if (!available.has(variable)) {
+          issues.push({
+            code: "template_variable_unavailable",
+            path,
+            message:
+              `Variable '${variable}' is not collected on every path to this node`,
+            node_id: node.id,
+          });
+        }
+      }
+    }
 
     if (node.type === "condition" && !available.has(node.config.variable)) {
       issues.push({
@@ -417,6 +470,20 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
         edge_id: edge.id,
       });
     }
+    if (
+      edge.kind === "option" &&
+      !["interactive_buttons", "list_message"].includes(
+        nodeById.get(edge.source)?.type ?? "",
+      )
+    ) {
+      issues.push({
+        code: "option_edge_source",
+        path: ["edges", edgeSourceIndexes.get(edge)!, "data", "kind"],
+        message:
+          "Option edges may originate only from interactive button or list nodes",
+        edge_id: edge.id,
+      });
+    }
   });
 
   nodes.forEach((node) => {
@@ -425,6 +492,7 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
     const outgoing = validEdges.filter((edge) => edge.source === node.id);
     const defaults = outgoing.filter((edge) => edge.kind === "default");
     const conditions = outgoing.filter((edge) => edge.kind === "condition");
+    const options = outgoing.filter((edge) => edge.kind === "option");
 
     if (node.type === "start") {
       if (incoming.length !== 0) {
@@ -452,6 +520,48 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
           path: ["nodes", nodeIndex],
           message:
             `${node.type} node must have exactly one default outgoing edge`,
+          node_id: node.id,
+        });
+      }
+    }
+
+    if (
+      node.type === "interactive_buttons" || node.type === "list_message"
+    ) {
+      const configuredOptionIds = node.type === "interactive_buttons"
+        ? node.config.buttons.map((button) => button.id)
+        : node.config.sections.flatMap((section) =>
+          section.rows.map((row) => row.id)
+        );
+      const uniqueConfiguredOptionIds = new Set(configuredOptionIds);
+      const routedOptionIds = options.map((edge) => edge.option_id);
+      const uniqueRoutedOptionIds = new Set(routedOptionIds);
+
+      if (uniqueConfiguredOptionIds.size !== configuredOptionIds.length) {
+        issues.push({
+          code: "duplicate_option_id",
+          path: ["nodes", nodeIndex, "data", "config"],
+          message: "Interactive option IDs must be unique within a node",
+          node_id: node.id,
+        });
+      }
+
+      if (
+        outgoing.length !== configuredOptionIds.length ||
+        options.length !== outgoing.length ||
+        uniqueRoutedOptionIds.size !== routedOptionIds.length ||
+        configuredOptionIds.some((optionId) =>
+          !uniqueRoutedOptionIds.has(optionId)
+        ) ||
+        routedOptionIds.some((optionId) =>
+          !uniqueConfiguredOptionIds.has(optionId)
+        )
+      ) {
+        issues.push({
+          code: "invalid_option_routing",
+          path: ["nodes", nodeIndex],
+          message:
+            `${node.type} node must have exactly one option edge for every configured option`,
           node_id: node.id,
         });
       }
@@ -522,7 +632,7 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
     startNodes.length === 1 && cycleNode === undefined &&
     !hasDuplicateNodes && !hasDuplicateEdges
   ) {
-    validateConditionVariables(
+    validateAvailableVariables(
       nodes,
       nodeSourceIndexes,
       validEdges,

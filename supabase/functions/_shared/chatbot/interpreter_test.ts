@@ -97,6 +97,10 @@ Deno.test("interpreter runs from start to the next wait", async () => {
     waiting_for: "free_text",
     variables: {},
     outgoing_texts: ["Welcome", "What is your city?"],
+    outgoing_messages: [
+      { type: "text", text: "Welcome" },
+      { type: "text", text: "What is your city?" },
+    ],
     error: null,
     transition_count: 3,
   });
@@ -115,9 +119,33 @@ Deno.test("interpreter resumes input and completes a matching branch", async () 
     waiting_for: null,
     variables: { customer_city: "LAHORE" },
     outgoing_texts: ["Lahore selected"],
+    outgoing_messages: [{ type: "text", text: "Lahore selected" }],
     error: null,
     transition_count: 4,
   });
+});
+
+Deno.test("interpreter renders a value collected earlier in the flow", async () => {
+  const flow: FlowDefinitionV1 = {
+    ...customerFlow,
+    nodes: customerFlow.nodes.map((node) =>
+      node.type === "send_message" && node.id === "lahore-message"
+        ? {
+          ...node,
+          config: { text: "We deliver to {{customer_city}}" },
+        }
+        : node
+    ),
+  };
+
+  const result = await interpretFlowDefinitionV1(flow, {
+    current_node_id: "collect-city",
+    variables: {},
+    free_text_input: "Lahore",
+  });
+
+  assertEquals(result.outgoing_texts, ["We deliver to Lahore"]);
+  assertEquals(result.status, "completed");
 });
 
 Deno.test("condition matching trims and ignores case for every operator", () => {
@@ -205,6 +233,68 @@ Deno.test("interpreter accumulates multiple automatic messages", async () => {
 
   assertEquals(result.outgoing_texts, ["One", "Two"]);
   assertEquals(result.status, "completed");
+});
+
+Deno.test("interactive buttons wait and route by exact reply ID", async () => {
+  const definition: FlowDefinitionV1 = {
+    schema_version: 1,
+    start_node_id: "buttons",
+    nodes: [
+      {
+        id: "buttons",
+        type: "interactive_buttons",
+        config: {
+          body: "Choose a team",
+          buttons: [
+            { id: "sales", title: "Sales" },
+            { id: "support", title: "Support" },
+          ],
+        },
+      },
+      { id: "sales-end", type: "end", config: {} },
+      { id: "support-end", type: "end", config: {} },
+    ],
+    edges: [
+      {
+        id: "sales-edge",
+        source: "buttons",
+        target: "sales-end",
+        kind: "option",
+        option_id: "sales",
+      },
+      {
+        id: "support-edge",
+        source: "buttons",
+        target: "support-end",
+        kind: "option",
+        option_id: "support",
+      },
+    ],
+  };
+
+  const waiting = await interpretFlowDefinitionV1(definition, {
+    current_node_id: "buttons",
+    variables: {},
+  });
+  assertEquals(waiting.waiting_for, "button");
+  assertEquals(waiting.outgoing_texts, []);
+  assertEquals(waiting.outgoing_messages[0]?.type, "interactive");
+
+  const completed = await interpretFlowDefinitionV1(definition, {
+    current_node_id: "buttons",
+    variables: {},
+    option_input: { kind: "button", id: "support" },
+  });
+  assertEquals(completed.status, "completed");
+  assertEquals(completed.current_node_id, "support-end");
+
+  const invalid = await interpretFlowDefinitionV1(definition, {
+    current_node_id: "buttons",
+    variables: {},
+    option_input: { kind: "button", id: "unknown" },
+  });
+  assertEquals(invalid.status, "waiting");
+  assertEquals(invalid.current_node_id, "buttons");
 });
 
 Deno.test("one invocation consumes free text only once", async () => {

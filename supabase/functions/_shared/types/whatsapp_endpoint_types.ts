@@ -30,6 +30,36 @@ export type OutgoingReaction = {
   };
 };
 
+export type OutgoingInteractive = {
+  type: "interactive";
+  interactive:
+    | {
+      type: "button";
+      body: { text: string };
+      action: {
+        buttons: Array<{
+          type: "reply";
+          reply: { id: string; title: string };
+        }>;
+      };
+    }
+    | {
+      type: "list";
+      body: { text: string };
+      action: {
+        button: string;
+        sections: Array<{
+          title: string;
+          rows: Array<{
+            id: string;
+            title: string;
+            description?: string;
+          }>;
+        }>;
+      };
+    };
+};
+
 // File based
 
 export type OutgoingAudio = {
@@ -80,6 +110,7 @@ export type EndpointMessage =
     | ContactsMessage
     | OutgoingDocument
     | OutgoingImage
+    | OutgoingInteractive
     | LocationMessage
     | OutgoingReaction
     | OutgoingSticker

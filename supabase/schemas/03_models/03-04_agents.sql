@@ -44,6 +44,13 @@ create index agents_user_id_idx
 on public.agents
 using btree (user_id);
 
+create unique index agents_one_chatbot_runtime_per_organization_idx
+on public.agents (organization_id)
+where (
+  ai = true
+  and extra->>'kind' = 'chatbot_runtime'
+);
+
 create trigger set_extra
 before update
 on public.agents

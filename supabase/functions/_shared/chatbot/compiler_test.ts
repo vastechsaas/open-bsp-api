@@ -135,6 +135,58 @@ Deno.test("compiles a five-node editor graph into the exact runtime definition",
   });
 });
 
+Deno.test("accepts templates using variables collected on every preceding path", () => {
+  const graph = representativeGraph();
+  const message = (graph.nodes as Record<string, unknown>[]).find(
+    (node) => node.id === "message-1",
+  )!;
+  (
+    (message.data as Record<string, unknown>).config as Record<string, unknown>
+  ).text = "We deliver to {{ customer_city }}.";
+
+  const result = compileFlowDefinition(graph);
+  if (!result.ok) throw new Error(JSON.stringify(result.issues));
+  assertEquals(
+    result.definition.nodes.find((node) => node.id === "message-1")?.config,
+    { text: "We deliver to {{ customer_city }}." },
+  );
+});
+
+Deno.test("rejects malformed and path-unavailable template variables", () => {
+  const malformed = representativeGraph();
+  const malformedMessage = (malformed.nodes as Record<string, unknown>[]).find(
+    (node) => node.id === "message-1",
+  )!;
+  (
+    (malformedMessage.data as Record<string, unknown>)
+      .config as Record<string, unknown>
+  ).text = "Hello {{customer_city";
+  assertEquals(
+    issueCodes(malformed).includes("invalid_template_syntax"),
+    true,
+  );
+
+  const unavailable = representativeGraph();
+  const unavailableMessage = (
+    unavailable.nodes as Record<string, unknown>[]
+  ).find((node) => node.id === "message-1")!;
+  (
+    (unavailableMessage.data as Record<string, unknown>)
+      .config as Record<string, unknown>
+  ).text = "Hello {{customer_name}}";
+  const issues = compileIssues(unavailable);
+  const issue = issues.find(
+    (candidate) => candidate.code === "template_variable_unavailable",
+  );
+  assertEquals(issue?.path, [
+    "nodes",
+    3,
+    "data",
+    "config",
+    "text",
+  ]);
+});
+
 Deno.test("invalid graph shape returns issues and never throws", () => {
   assertEquals(issueCodes(null), ["invalid_graph_shape"]);
   assertEquals(issueCodes({ nodes: "bad" }), [
@@ -202,6 +254,71 @@ Deno.test("reports invalid node routing and conditional edge origins", () => {
     issueCodes(conditionGraph).includes("invalid_condition_routing"),
     true,
   );
+});
+
+Deno.test("interactive options compile to exact option edges", () => {
+  const graph = {
+    nodes: [
+      editorNode("start", "start"),
+      editorNode("buttons", "interactive_buttons", {
+        body: "Choose",
+        buttons: [
+          { id: "sales", title: "Sales" },
+          { id: "support", title: "Support" },
+        ],
+      }),
+      editorNode("sales-end", "end"),
+      editorNode("support-end", "end"),
+    ],
+    edges: [
+      editorEdge("start-edge", "start", "buttons"),
+      editorEdge("sales-edge", "buttons", "sales-end", {
+        kind: "option",
+        option_id: "sales",
+      }),
+      editorEdge("support-edge", "buttons", "support-end", {
+        kind: "option",
+        option_id: "support",
+      }),
+    ],
+  };
+
+  const result = compileFlowDefinition(graph);
+  if (!result.ok) throw new Error(JSON.stringify(result.issues));
+  assertEquals(result.definition.edges[1], {
+    id: "sales-edge",
+    source: "buttons",
+    target: "sales-end",
+    kind: "option",
+    option_id: "sales",
+  });
+});
+
+Deno.test("interactive nodes require one known edge per unique option", () => {
+  const graph = {
+    nodes: [
+      editorNode("start", "start"),
+      editorNode("buttons", "interactive_buttons", {
+        body: "Choose",
+        buttons: [
+          { id: "sales", title: "Sales" },
+          { id: "sales", title: "Support" },
+        ],
+      }),
+      editorNode("end", "end"),
+    ],
+    edges: [
+      editorEdge("start-edge", "start", "buttons"),
+      editorEdge("unknown-edge", "buttons", "end", {
+        kind: "option",
+        option_id: "unknown",
+      }),
+    ],
+  };
+
+  const codes = issueCodes(graph);
+  assertEquals(codes.includes("duplicate_option_id"), true);
+  assertEquals(codes.includes("invalid_option_routing"), true);
 });
 
 Deno.test("reports unreachable nodes", () => {

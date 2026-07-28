@@ -837,6 +837,75 @@ export type Database = {
           },
         ]
       }
+      chatbot_flow_deployments: {
+        Row: {
+          activated_at: string
+          activated_by: string | null
+          agent_id: string
+          flow_id: string
+          flow_version_id: string
+          organization_address: string
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          activated_at?: string
+          activated_by?: string | null
+          agent_id: string
+          flow_id: string
+          flow_version_id: string
+          organization_address: string
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          activated_at?: string
+          activated_by?: string | null
+          agent_id?: string
+          flow_id?: string
+          flow_version_id?: string
+          organization_address?: string
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chatbot_flow_deployments_activated_by_fkey"
+            columns: ["organization_id", "activated_by"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "chatbot_flow_deployments_address_fkey"
+            columns: ["organization_id", "organization_address"]
+            isOneToOne: true
+            referencedRelation: "organizations_addresses"
+            referencedColumns: ["organization_id", "address"]
+          },
+          {
+            foreignKeyName: "chatbot_flow_deployments_agent_fkey"
+            columns: ["organization_id", "agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "chatbot_flow_deployments_flow_fkey"
+            columns: ["organization_id", "flow_id"]
+            isOneToOne: false
+            referencedRelation: "chatbot_flows"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "chatbot_flow_deployments_version_fkey"
+            columns: ["organization_id", "flow_version_id"]
+            isOneToOne: false
+            referencedRelation: "chatbot_flow_versions"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
       chatbot_flow_runs: {
         Row: {
           agent_id: string
@@ -1649,6 +1718,7 @@ export type Database = {
           p_error: Json
           p_expected_lock_version: number
           p_message_id: string
+          p_outgoing_messages?: Json
           p_outgoing_texts: string[]
           p_run_id: string
           p_status: string
@@ -1697,6 +1767,10 @@ export type Database = {
           draft_version: number
           flow_id: string
         }[]
+      }
+      ensure_chatbot_runtime_agent: {
+        Args: { p_organization_id: string }
+        Returns: string
       }
       get_authorized_orgs: {
         Args: { role?: Database["public"]["Enums"]["role"] }
