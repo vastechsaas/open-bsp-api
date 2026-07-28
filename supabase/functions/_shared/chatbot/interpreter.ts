@@ -28,9 +28,10 @@ export interface InterpretationErrorV1 {
 }
 
 export interface InterpretationResultV1 {
-  readonly status: "waiting" | "completed" | "failed";
+  readonly status: "waiting" | "completed" | "failed" | "handed_off";
   readonly current_node_id: string;
   readonly waiting_for: "free_text" | "button" | "list_selection" | null;
+  readonly handoff_agent_id?: string;
   readonly variables: Readonly<Record<string, JsonValue>>;
   readonly outgoing_texts: readonly string[];
   readonly outgoing_messages: readonly ChatbotOutgoingMessageV1[];
@@ -202,6 +203,20 @@ export async function interpretFlowDefinitionV1(
         status: "completed",
         current_node_id: currentNodeId,
         waiting_for: null,
+        variables,
+        outgoing_texts: outgoingTexts,
+        outgoing_messages: outgoingMessages,
+        error: null,
+        transition_count: transitionCount,
+      };
+    }
+
+    if (result.type === "handoff") {
+      return {
+        status: "handed_off",
+        current_node_id: currentNodeId,
+        waiting_for: null,
+        handoff_agent_id: result.agent_id,
         variables,
         outgoing_texts: outgoingTexts,
         outgoing_messages: outgoingMessages,

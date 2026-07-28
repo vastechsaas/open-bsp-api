@@ -5,6 +5,7 @@ import type {
   ExecutionContextV1,
 } from "./flow_definition.ts";
 import {
+  assignAgentNodeStrategy,
   collectInputNodeStrategy,
   conditionNodeStrategy,
   endNodeStrategy,
@@ -313,5 +314,22 @@ Deno.test("end completes execution", async () => {
       emptyContext,
     ),
     { type: "complete" },
+  );
+});
+
+Deno.test("assign_agent requests a terminal handoff", async () => {
+  assertEquals(
+    await assignAgentNodeStrategy.execute(
+      {
+        id: "handoff",
+        type: "assign_agent",
+        config: { agent_id: "11111111-1111-4111-8111-111111111111" },
+      },
+      emptyContext,
+    ),
+    {
+      type: "handoff",
+      agent_id: "11111111-1111-4111-8111-111111111111",
+    },
   );
 });

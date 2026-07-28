@@ -364,6 +364,27 @@ Deno.test("invalid stored definitions fail without throwing", async () => {
   assertEquals(result.transition_count, 0);
 });
 
+Deno.test("assign_agent ends interpretation with a side-effect request", async () => {
+  const agentId = "11111111-1111-4111-8111-111111111111";
+  const result = await interpretFlowDefinitionV1(
+    {
+      schema_version: 1,
+      start_node_id: "handoff",
+      nodes: [{
+        id: "handoff",
+        type: "assign_agent",
+        config: { agent_id: agentId },
+      }],
+      edges: [],
+    },
+    { current_node_id: "handoff", variables: {} },
+  );
+
+  assertEquals(result.status, "handed_off");
+  assertEquals(result.handoff_agent_id, agentId);
+  assertEquals(result.outgoing_messages, []);
+});
+
 Deno.test("missing variables and missing edges become failure results", async () => {
   const missingVariable = await interpretFlowDefinitionV1(customerFlow, {
     current_node_id: "route-city",

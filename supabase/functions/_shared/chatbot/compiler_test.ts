@@ -239,7 +239,7 @@ Deno.test("reports invalid node routing and conditional edge origins", () => {
   const codes = issueCodes(graph);
   assertEquals(codes.includes("conditional_edge_source"), true);
   assertEquals(codes.includes("invalid_default_routing"), true);
-  assertEquals(codes.includes("end_has_outgoing_edge"), true);
+  assertEquals(codes.includes("terminal_has_outgoing_edge"), true);
   assertEquals(codes.includes("start_has_incoming_edge"), true);
 
   const conditionGraph = representativeGraph();
@@ -252,6 +252,33 @@ Deno.test("reports invalid node routing and conditional edge origins", () => {
   };
   assertEquals(
     issueCodes(conditionGraph).includes("invalid_condition_routing"),
+    true,
+  );
+});
+
+Deno.test("assign_agent is a configured terminal node", () => {
+  const agentId = "11111111-1111-4111-8111-111111111111";
+  const graph = {
+    nodes: [
+      editorNode("start", "start"),
+      editorNode("handoff", "assign_agent", { agent_id: agentId }),
+    ],
+    edges: [editorEdge("to-handoff", "start", "handoff")],
+  };
+
+  const result = compileFlowDefinition(graph);
+  if (!result.ok) throw new Error(JSON.stringify(result.issues));
+  assertEquals(result.definition.nodes[1], {
+    id: "handoff",
+    type: "assign_agent",
+    config: { agent_id: agentId },
+  });
+
+  (graph.edges as Record<string, unknown>[]).push(
+    editorEdge("invalid-outgoing", "handoff", "start"),
+  );
+  assertEquals(
+    issueCodes(graph).includes("terminal_has_outgoing_edge"),
     true,
   );
 });

@@ -88,14 +88,14 @@ Planned builder work
 - [x] SCRUM-83 - Make chatbot builder activation language-consistent
   - Frontend branch: `scrum-83-chatbot-localization`
   - Status: merged into `meta_vista_frontend` and verified on staging
-- [ ] SCRUM-84 - Decouple chatbot activation from AI agents
+- [x] SCRUM-84 - Decouple chatbot activation from AI agents
   - Backend branch: `scrum-84-chatbot-runtime-identity`
   - Frontend branch: `scrum-84-chatbot-runtime-identity-ui`
-  - Status: in progress
+  - Status: merged into both staging branches
 - [ ] SCRUM-85 - Add Assign Agent and human handoff node
   - Backend branch: `scrum-85-assign-agent-handoff`
   - Frontend branch: `scrum-85-assign-agent-handoff-ui`
-  - Status: planned after SCRUM-84
+  - Status: implementation and validation complete; staging merge pending
 - [ ] SCRUM-86 - Add secured Webhook/API node
   - Backend branch: `scrum-86-secure-webhook-node`
   - Frontend branch: `scrum-86-secure-webhook-node-ui`

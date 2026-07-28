@@ -59,6 +59,11 @@ const nodes = [
       }],
     },
   },
+  {
+    id: "handoff-1",
+    type: "assign_agent",
+    config: { agent_id: "11111111-1111-4111-8111-111111111111" },
+  },
   { id: "end-1", type: "end", config: {} },
 ];
 
@@ -283,6 +288,10 @@ Deno.test("every NodeResultV1 variant parses", () => {
     },
     { type: "complete" },
     {
+      type: "handoff",
+      agent_id: "11111111-1111-4111-8111-111111111111",
+    },
+    {
       type: "fail",
       code: "invalid-input",
       message: "The input was invalid",
@@ -293,6 +302,14 @@ Deno.test("every NodeResultV1 variant parses", () => {
   for (const result of results) {
     assertValid(nodeResultV1Schema.safeParse(result));
   }
+});
+
+Deno.test("assign_agent requires a UUID agent reference", () => {
+  assertInvalid(flowNodeV1Schema.safeParse({
+    id: "handoff",
+    type: "assign_agent",
+    config: { agent_id: "not-an-agent-id" },
+  }));
 });
 
 Deno.test("NodeResultV1 rejects infrastructure commands and invalid data", () => {
