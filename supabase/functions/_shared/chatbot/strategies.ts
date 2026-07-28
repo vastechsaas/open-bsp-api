@@ -1,4 +1,5 @@
 import type {
+  AssignAgentNodeV1,
   CollectInputNodeV1,
   ConditionNodeV1,
   EndNodeV1,
@@ -215,6 +216,15 @@ export const conditionNodeStrategy: NodeStrategy<ConditionNodeV1> = {
   },
 };
 
+export const assignAgentNodeStrategy: NodeStrategy<AssignAgentNodeV1> = {
+  execute(node): Promise<NodeResultV1> {
+    return Promise.resolve({
+      type: "handoff",
+      agent_id: node.config.agent_id,
+    });
+  },
+};
+
 export const endNodeStrategy: NodeStrategy<EndNodeV1> = {
   execute(): Promise<NodeResultV1> {
     return Promise.resolve({ type: "complete" });
@@ -238,6 +248,8 @@ export function executeNodeStrategy(
       return collectInputNodeStrategy.execute(node, context);
     case "condition":
       return conditionNodeStrategy.execute(node, context);
+    case "assign_agent":
+      return assignAgentNodeStrategy.execute(node, context);
     case "end":
       return endNodeStrategy.execute(node, context);
   }

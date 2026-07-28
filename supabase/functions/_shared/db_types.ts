@@ -1717,6 +1717,7 @@ export type Database = {
           p_current_node_id: string
           p_error: Json
           p_expected_lock_version: number
+          p_handoff_agent_id?: string
           p_message_id: string
           p_outgoing_messages?: Json
           p_outgoing_texts: string[]

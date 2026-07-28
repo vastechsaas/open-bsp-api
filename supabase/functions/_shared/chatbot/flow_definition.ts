@@ -21,6 +21,8 @@ const variableKeySchema = z.string().min(1).max(64).regex(
   "Must be a lowercase snake_case key",
 );
 
+const agentIdSchema = z.string().uuid();
+
 const nonblankTextSchema = z.string().min(1).max(CHATBOT_TEXT_MAX_LENGTH)
   .refine((value) => value.trim().length > 0, "Must not be blank");
 
@@ -136,6 +138,14 @@ const conditionNodeSchema = z.object({
   }).strict(),
 }).strict();
 
+const assignAgentNodeSchema = z.object({
+  id: stableIdSchema,
+  type: z.literal("assign_agent"),
+  config: z.object({
+    agent_id: agentIdSchema,
+  }).strict(),
+}).strict();
+
 const endNodeSchema = z.object({
   id: stableIdSchema,
   type: z.literal("end"),
@@ -149,6 +159,7 @@ export const flowNodeV1Schema = z.discriminatedUnion("type", [
   listMessageNodeSchema,
   collectInputNodeSchema,
   conditionNodeSchema,
+  assignAgentNodeSchema,
   endNodeSchema,
 ]);
 
@@ -363,6 +374,11 @@ const completeResultSchema = z.object({
   type: z.literal("complete"),
 }).strict();
 
+const handoffResultSchema = z.object({
+  type: z.literal("handoff"),
+  agent_id: agentIdSchema,
+}).strict();
+
 const failResultSchema = z.object({
   type: z.literal("fail"),
   code: stableIdSchema,
@@ -375,6 +391,7 @@ export const nodeResultV1Schema = z.discriminatedUnion("type", [
   emitMessageResultSchema,
   waitForInputResultSchema,
   completeResultSchema,
+  handoffResultSchema,
   failResultSchema,
 ]);
 
@@ -387,6 +404,7 @@ export type InteractiveButtonsNodeV1 = z.infer<
 export type ListMessageNodeV1 = z.infer<typeof listMessageNodeSchema>;
 export type CollectInputNodeV1 = z.infer<typeof collectInputNodeSchema>;
 export type ConditionNodeV1 = z.infer<typeof conditionNodeSchema>;
+export type AssignAgentNodeV1 = z.infer<typeof assignAgentNodeSchema>;
 export type EndNodeV1 = z.infer<typeof endNodeSchema>;
 export type FlowEdgeV1 = z.infer<typeof flowEdgeV1Schema>;
 export type ConditionOperatorV1 = z.infer<typeof conditionOperatorV1Schema>;

@@ -5,7 +5,10 @@ import { HTTPException } from "jsr:@hono/hono/http-exception";
 import { type SupabaseClient, type User } from "@supabase/supabase-js";
 import { z } from "zod";
 import * as log from "../_shared/logger.ts";
-import { compileFlowDefinition } from "../_shared/chatbot/mod.ts";
+import {
+  compileFlowDefinition,
+  type FlowDefinitionV1,
+} from "../_shared/chatbot/mod.ts";
 import {
   type ApiKeyRow,
   createApiClient,
@@ -26,6 +29,10 @@ import {
   simulateFlowPayloadSchema,
   validateDraftPayloadSchema,
 } from "./payload.ts";
+import {
+  assignedHumanAgentIds,
+  findUnavailableAgentIssues,
+} from "./agent_references.ts";
 import { simulateChatbotFlow } from "./simulation.ts";
 
 type AppEnv = {
@@ -210,6 +217,43 @@ function throwDatabaseError(error: DatabaseError, fallback: string): never {
 
 function serviceClient(): SupabaseClient<Database> {
   return createUnsecureClient();
+}
+
+async function unavailableAgentIssues(
+  client: SupabaseClient<Database>,
+  organizationId: string,
+  definition: FlowDefinitionV1,
+) {
+  const referencedIds = assignedHumanAgentIds(definition);
+  if (referencedIds.length === 0) return [];
+
+  const { data, error } = await client
+    .from("agents")
+    .select("id, user_id, extra")
+    .eq("organization_id", organizationId)
+    .eq("ai", false)
+    .in("id", referencedIds);
+
+  if (error) {
+    throwDatabaseError(error, "Unable to validate chatbot handoff agents");
+  }
+
+  const availableIds = new Set(
+    data.filter((agent) => {
+      if (!agent.user_id) return false;
+      const extra = agent.extra;
+      if (!extra || typeof extra !== "object" || Array.isArray(extra)) {
+        return true;
+      }
+      const invitation = "invitation" in extra ? extra.invitation : undefined;
+      return !invitation ||
+        typeof invitation !== "object" ||
+        Array.isArray(invitation) ||
+        invitation.status === "accepted";
+    }).map((agent) => agent.id),
+  );
+
+  return findUnavailableAgentIssues(definition, availableIds);
 }
 
 function flowId(c: Context<AppEnv>): string {
@@ -404,9 +448,18 @@ app.post(
     const payload = validateDraftPayloadSchema.parse(await c.req.json());
     const result = compileFlowDefinition(payload.editor_graph);
 
-    return result.ok
-      ? c.json({ valid: true, definition: result.definition })
-      : c.json({ valid: false, issues: result.issues });
+    if (!result.ok) {
+      return c.json({ valid: false, issues: result.issues });
+    }
+
+    const issues = await unavailableAgentIssues(
+      serviceClient(),
+      payload.organization_id,
+      result.definition,
+    );
+    return issues.length > 0
+      ? c.json({ valid: false, issues })
+      : c.json({ valid: true, definition: result.definition });
   },
 );
 
@@ -427,6 +480,19 @@ app.post(
     }
     if (!flow) {
       throw new HTTPException(404, { message: "Chatbot flow not found" });
+    }
+
+    const compiled = compileFlowDefinition(payload.editor_graph);
+    if (!compiled.ok) {
+      return c.json({ valid: false, issues: compiled.issues });
+    }
+    const agentIssues = await unavailableAgentIssues(
+      serviceClient(),
+      payload.organization_id,
+      compiled.definition,
+    );
+    if (agentIssues.length > 0) {
+      return c.json({ valid: false, issues: agentIssues });
     }
 
     const result = await simulateChatbotFlow(payload.editor_graph, {
@@ -474,6 +540,19 @@ app.post(
         message: "Chatbot draft is invalid",
         valid: false,
         issues: compiled.issues,
+      }, 422);
+    }
+
+    const agentIssues = await unavailableAgentIssues(
+      client,
+      payload.organization_id,
+      compiled.definition,
+    );
+    if (agentIssues.length > 0) {
+      return c.json({
+        message: "Chatbot draft has unavailable handoff agents",
+        valid: false,
+        issues: agentIssues,
       }, 422);
     }
 

@@ -148,6 +148,9 @@ export async function processChatbotMessage(
       p_outgoing_messages: [
         ...interpreted.outgoing_messages,
       ] as unknown as Json,
+      ...(interpreted.handoff_agent_id
+        ? { p_handoff_agent_id: interpreted.handoff_agent_id }
+        : {}),
     },
   );
 

@@ -416,7 +416,9 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
     issues,
   );
   const startNodes = nodes.filter((node) => node.type === "start");
-  const endNodes = nodes.filter((node) => node.type === "end");
+  const terminalNodes = nodes.filter((node) =>
+    node.type === "end" || node.type === "assign_agent"
+  );
 
   if (startNodes.length !== 1) {
     issues.push({
@@ -425,11 +427,11 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
       message: `Expected exactly one start node, found ${startNodes.length}`,
     });
   }
-  if (endNodes.length === 0) {
+  if (terminalNodes.length === 0) {
     issues.push({
-      code: "missing_end_node",
+      code: "missing_terminal_node",
       path: ["nodes"],
-      message: "Expected at least one end node",
+      message: "Expected at least one end or assign-agent node",
     });
   }
 
@@ -579,11 +581,14 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
       }
     }
 
-    if (node.type === "end" && outgoing.length !== 0) {
+    if (
+      (node.type === "end" || node.type === "assign_agent") &&
+      outgoing.length !== 0
+    ) {
       issues.push({
-        code: "end_has_outgoing_edge",
+        code: "terminal_has_outgoing_edge",
         path: ["nodes", nodeIndex],
-        message: "End node must not have outgoing edges",
+        message: "Terminal nodes must not have outgoing edges",
         node_id: node.id,
       });
     }
