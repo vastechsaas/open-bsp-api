@@ -100,7 +100,8 @@ Planned builder work
   - Backend branch: `scrum-86-secure-webhook-node`
   - Frontend branch: `scrum-86-secure-webhook-node-ui`
   - Status: secured runtime, protected credentials, builder controls, and
-    mock-only simulation implemented and validated; staging merge pending
+    mock-only simulation implemented, validated, and merged into both staging
+    branches
 
 Deferred beyond V1
 
