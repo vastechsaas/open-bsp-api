@@ -147,6 +147,7 @@ for each row
 when (
   new.direction = 'outgoing'::public.direction
   and new.service <> 'local'::public.service
+  and new.content <> '{}'::jsonb -- status-only rows are not human messages
   and new.timestamp <= now() -- messages not in the future
   and new.timestamp >= now() - interval '10 seconds' -- recent messages
 )

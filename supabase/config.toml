@@ -65,3 +65,8 @@ entrypoint = "./functions/storage-gc/index.ts"
 verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/chatbot-management/index.ts"
+
+[functions.chatbot-reply-webhook]
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/chatbot-reply-webhook/index.ts"

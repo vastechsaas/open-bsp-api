@@ -1832,6 +1832,14 @@ export type Database = {
         Args: { p_organization_id: string }
         Returns: string
       }
+      ensure_external_chatbot_agent: {
+        Args: {
+          p_integration_key: string
+          p_name: string
+          p_organization_id: string
+        }
+        Returns: string
+      }
       get_authorized_orgs: {
         Args: { role?: Database["public"]["Enums"]["role"] }
         Returns: string[]
@@ -2091,6 +2099,21 @@ export type Database = {
           p_retryable?: boolean
         }
         Returns: string
+      }
+      record_external_chatbot_reply: {
+        Args: {
+          p_agent_id: string
+          p_content: Json
+          p_organization_id: string
+          p_phone_number_id: string
+          p_recipient: string
+          p_sent_at: string
+          p_wamid: string
+        }
+        Returns: {
+          message_id: string
+          outcome: string
+        }[]
       }
       resolve_chatbot_webhook_credential: {
         Args: { p_credential_id: string; p_organization_id: string }
