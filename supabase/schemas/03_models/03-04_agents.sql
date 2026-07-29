@@ -51,6 +51,13 @@ where (
   and extra->>'kind' = 'chatbot_runtime'
 );
 
+create unique index agents_external_chatbot_key_idx
+on public.agents (organization_id, (extra->>'integration_key'))
+where (
+  ai = true
+  and extra->>'kind' = 'external_chatbot'
+);
+
 create trigger set_extra
 before update
 on public.agents
