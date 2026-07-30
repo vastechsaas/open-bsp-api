@@ -96,13 +96,13 @@ function getNewestIncomingMessage(
   return sortedMessages[0];
 }
 
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const EDGE_FUNCTIONS_TOKEN = Deno.env.get("EDGE_FUNCTIONS_TOKEN");
 
 Deno.serve(async (req) => {
   const authHeader = req.headers.get("Authorization");
   const token = authHeader?.replace("Bearer ", "");
 
-  if (token !== SERVICE_ROLE_KEY) {
+  if (!EDGE_FUNCTIONS_TOKEN || token !== EDGE_FUNCTIONS_TOKEN) {
     return new Response("Unauthorized", { status: 401 });
   }
 
