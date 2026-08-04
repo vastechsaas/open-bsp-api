@@ -191,6 +191,14 @@ export type InteractiveMessage = {
     | {
       type: "list_reply";
       list_reply: { id: string; title: string; description?: string };
+    }
+    | {
+      type: "nfm_reply";
+      nfm_reply: {
+        name: string;
+        body: string;
+        response_json: string;
+      };
     };
 };
 
