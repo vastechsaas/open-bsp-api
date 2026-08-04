@@ -133,6 +133,33 @@ begin
 end;
 $$;
 
+-- Supervisors can update human Members without changing their role,
+-- invitation state, organization, or identity.
+create function public.member_update_by_supervisor_rules(
+  p_id uuid,
+  p_user_id uuid,
+  p_organization_id uuid,
+  p_ai boolean,
+  p_extra jsonb
+) returns boolean
+language plpgsql
+security definer -- avoid RLS infinite recursion
+set search_path to ''
+as $$
+begin
+  return exists (
+    select 1 from public.agents
+    where id = p_id
+      and user_id is not distinct from p_user_id
+      and organization_id = p_organization_id
+      and ai = false
+      and p_ai = false
+      and extra->>'role' = 'member'
+      and extra is not distinct from p_extra
+  );
+end;
+$$;
+
 -- Check if organization name is unchanged (for admin updates)
 create function public.org_update_by_admin_rules(
   p_id uuid,

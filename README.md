@@ -850,7 +850,7 @@ npm exec -- supabase start
 After editing the schema files, generate a migration
 
 ```
-npm run db:diff -- -f <migration_name>
+npm run db:diff -- <migration_name>
 ```
 
 Apply the migration to the local database

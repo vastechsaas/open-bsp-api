@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 
 set local search_path = extensions, public, auth, billing, storage;
 
-select plan(35);
+select plan(45);
 
 insert into public.organizations (id, name, extra)
 values
@@ -69,6 +69,30 @@ values
     'Member A',
     false,
     '{"role":"member"}'
+  ),
+  (
+    '30200000-0000-4000-8000-000000000003',
+    '10200000-0000-4000-8000-000000000001',
+    null,
+    'Protected Admin',
+    false,
+    '{"role":"admin","invitation":{"email":"admin@example.test","status":"pending"}}'
+  ),
+  (
+    '30200000-0000-4000-8000-000000000004',
+    '10200000-0000-4000-8000-000000000001',
+    null,
+    'Protected Supervisor',
+    false,
+    '{"role":"supervisor","invitation":{"email":"supervisor-b@example.test","status":"pending"}}'
+  ),
+  (
+    '30200000-0000-4000-8000-000000000005',
+    '10200000-0000-4000-8000-000000000001',
+    null,
+    'Protected Owner',
+    false,
+    '{"role":"owner","invitation":{"email":"owner@example.test","status":"pending"}}'
   );
 
 insert into public.organizations_addresses (
@@ -258,6 +282,119 @@ select is_empty(
     )
   $$,
   'exact-role authorization can exclude Supervisor while retaining Member'
+);
+
+select lives_ok(
+  $$
+    insert into public.agents (id, organization_id, name, ai, extra)
+    values (
+      '30200000-0000-4000-8000-000000000006',
+      '10200000-0000-4000-8000-000000000001',
+      'Invited Member',
+      false,
+      '{"role":"member","invitation":{"email":"invited-member@example.test","status":"pending"}}'
+    )
+  $$,
+  'Supervisor can invite a Member'
+);
+
+select is(
+  (
+    select count(*)
+    from public.agents
+    where id = '30200000-0000-4000-8000-000000000006'
+  ),
+  1::bigint,
+  'Supervisor Member invitation is created'
+);
+
+select throws_like(
+  $$
+    insert into public.agents (id, organization_id, name, ai, extra)
+    values (
+      '30200000-0000-4000-8000-000000000007',
+      '10200000-0000-4000-8000-000000000001',
+      'Escalated Supervisor',
+      false,
+      '{"role":"supervisor","invitation":{"email":"escalated@example.test","status":"pending"}}'
+    )
+  $$,
+  '%row-level security%',
+  'Supervisor cannot invite another Supervisor'
+);
+
+select lives_ok(
+  $$
+    update public.agents
+    set name = 'Member Managed by Supervisor'
+    where id = '30200000-0000-4000-8000-000000000002'
+  $$,
+  'Supervisor can update a Member'
+);
+
+select throws_like(
+  $$
+    update public.agents
+    set extra = jsonb_set(extra, '{role}', '"supervisor"')
+    where id = '30200000-0000-4000-8000-000000000002'
+  $$,
+  '%row-level security%',
+  'Supervisor cannot promote a Member'
+);
+
+select results_eq(
+  $$
+    select name, extra->>'role'
+    from public.agents
+    where id = '30200000-0000-4000-8000-000000000002'
+  $$,
+  $$ values ('Member Managed by Supervisor'::text, 'member'::text) $$,
+  'Supervisor Member update preserves the role'
+);
+
+select lives_ok(
+  $$
+    delete from public.agents
+    where id = '30200000-0000-4000-8000-000000000006'
+  $$,
+  'Supervisor can remove a Member invitation'
+);
+
+select is(
+  (
+    select count(*)
+    from public.agents
+    where id = '30200000-0000-4000-8000-000000000006'
+  ),
+  0::bigint,
+  'Supervisor Member invitation is removed'
+);
+
+select is_empty(
+  $$
+    update public.agents
+    set name = 'Unauthorized management'
+    where id in (
+      '30200000-0000-4000-8000-000000000003',
+      '30200000-0000-4000-8000-000000000004',
+      '30200000-0000-4000-8000-000000000005'
+    )
+    returning id
+  $$,
+  'Supervisor cannot update Admin, Supervisor, or Owner records'
+);
+
+select is_empty(
+  $$
+    delete from public.agents
+    where id in (
+      '30200000-0000-4000-8000-000000000003',
+      '30200000-0000-4000-8000-000000000004',
+      '30200000-0000-4000-8000-000000000005'
+    )
+    returning id
+  $$,
+  'Supervisor cannot remove Admin, Supervisor, or Owner records'
 );
 
 select is(

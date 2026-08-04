@@ -30,7 +30,7 @@ C:\Hurera New Laptop\open-bsp-ui
 - Do not hand-write ordinary migrations. Generate them from schema diffs:
 
 ```powershell
-npm run db:diff -- -f <migration_name>
+npm run db:diff -- <migration_name>
 ```
 
 - Apply locally before committing when possible:

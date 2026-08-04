@@ -2,7 +2,7 @@
   "name": "open-bsp-api-tools",
   "private": true,
   "scripts": {
-    "db:diff": "supabase db diff",
+    "db:diff": "node scripts/create-db-diff.mjs",
     "db:migrate:local": "supabase migration up --local",
     "db:test": "supabase test db --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres",
     "types:generate": "node scripts/generate-db-types.mjs",

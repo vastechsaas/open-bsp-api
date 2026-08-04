@@ -9,7 +9,7 @@ npm ci
 Use the repository commands instead of invoking an unpinned Supabase CLI:
 
 ```powershell
-npm run db:diff -- -f <migration_name>
+npm run db:diff -- <migration_name>
 npm run db:migrate:local
 npm run db:test -- supabase/tests/<test_file>.sql
 ```

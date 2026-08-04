@@ -2051,6 +2051,16 @@ export type Database = {
         }
         Returns: boolean
       }
+      member_update_by_supervisor_rules: {
+        Args: {
+          p_ai: boolean
+          p_extra: Json
+          p_id: string
+          p_organization_id: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
       merge_update_jsonb: {
         Args: { object: Json; path: string[]; target: Json }
         Returns: Json
