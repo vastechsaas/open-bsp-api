@@ -835,34 +835,40 @@ export type AgentExtra = {
 
 Requires Node 🐢 and Docker 🐋.
 
+Install the pinned local tooling:
+
+```
+npm ci
+```
+
 ### Database
 
 ```
-npx supabase start
+npm exec -- supabase start
 ```
 
 After editing the schema files, generate a migration
 
 ```
-npx supabase db diff -f <migration_name>
+npm run db:diff -- -f <migration_name>
 ```
 
 Apply the migration to the local database
 
 ```
-npx supabase migration up
+npm run db:migrate:local
 ```
 
 Finally, update the types
 
 ```
-npx supabase gen types typescript --local > supabase/functions/_shared/db_types.ts
+npm run types:generate
 ```
 
 ### Edge Functions
 
 ```
-npx supabase functions serve
+npm exec -- supabase functions serve
 ```
 
 ### REST API docs
