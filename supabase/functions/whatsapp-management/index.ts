@@ -9,6 +9,7 @@ import {
   createApiClient,
   createClient,
   createUnsecureClient,
+  type Database,
   type TemplateData,
 } from "../_shared/supabase.ts";
 import {
@@ -83,6 +84,8 @@ type AppEnv = {
     apiKey: ApiKeyRow;
   };
 };
+
+type OrganizationRole = Database["public"]["Enums"]["role"];
 
 const app = new Hono<AppEnv>();
 
@@ -175,7 +178,7 @@ app.use("*", async (c, next) => {
 
 // Require roles middleware factory
 function requireRoles(
-  roles: Array<"member" | "admin" | "owner">,
+  roles: OrganizationRole[],
 ) {
   return async (c: Context<AppEnv>, next: () => Promise<void>) => {
     const client = c.get("supabase");
@@ -334,7 +337,7 @@ async function getCurrentAgentId(
 
 app.put(
   "/whatsapp-management/templates",
-  requireRoles(["member", "admin", "owner"]),
+  requireRoles(["member", "supervisor", "admin", "owner"]),
   async (c) => {
     const { organization_id, organization_address, template } = await c.req
       .json<TemplatePayload>();
@@ -458,7 +461,7 @@ app.delete(
 
 app.put(
   "/whatsapp-management/templates/page",
-  requireRoles(["member", "admin", "owner"]),
+  requireRoles(["member", "supervisor", "admin", "owner"]),
   async (c) => {
     const payload = await c.req.json<TemplatePagePayload>();
 

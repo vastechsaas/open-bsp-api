@@ -35,7 +35,9 @@ declare
 begin
   if not exists (
     select 1
-    from public.get_authorized_orgs('member') as authorized_orgs(id)
+    from public.get_authorized_orgs_by_roles(
+      array['owner', 'admin', 'member']::public.role[]
+    ) as authorized_orgs(id)
     where authorized_orgs.id = p_organization_id
   ) then
     raise exception using

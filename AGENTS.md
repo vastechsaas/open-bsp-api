@@ -30,13 +30,13 @@ C:\Hurera New Laptop\open-bsp-ui
 - Do not hand-write ordinary migrations. Generate them from schema diffs:
 
 ```powershell
-npx supabase db diff -f <migration_name>
+npm run db:diff -- <migration_name>
 ```
 
 - Apply locally before committing when possible:
 
 ```powershell
-npx supabase migration up --local
+npm run db:migrate:local
 ```
 
 - Do not modify already-applied migrations unless the user explicitly asks and
@@ -52,7 +52,7 @@ npx supabase migration up --local
 After local schema/migration changes are applied, regenerate:
 
 ```powershell
-npx supabase gen types typescript --local > supabase/functions/_shared/db_types.ts
+npm run types:generate
 ```
 
 The UI mirrors this generated file at:
@@ -61,7 +61,7 @@ The UI mirrors this generated file at:
 ../open-bsp-ui/src/supabase/db_types.ts
 ```
 
-When syncing to UI, ensure the generated types include the `billing` schema.
+The generator requires the `billing`, `public`, and `storage` schemas.
 
 ## Paginated data-table APIs
 
@@ -89,31 +89,36 @@ module-specific.
 
 ## Required checks
 
-Run Deno checks from the correct directories:
+Use the quick loop while implementing, then run the full suite once before
+commit:
 
 ```powershell
-deno fmt --check
-cd supabase/functions
-deno lint
-deno check .
+npm run validate:quick
+npm run validate
 ```
 
-`deno check .` must be run from `supabase/functions`, because the import map is
-there. Running `deno check <file>` from the repo root can produce false missing
-dependency errors.
+The scripts format-check changed files and run `deno check .` from
+`supabase/functions`, where its import map is available. Full validation also
+checks the plugin and runs database tests.
 
 For database tests:
 
 ```powershell
-npx supabase test db --local supabase/tests/<test_file>.sql
+npm run db:test -- supabase/tests/<test_file>.sql
 ```
 
 If local discovery is flaky but the DB container is healthy, use the explicit
 local DB URL:
 
 ```powershell
-npx supabase test db --db-url "postgresql://postgres:postgres@127.0.0.1:54322/postgres" supabase/tests/<test_file>.sql
+npm run db:test -- supabase/tests/<test_file>.sql
 ```
+
+Install the pinned repository tooling with `npm ci`. During development use
+`npm run validate:quick`; run `npm run validate` once before committing. The
+type generator always includes `billing`, `public`, and `storage`, validates its
+output before replacement and supports `--ui-file=<path>` to sync an explicit
+frontend worktree. See `docs/development-workflow.md`.
 
 ## Staging migration safety
 
@@ -121,9 +126,9 @@ For staging deployment, make sure the target Supabase project is the staging
 project before applying migrations:
 
 ```powershell
-npx supabase link --project-ref <STAGING_PROJECT_REF>
-npx supabase db push --dry-run
-npx supabase db push
+npm exec -- supabase link --project-ref <STAGING_PROJECT_REF>
+npm exec -- supabase db push --dry-run
+npm exec -- supabase db push
 ```
 
 Never run staging or production migration commands without confirming the linked

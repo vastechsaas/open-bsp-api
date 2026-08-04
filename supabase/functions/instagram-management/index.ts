@@ -9,6 +9,7 @@ import {
   createApiClient,
   createClient,
   createUnsecureClient,
+  type Database,
 } from "../_shared/supabase.ts";
 import {
   buildAuthorizeUrl,
@@ -45,6 +46,8 @@ type AppEnv = {
     apiKey: ApiKeyRow;
   };
 };
+
+type OrganizationRole = Database["public"]["Enums"]["role"];
 
 const app = new Hono<AppEnv>();
 
@@ -130,7 +133,7 @@ app.use("*", async (c, next) => {
 });
 
 // Require roles middleware factory (identical to whatsapp-management).
-function requireRoles(roles: Array<"member" | "admin" | "owner">) {
+function requireRoles(roles: OrganizationRole[]) {
   return async (c: Context<AppEnv>, next: () => Promise<void>) => {
     const client = c.get("supabase");
 

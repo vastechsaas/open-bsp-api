@@ -14,45 +14,42 @@ Edge Functions and the CI checks).
    cd open-bsp-api
    ```
 
-2. Start the local Supabase instance:
+2. Install the pinned local tooling:
    ```bash
-   npx supabase start
+   npm ci
    ```
 
-3. Serve Edge Functions locally:
+3. Start the local Supabase instance:
    ```bash
-   npx supabase functions serve
+   npm exec -- supabase start
+   ```
+
+4. Serve Edge Functions locally:
+   ```bash
+   npm exec -- supabase functions serve
    ```
 
 ## Database Changes
 
 - Edit schema files in `supabase/schemas/` (never create tables directly via
   SQL)
-- Generate a migration: `npx supabase db diff -f <migration_name>`
-- Apply it locally: `npx supabase migration up`
-- Regenerate types:
-  `npx supabase gen types typescript --local > supabase/functions/_shared/db_types.ts`
+- Generate a migration: `npm run db:diff -- <migration_name>`
+- Apply it locally: `npm run db:migrate:local`
+- Regenerate types: `npm run types:generate`
 
 ## Code Checks
 
-CI runs `.github/workflows/check.yml` on every push and pull request. Run the
-same checks locally before pushing so they pass:
+CI runs `.github/workflows/check.yml` on every push and pull request. Install
+the pinned tooling with `npm ci`, use `npm run validate:quick` during
+implementation, and run the complete checks once before pushing:
 
 ```bash
-# 1. Format the whole repo (CI runs `deno fmt --check`)
-deno fmt
-
-# 2. Lint and type-check the Edge Functions
-cd supabase/functions && deno lint && deno check . && cd ../..
-
-# 3. Lint and type-check the plugin
-cd plugin && deno lint && deno check . && cd ..
+npm run validate
 ```
 
-`deno fmt` formats in place; CI only verifies (`deno fmt --check`), so a commit
-with unformatted files — including Markdown such as `README.md` or the docs in
-the repo root — will fail the check. Run `deno fmt --check` to preview what
-would fail without changing any files.
+The validation command format-checks changed files, checks the Edge Functions
+and plugin from their correct import-map directories, and runs database tests.
+See `docs/development-workflow.md` for targeted options.
 
 ## Submitting Changes
 

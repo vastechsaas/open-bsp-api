@@ -6,7 +6,7 @@ for select
 to authenticated, anon
 using (
   organization_id in (
-    select public.get_authorized_orgs('member')
+    select public.get_authorized_orgs_by_roles(array['owner', 'admin', 'member']::public.role[])
   )
 );
 
@@ -16,7 +16,7 @@ for insert
 to authenticated, anon
 with check (
   organization_id in (
-    select public.get_authorized_orgs('member')
+    select public.get_authorized_orgs_by_roles(array['owner', 'admin', 'member']::public.role[])
   )
   and status = 'draft'
 );
@@ -27,13 +27,13 @@ for update
 to authenticated, anon
 using (
   organization_id in (
-    select public.get_authorized_orgs('member')
+    select public.get_authorized_orgs_by_roles(array['owner', 'admin', 'member']::public.role[])
   )
   and status = 'draft'
 )
 with check (
   organization_id in (
-    select public.get_authorized_orgs('member')
+    select public.get_authorized_orgs_by_roles(array['owner', 'admin', 'member']::public.role[])
   )
   and status = 'draft'
 );
@@ -44,7 +44,7 @@ for delete
 to authenticated, anon
 using (
   organization_id in (
-    select public.get_authorized_orgs('member')
+    select public.get_authorized_orgs_by_roles(array['owner', 'admin', 'member']::public.role[])
   )
   and status = 'draft'
 );
@@ -57,7 +57,7 @@ for select
 to authenticated, anon
 using (
   organization_id in (
-    select public.get_authorized_orgs('member')
+    select public.get_authorized_orgs_by_roles(array['owner', 'admin', 'member']::public.role[])
   )
 );
 
@@ -67,7 +67,7 @@ for insert
 to authenticated, anon
 with check (
   organization_id in (
-    select public.get_authorized_orgs('member')
+    select public.get_authorized_orgs_by_roles(array['owner', 'admin', 'member']::public.role[])
   )
   and exists (
     select 1
@@ -84,7 +84,7 @@ for update
 to authenticated, anon
 using (
   organization_id in (
-    select public.get_authorized_orgs('member')
+    select public.get_authorized_orgs_by_roles(array['owner', 'admin', 'member']::public.role[])
   )
   and exists (
     select 1
@@ -96,7 +96,7 @@ using (
 )
 with check (
   organization_id in (
-    select public.get_authorized_orgs('member')
+    select public.get_authorized_orgs_by_roles(array['owner', 'admin', 'member']::public.role[])
   )
   and exists (
     select 1
@@ -113,7 +113,7 @@ for delete
 to authenticated, anon
 using (
   organization_id in (
-    select public.get_authorized_orgs('member')
+    select public.get_authorized_orgs_by_roles(array['owner', 'admin', 'member']::public.role[])
   )
   and exists (
     select 1
@@ -132,6 +132,6 @@ for select
 to authenticated, anon
 using (
   organization_id in (
-    select public.get_authorized_orgs('member')
+    select public.get_authorized_orgs_by_roles(array['owner', 'admin', 'member']::public.role[])
   )
 );

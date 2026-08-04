@@ -1844,6 +1844,10 @@ export type Database = {
         Args: { role?: Database["public"]["Enums"]["role"] }
         Returns: string[]
       }
+      get_authorized_orgs_by_roles: {
+        Args: { roles: Database["public"]["Enums"]["role"][] }
+        Returns: string[]
+      }
       get_campaign_audience_count: {
         Args: { p_campaign_id: string; p_organization_id: string }
         Returns: number
@@ -2047,6 +2051,16 @@ export type Database = {
         }
         Returns: boolean
       }
+      member_update_by_supervisor_rules: {
+        Args: {
+          p_ai: boolean
+          p_extra: Json
+          p_id: string
+          p_organization_id: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
       merge_update_jsonb: {
         Args: { object: Json; path: string[]; target: Json }
         Returns: Json
@@ -2151,7 +2165,7 @@ export type Database = {
       campaign_audience_type: "all_contacts" | "active_24h" | "csv_upload"
       direction: "incoming" | "outgoing" | "internal"
       log_level: "info" | "warning" | "error"
-      role: "owner" | "admin" | "member"
+      role: "owner" | "admin" | "supervisor" | "member"
       service:
         | "whatsapp"
         | "instagram"
@@ -2845,7 +2859,7 @@ export const Constants = {
       campaign_audience_type: ["all_contacts", "active_24h", "csv_upload"],
       direction: ["incoming", "outgoing", "internal"],
       log_level: ["info", "warning", "error"],
-      role: ["owner", "admin", "member"],
+      role: ["owner", "admin", "supervisor", "member"],
       service: ["whatsapp", "instagram", "local", "slack", "discord", "teams"],
       webhook_operation: ["insert", "update"],
       webhook_table: [

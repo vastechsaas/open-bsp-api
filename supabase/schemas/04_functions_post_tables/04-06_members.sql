@@ -68,6 +68,7 @@ begin
       case agent.extra->>'role'
         when 'owner' then 'owner'::public.role
         when 'admin' then 'admin'::public.role
+        when 'supervisor' then 'supervisor'::public.role
         else 'member'::public.role
       end as role,
       case agent.extra->'invitation'->>'status'

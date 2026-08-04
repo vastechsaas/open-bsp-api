@@ -16,7 +16,8 @@ using (
   user_id = auth.uid()
 )
 with check (
-  public.member_self_update_rules(id, user_id, organization_id, ai, extra)
+  user_id = auth.uid()
+  and public.member_self_update_rules(id, user_id, organization_id, ai, extra)
 );
 
 create policy "members can delete themselves"
@@ -75,6 +76,54 @@ with check (
   and extra->'invitation'->>'email' is not null
 );
 
+create policy "supervisors can send member invitations"
+on public.agents
+for insert
+to authenticated
+with check (
+  organization_id in (
+    select public.get_authorized_orgs('supervisor')
+  )
+  and user_id is null
+  and ai = false
+  and extra->>'role' = 'member'
+  and extra->'invitation'->>'status' = 'pending'
+  and extra->'invitation'->>'email' is not null
+);
+
+create policy "supervisors can update members"
+on public.agents
+for update
+to authenticated
+using (
+  organization_id in (
+    select public.get_authorized_orgs('supervisor')
+  )
+  and ai = false
+  and extra->>'role' = 'member'
+)
+with check (
+  public.member_update_by_supervisor_rules(
+    id,
+    user_id,
+    organization_id,
+    ai,
+    extra
+  )
+);
+
+create policy "supervisors can delete members"
+on public.agents
+for delete
+to authenticated
+using (
+  organization_id in (
+    select public.get_authorized_orgs('supervisor')
+  )
+  and ai = false
+  and extra->>'role' = 'member'
+);
+
 create policy "owners can update their orgs agents"
 on public.agents
 for update
@@ -86,7 +135,10 @@ using (
   and coalesce(extra->>'kind', '') <> 'chatbot_runtime'
 )
 with check (
-  coalesce(extra->>'kind', '') <> 'chatbot_runtime'
+  organization_id in (
+    select public.get_authorized_orgs('owner')
+  )
+  and coalesce(extra->>'kind', '') <> 'chatbot_runtime'
   and
   public.agent_update_by_owner_rules(id, user_id, organization_id, ai, extra)
 );

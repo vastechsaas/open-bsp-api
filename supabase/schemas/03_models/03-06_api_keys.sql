@@ -17,6 +17,10 @@ add constraint api_keys_pkey
 primary key (id);
 
 alter table only public.api_keys
+add constraint api_keys_role_check
+check (role in ('owner'::public.role, 'admin'::public.role, 'member'::public.role));
+
+alter table only public.api_keys
 add constraint api_keys_organization_id_fkey
 foreign key (organization_id)
 references public.organizations(id)
@@ -30,4 +34,4 @@ create trigger set_updated_at
 before update
 on public.api_keys
 for each row
-execute function public.moddatetime('updated_at'); 
+execute function public.moddatetime('updated_at');

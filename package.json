@@ -1,0 +1,15 @@
+{
+  "name": "open-bsp-api-tools",
+  "private": true,
+  "scripts": {
+    "db:diff": "node scripts/create-db-diff.mjs",
+    "db:migrate:local": "supabase migration up --local",
+    "db:test": "supabase test db --db-url postgresql://postgres:postgres@127.0.0.1:54322/postgres",
+    "types:generate": "node scripts/generate-db-types.mjs",
+    "validate:quick": "node scripts/validate-backend.mjs --quick",
+    "validate": "node scripts/validate-backend.mjs"
+  },
+  "devDependencies": {
+    "supabase": "2.111.0"
+  }
+}

@@ -6,7 +6,9 @@ for select
 to authenticated, anon
 using (
   organization_id in (
-    select public.get_authorized_orgs('member')
+    select public.get_authorized_orgs_by_roles(
+      array['owner', 'admin', 'member']::public.role[]
+    )
   )
 );
 
