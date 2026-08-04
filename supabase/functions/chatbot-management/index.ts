@@ -52,6 +52,8 @@ type DatabaseError = {
   hint?: string;
 };
 
+type OrganizationRole = Database["public"]["Enums"]["role"];
+
 const app = new Hono<AppEnv>();
 
 app.use("*", cors());
@@ -141,7 +143,7 @@ function requireMember(
 async function authorizeOrganization(
   c: Context<AppEnv>,
   next: () => Promise<void>,
-  roles: Array<"member" | "admin" | "owner">,
+  roles: OrganizationRole[],
 ): Promise<void> {
   const organizationId = c.req.method === "GET"
     ? organizationPayloadSchema.parse({
@@ -177,7 +179,7 @@ async function authorizeOrganization(
   if (
     !apiKey ||
     apiKey.organization_id !== organizationId ||
-    !roles.includes(apiKey.role as "admin" | "owner")
+    !roles.includes(apiKey.role)
   ) {
     throw new HTTPException(403, {
       message: "Administrator access is required for this organization",

@@ -1,19 +1,14 @@
-create function public.get_authorized_orgs(role public.role default 'member') returns setof uuid
+create function public.get_authorized_orgs_by_roles(
+  roles public.role[]
+) returns setof uuid
 language plpgsql
 security definer
 set search_path to ''
 as $$
 declare
-  req_level int;
   api_key text;
   org_id uuid;
 begin
-  req_level := case role::text
-    when 'owner' then 3
-    when 'admin' then 2
-    else 1 -- 'member'
-  end;
-
   -- First, try JWT authentication via auth.uid()
   if auth.uid() is not null then
     return query select organization_id from public.agents
@@ -23,13 +18,10 @@ begin
       extra->'invitation' is null
       or extra->'invitation'->>'status' = 'accepted'
     )
-    and (
-      case (extra->>'role')
-        when 'owner' then 3
-        when 'admin' then 2
-        else 1 -- 'member'
-      end
-    ) >= req_level;
+    and extra->>'role' in (
+      select allowed_role::text
+      from unnest(roles) as allowed_role
+    );
 
     -- Authenticated but lacking the requested role: return the empty set so RLS
     -- subqueries can fall through to other OR-combined policies (e.g. a member
@@ -48,13 +40,7 @@ begin
     select a.organization_id into org_id
     from public.api_keys a
     where a.key = api_key
-    and (
-      case (a.role::text)
-        when 'owner' then 3
-        when 'admin' then 2
-        else 1 -- 'member'
-      end
-    ) >= req_level;
+    and a.role = any(roles);
 
     if org_id is not null then
       return next org_id;
@@ -73,6 +59,22 @@ begin
     message = 'authentication required',
     hint = 'use api-key header or jwt authentication';
 end;
+$$;
+
+create function public.get_authorized_orgs(role public.role default 'member') returns setof uuid
+language sql
+security definer
+set search_path to ''
+as $$
+  select public.get_authorized_orgs_by_roles(
+    case role
+      when 'owner'::public.role then array['owner']::public.role[]
+      when 'admin'::public.role then array['owner', 'admin']::public.role[]
+      when 'supervisor'::public.role then array['owner', 'admin', 'supervisor']::public.role[]
+      when 'member'::public.role then array['owner', 'admin', 'supervisor', 'member']::public.role[]
+      else array[]::public.role[]
+    end
+  );
 $$;
 
 -- Check if agent immutable fields match the original (for UPDATE policies)

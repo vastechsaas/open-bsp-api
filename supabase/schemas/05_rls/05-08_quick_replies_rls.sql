@@ -10,12 +10,12 @@ using (
   )
 );
 
-create policy "admins can manage their orgs quick replies"
+create policy "supervisors can manage their orgs quick replies"
 on public.quick_replies
 for all
 to authenticated, anon
 using (
   organization_id in (
-    select public.get_authorized_orgs('admin')
+    select public.get_authorized_orgs('supervisor')
   )
 );
