@@ -72,8 +72,205 @@ as $$
       when 'admin'::public.role then array['owner', 'admin']::public.role[]
       when 'supervisor'::public.role then array['owner', 'admin', 'supervisor']::public.role[]
       when 'member'::public.role then array['owner', 'admin', 'supervisor', 'member']::public.role[]
+      when 'agent'::public.role then array['owner', 'admin', 'supervisor', 'member', 'agent']::public.role[]
       else array[]::public.role[]
     end
+  );
+$$;
+
+create function public.role_rank(role public.role) returns integer
+language sql
+immutable
+set search_path to ''
+as $$
+  select case role
+    when 'owner'::public.role then 5
+    when 'admin'::public.role then 4
+    when 'supervisor'::public.role then 3
+    when 'member'::public.role then 2
+    when 'agent'::public.role then 1
+    else 0
+  end;
+$$;
+
+create function public.get_request_organization_role(
+  p_organization_id uuid
+) returns public.role
+language plpgsql
+stable
+security definer
+set search_path to ''
+as $$
+declare
+  request_role public.role;
+  api_key text;
+begin
+  if auth.uid() is not null then
+    select (a.extra->>'role')::public.role into request_role
+    from public.agents a
+    where a.organization_id = p_organization_id
+      and a.user_id = auth.uid()
+      and a.ai = false
+      and (
+        a.extra->'invitation' is null
+        or a.extra->'invitation'->>'status' = 'accepted'
+      )
+      and a.extra->>'role' in ('owner', 'admin', 'supervisor', 'member', 'agent')
+    limit 1;
+
+    return request_role;
+  end if;
+
+  api_key := current_setting('request.headers', true)::json->>'api-key';
+  if api_key is not null then
+    select a.role into request_role
+    from public.api_keys a
+    where a.organization_id = p_organization_id
+      and a.key = api_key;
+  end if;
+
+  return request_role;
+exception
+  when invalid_text_representation then
+    return null;
+end;
+$$;
+
+create function public.get_current_human_agent_id(
+  p_organization_id uuid
+) returns uuid
+language sql
+stable
+security definer
+set search_path to ''
+as $$
+  select a.id
+  from public.agents a
+  where a.organization_id = p_organization_id
+    and a.user_id = auth.uid()
+    and a.ai = false
+    and (
+      a.extra->'invitation' is null
+      or a.extra->'invitation'->>'status' = 'accepted'
+    )
+  limit 1;
+$$;
+
+create function public.agent_can_read_conversation(
+  p_organization_id uuid,
+  p_conversation_id uuid
+) returns boolean
+language sql
+stable
+security definer
+set search_path to ''
+as $$
+  select public.get_request_organization_role(p_organization_id) = 'agent'::public.role
+    and exists (
+      select 1
+      from public.conversations c
+      where c.id = p_conversation_id
+        and c.organization_id = p_organization_id
+        and c.status = 'active'
+        and (
+          c.assigned_agent_id is null
+          or c.assigned_agent_id = public.get_current_human_agent_id(p_organization_id)
+        )
+    );
+$$;
+
+create function public.agent_owns_conversation(
+  p_organization_id uuid,
+  p_conversation_id uuid
+) returns boolean
+language sql
+stable
+security definer
+set search_path to ''
+as $$
+  select public.get_request_organization_role(p_organization_id) = 'agent'::public.role
+    and exists (
+      select 1
+      from public.conversations c
+      where c.id = p_conversation_id
+        and c.organization_id = p_organization_id
+        and c.status = 'active'
+        and c.assigned_agent_id = public.get_current_human_agent_id(p_organization_id)
+    );
+$$;
+
+create function public.agent_conversation_update_rules(
+  p_id uuid,
+  p_organization_id uuid,
+  p_service public.service,
+  p_organization_address text,
+  p_contact_address text,
+  p_group_address text,
+  p_assigned_agent_id uuid
+) returns boolean
+language sql
+stable
+security definer
+set search_path to ''
+as $$
+  select exists (
+    select 1
+    from public.conversations c
+    where c.id = p_id
+      and c.organization_id = p_organization_id
+      and c.service = p_service
+      and c.organization_address = p_organization_address
+      and c.contact_address is not distinct from p_contact_address
+      and c.group_address is not distinct from p_group_address
+      and c.assigned_agent_id = p_assigned_agent_id
+      and c.assigned_agent_id = public.get_current_human_agent_id(p_organization_id)
+  );
+$$;
+
+create function public.agent_message_insert_rules(
+  p_organization_id uuid,
+  p_conversation_id uuid,
+  p_agent_id uuid,
+  p_direction public.direction,
+  p_service public.service,
+  p_organization_address text,
+  p_group_address text
+) returns boolean
+language sql
+stable
+security definer
+set search_path to ''
+as $$
+  select public.get_request_organization_role(p_organization_id) = 'agent'::public.role
+    and p_direction = 'outgoing'::public.direction
+    and p_agent_id = public.get_current_human_agent_id(p_organization_id)
+    and exists (
+      select 1
+      from public.conversations c
+      where c.id = p_conversation_id
+        and c.organization_id = p_organization_id
+        and c.status = 'active'
+        and c.assigned_agent_id = p_agent_id
+        and c.service = p_service
+        and c.organization_address = p_organization_address
+        and c.group_address is not distinct from p_group_address
+    );
+$$;
+
+create function public.agent_can_download_media_object(
+  p_name text
+) returns boolean
+language sql
+stable
+security definer
+set search_path to ''
+as $$
+  select exists (
+    select 1
+    from public.messages m
+    cross join lateral jsonb_path_query(m.content, '$.**') as content_value
+    where content_value = to_jsonb('internal://media/' || p_name)
+      and public.agent_can_read_conversation(m.organization_id, m.conversation_id)
   );
 $$;
 
@@ -133,7 +330,7 @@ begin
 end;
 $$;
 
--- Supervisors can update human Members without changing their role,
+-- Admins and Supervisors can update human Members and Agents without changing their role,
 -- invitation state, organization, or identity.
 create function public.member_update_by_supervisor_rules(
   p_id uuid,
@@ -154,7 +351,7 @@ begin
       and organization_id = p_organization_id
       and ai = false
       and p_ai = false
-      and extra->>'role' = 'member'
+      and extra->>'role' in ('member', 'agent')
       and extra is not distinct from p_extra
   );
 end;

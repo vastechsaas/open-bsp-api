@@ -57,3 +57,47 @@ using (
   )
   and (extra->'synced'->>'action') is distinct from 'add'
 );
+
+create policy "agents can read their orgs contacts addresses"
+on public.contacts_addresses
+for select
+to authenticated
+using (
+  public.get_request_organization_role(organization_id) = 'agent'::public.role
+);
+
+create policy "agents can insert contacts addresses"
+on public.contacts_addresses
+for insert
+to authenticated
+with check (
+  public.get_request_organization_role(organization_id) = 'agent'::public.role
+  and (extra->'synced'->>'action') is distinct from 'add'
+);
+
+create policy "agents can update contacts addresses"
+on public.contacts_addresses
+for update
+to authenticated
+using (
+  public.get_request_organization_role(organization_id) = 'agent'::public.role
+)
+with check (
+  public.get_request_organization_role(organization_id) = 'agent'::public.role
+  and public.contact_address_update_rules(
+    organization_id,
+    service,
+    address,
+    extra,
+    status
+  )
+);
+
+create policy "agents can delete non-synced contacts addresses"
+on public.contacts_addresses
+for delete
+to authenticated
+using (
+  public.get_request_organization_role(organization_id) = 'agent'::public.role
+  and (extra->'synced'->>'action') is distinct from 'add'
+);

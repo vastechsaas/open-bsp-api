@@ -89,6 +89,34 @@ type OrganizationRole = Database["public"]["Enums"]["role"];
 
 const app = new Hono<AppEnv>();
 
+async function getOrganizationRole(
+  c: Context<AppEnv>,
+  organizationId: string,
+): Promise<OrganizationRole | null> {
+  const apiKey = c.get("apiKey");
+  if (apiKey) return apiKey.role;
+
+  const user = c.get("user");
+  if (!user) return null;
+
+  const { data, error } = await c.get("supabase")
+    .from("agents")
+    .select("extra")
+    .eq("organization_id", organizationId)
+    .eq("user_id", user.id)
+    .eq("ai", false)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  const extra = data.extra as Record<string, unknown> | null;
+  const invitation = extra?.invitation as Record<string, unknown> | undefined;
+  if (invitation && invitation.status !== "accepted") return null;
+
+  const role = extra?.role;
+  return typeof role === "string" ? role as OrganizationRole : null;
+}
+
 // CORS middleware
 app.use("*", cors());
 
@@ -337,12 +365,13 @@ async function getCurrentAgentId(
 
 app.put(
   "/whatsapp-management/templates",
-  requireRoles(["member", "supervisor", "admin", "owner"]),
+  requireRoles(["agent", "member", "supervisor", "admin", "owner"]),
   async (c) => {
     const { organization_id, organization_address, template } = await c.req
       .json<TemplatePayload>();
 
     const client = c.get("supabase");
+    const role = await getOrganizationRole(c, organization_id);
 
     // fetch
     if (template) {
@@ -352,6 +381,12 @@ app.put(
         organization_address,
         template,
       );
+
+      if (role === "agent" && templateDetails.status !== "APPROVED") {
+        throw new HTTPException(403, {
+          message: "Agents can only read approved templates",
+        });
+      }
 
       return c.json(templateDetails);
     }
@@ -363,7 +398,14 @@ app.put(
       organization_address,
     );
 
-    return c.json(templates);
+    return c.json(
+      role === "agent"
+        ? {
+          ...templates,
+          data: templates.data.filter((item) => item.status === "APPROVED"),
+        }
+        : templates,
+    );
   },
 );
 

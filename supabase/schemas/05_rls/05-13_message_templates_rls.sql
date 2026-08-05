@@ -44,3 +44,12 @@ using (
     select public.get_authorized_orgs('admin')
   )
 );
+
+create policy "agents can read approved message templates"
+on public.message_templates
+for select
+to authenticated
+using (
+  status = 'approved'
+  and public.get_request_organization_role(organization_id) = 'agent'::public.role
+);

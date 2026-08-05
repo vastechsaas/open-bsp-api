@@ -9,3 +9,31 @@ using (
     select public.get_authorized_orgs('member')
   )
 );
+
+create policy "agents can read visible conversations"
+on public.conversations
+for select
+to authenticated
+using (
+  public.agent_can_read_conversation(organization_id, id)
+);
+
+create policy "agents can update assigned conversations"
+on public.conversations
+for update
+to authenticated
+using (
+  public.agent_owns_conversation(organization_id, id)
+)
+with check (
+  public.get_request_organization_role(organization_id) = 'agent'::public.role
+  and public.agent_conversation_update_rules(
+    id,
+    organization_id,
+    service,
+    organization_address,
+    contact_address,
+    group_address,
+    assigned_agent_id
+  )
+);

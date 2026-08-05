@@ -58,3 +58,11 @@ using (
     select public.get_authorized_orgs('owner')
   )
 );
+
+create policy "agents can read their orgs"
+on public.organizations
+for select
+to authenticated
+using (
+  public.get_request_organization_role(id) = 'agent'::public.role
+);
