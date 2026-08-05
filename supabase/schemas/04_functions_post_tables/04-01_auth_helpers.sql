@@ -171,10 +171,18 @@ as $$
       from public.conversations c
       where c.id = p_conversation_id
         and c.organization_id = p_organization_id
-        and c.status = 'active'
         and (
-          c.assigned_agent_id is null
-          or c.assigned_agent_id = public.get_current_human_agent_id(p_organization_id)
+          (
+            c.status = 'active'
+            and (
+              c.assigned_agent_id is null
+              or c.assigned_agent_id = public.get_current_human_agent_id(p_organization_id)
+            )
+          )
+          or (
+            c.status in ('spam', 'closed')
+            and c.assigned_agent_id = public.get_current_human_agent_id(p_organization_id)
+          )
         )
     );
 $$;
