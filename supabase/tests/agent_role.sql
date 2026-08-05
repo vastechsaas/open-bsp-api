@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth, storage;
 
-select plan(40);
+select plan(43);
 
 insert into public.organizations (id, name, extra) values
   ('95000000-0000-4000-8000-000000000001', 'Agent Org A', '{}'),
@@ -46,14 +46,22 @@ insert into public.conversations (
   ('95400000-0000-4000-8000-000000000002', '95000000-0000-4000-8000-000000000001', 'whatsapp', 'agent-org-a', '15559500001', 'Mine', '95200000-0000-4000-8000-000000000001', 'active', '{}'),
   ('95400000-0000-4000-8000-000000000003', '95000000-0000-4000-8000-000000000001', 'whatsapp', 'agent-org-a', '15559500001', 'Other Agent', '95200000-0000-4000-8000-000000000002', 'active', '{}'),
   ('95400000-0000-4000-8000-000000000004', '95000000-0000-4000-8000-000000000001', 'whatsapp', 'agent-org-a', '15559500001', 'Member Owned', '95200000-0000-4000-8000-000000000004', 'active', '{}'),
-  ('95400000-0000-4000-8000-000000000005', '95000000-0000-4000-8000-000000000001', 'whatsapp', 'agent-org-a', '15559500001', 'Closed', null, 'closed', '{}');
+  ('95400000-0000-4000-8000-000000000005', '95000000-0000-4000-8000-000000000001', 'whatsapp', 'agent-org-a', '15559500001', 'Closed Mine', '95200000-0000-4000-8000-000000000001', 'closed', '{}'),
+  ('95400000-0000-4000-8000-000000000006', '95000000-0000-4000-8000-000000000001', 'whatsapp', 'agent-org-a', '15559500001', 'Spam Mine', '95200000-0000-4000-8000-000000000001', 'spam', '{}'),
+  ('95400000-0000-4000-8000-000000000007', '95000000-0000-4000-8000-000000000001', 'whatsapp', 'agent-org-a', '15559500001', 'Closed Other Agent', '95200000-0000-4000-8000-000000000002', 'closed', '{}'),
+  ('95400000-0000-4000-8000-000000000008', '95000000-0000-4000-8000-000000000001', 'whatsapp', 'agent-org-a', '15559500001', 'Expired Mine', '95200000-0000-4000-8000-000000000001', 'active', '{}');
 
 insert into public.messages (
   id, organization_id, conversation_id, direction, contact_address, service,
   organization_address, content
 ) values
   ('95500000-0000-4000-8000-000000000001', '95000000-0000-4000-8000-000000000001', '95400000-0000-4000-8000-000000000001', 'incoming', '15559500001', 'whatsapp', 'agent-org-a', '{"version":"1","type":"file","kind":"document","file":{"uri":"internal://media/organizations/95000000-0000-4000-8000-000000000001/attachments/pending.pdf"}}'),
-  ('95500000-0000-4000-8000-000000000002', '95000000-0000-4000-8000-000000000001', '95400000-0000-4000-8000-000000000003', 'incoming', '15559500001', 'whatsapp', 'agent-org-a', '{"version":"1","type":"file","kind":"document","file":{"uri":"internal://media/organizations/95000000-0000-4000-8000-000000000001/attachments/other.pdf"}}');
+  ('95500000-0000-4000-8000-000000000002', '95000000-0000-4000-8000-000000000001', '95400000-0000-4000-8000-000000000003', 'incoming', '15559500001', 'whatsapp', 'agent-org-a', '{"version":"1","type":"file","kind":"document","file":{"uri":"internal://media/organizations/95000000-0000-4000-8000-000000000001/attachments/other.pdf"}}'),
+  ('95500000-0000-4000-8000-000000000003', '95000000-0000-4000-8000-000000000001', '95400000-0000-4000-8000-000000000008', 'incoming', '15559500001', 'whatsapp', 'agent-org-a', '{"version":"1","type":"text","kind":"text","text":"expired"}');
+
+update public.messages
+set timestamp = now() - interval '25 hours'
+where id = '95500000-0000-4000-8000-000000000003';
 
 insert into public.quick_replies (id, organization_id, name, content) values
   ('95600000-0000-4000-8000-000000000001', '95000000-0000-4000-8000-000000000001', 'Greeting', 'Hello');
@@ -77,12 +85,15 @@ set local search_path = extensions, public, auth, storage;
 
 select results_eq($$ select public.get_authorized_orgs('agent') $$, $$ values ('95000000-0000-4000-8000-000000000001'::uuid) $$, 'Agent authorizes its organization');
 select is_empty($$ select public.get_authorized_orgs('member') $$, 'Agent does not inherit Member access');
-select results_eq($$ select key, "order" from public.get_conversation_queues('95000000-0000-4000-8000-000000000001') $$, $$ values ('pending'::text, 1), ('assigned'::text, 2) $$, 'Agent receives Pending then Assigned queues');
+select results_eq($$ select key, "order" from public.get_conversation_queues('95000000-0000-4000-8000-000000000001') $$, $$ values ('pending'::text, 1), ('assigned'::text, 2), ('spam'::text, 3), ('closed'::text, 4), ('expired'::text, 5) $$, 'Agent receives assignment and lifecycle queues');
 select results_eq($$ select id from public.get_conversation_queue_conversations('95000000-0000-4000-8000-000000000001', 'pending') $$, $$ values ('95400000-0000-4000-8000-000000000001'::uuid) $$, 'Pending contains active unassigned conversations');
-select results_eq($$ select id from public.get_conversation_queue_conversations('95000000-0000-4000-8000-000000000001', 'assigned') $$, $$ values ('95400000-0000-4000-8000-000000000002'::uuid) $$, 'Assigned contains only the current Agent conversations');
+select results_eq($$ select id from public.get_conversation_queue_conversations('95000000-0000-4000-8000-000000000001', 'assigned') order by id $$, $$ values ('95400000-0000-4000-8000-000000000002'::uuid), ('95400000-0000-4000-8000-000000000008'::uuid) $$, 'Assigned contains only active conversations assigned to the current Agent');
+select results_eq($$ select id from public.get_conversation_queue_conversations('95000000-0000-4000-8000-000000000001', 'spam') $$, $$ values ('95400000-0000-4000-8000-000000000006'::uuid) $$, 'Spam contains only the current Agent conversations');
+select results_eq($$ select id from public.get_conversation_queue_conversations('95000000-0000-4000-8000-000000000001', 'closed') $$, $$ values ('95400000-0000-4000-8000-000000000005'::uuid) $$, 'Closed contains only the current Agent conversations');
+select results_eq($$ select id from public.get_conversation_queue_conversations('95000000-0000-4000-8000-000000000001', 'expired') $$, $$ values ('95400000-0000-4000-8000-000000000008'::uuid) $$, 'Expired contains only visible stale active conversations');
 select throws_like($$ select * from public.get_conversation_queue_conversations('95000000-0000-4000-8000-000000000001', 'all_active') $$, '%not available to Agent%', 'Agent cannot request All Active');
-select results_eq($$ select id from public.conversations order by id $$, $$ values ('95400000-0000-4000-8000-000000000001'::uuid), ('95400000-0000-4000-8000-000000000002'::uuid) $$, 'Agent sees pending and own assigned active conversations only');
-select results_eq($$ select id from public.messages $$, $$ values ('95500000-0000-4000-8000-000000000001'::uuid) $$, 'Agent reads messages only in visible conversations');
+select results_eq($$ select id from public.conversations order by id $$, $$ values ('95400000-0000-4000-8000-000000000001'::uuid), ('95400000-0000-4000-8000-000000000002'::uuid), ('95400000-0000-4000-8000-000000000005'::uuid), ('95400000-0000-4000-8000-000000000006'::uuid), ('95400000-0000-4000-8000-000000000008'::uuid) $$, 'Agent sees unassigned active and own assigned lifecycle conversations only');
+select results_eq($$ select id from public.messages order by id $$, $$ values ('95500000-0000-4000-8000-000000000001'::uuid), ('95500000-0000-4000-8000-000000000003'::uuid) $$, 'Agent reads messages only in visible conversations');
 select throws_like($$ insert into public.messages (organization_id, conversation_id, direction, agent_id, service, organization_address, contact_address, content) values ('95000000-0000-4000-8000-000000000001', '95400000-0000-4000-8000-000000000001', 'outgoing', '95200000-0000-4000-8000-000000000001', 'whatsapp', 'agent-org-a', '15559500001', '{"version":"1","type":"text","kind":"text","text":"blocked"}') $$, '%row-level security%', 'Agent cannot reply before assignment');
 select lives_ok($$ select public.assign_conversation_to_me('95400000-0000-4000-8000-000000000001') $$, 'Agent can self-assign Pending');
 select lives_ok($$ insert into public.messages (organization_id, conversation_id, direction, agent_id, service, organization_address, contact_address, content) values ('95000000-0000-4000-8000-000000000001', '95400000-0000-4000-8000-000000000001', 'outgoing', '95200000-0000-4000-8000-000000000001', 'whatsapp', 'agent-org-a', '15559500001', '{"version":"1","type":"text","kind":"text","text":"allowed"}') $$, 'Agent can send from an assigned conversation');
