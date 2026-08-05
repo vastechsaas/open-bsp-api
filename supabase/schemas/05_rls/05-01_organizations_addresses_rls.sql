@@ -11,3 +11,11 @@ using (
     select public.get_authorized_orgs('member')
   )
 );
+
+create policy "agents can read their orgs addresses"
+on public.organizations_addresses
+for select
+to authenticated
+using (
+  public.get_request_organization_role(organization_id) = 'agent'::public.role
+);

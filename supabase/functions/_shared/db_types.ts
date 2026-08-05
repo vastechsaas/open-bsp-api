@@ -1708,6 +1708,42 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      agent_can_download_media_object: {
+        Args: { p_name: string }
+        Returns: boolean
+      }
+      agent_can_read_conversation: {
+        Args: { p_conversation_id: string; p_organization_id: string }
+        Returns: boolean
+      }
+      agent_conversation_update_rules: {
+        Args: {
+          p_assigned_agent_id: string
+          p_contact_address: string
+          p_group_address: string
+          p_id: string
+          p_organization_address: string
+          p_organization_id: string
+          p_service: Database["public"]["Enums"]["service"]
+        }
+        Returns: boolean
+      }
+      agent_message_insert_rules: {
+        Args: {
+          p_agent_id: string
+          p_conversation_id: string
+          p_direction: Database["public"]["Enums"]["direction"]
+          p_group_address: string
+          p_organization_address: string
+          p_organization_id: string
+          p_service: Database["public"]["Enums"]["service"]
+        }
+        Returns: boolean
+      }
+      agent_owns_conversation: {
+        Args: { p_conversation_id: string; p_organization_id: string }
+        Returns: boolean
+      }
       agent_update_by_owner_rules: {
         Args: {
           p_ai: boolean
@@ -1814,6 +1850,37 @@ export type Database = {
           updated_at: string
         }[]
       }
+      create_conversation_for_me: {
+        Args: {
+          p_contact_address?: string
+          p_extra?: Json
+          p_group_address?: string
+          p_name?: string
+          p_organization_address: string
+          p_organization_id: string
+          p_service: Database["public"]["Enums"]["service"]
+        }
+        Returns: {
+          assigned_agent_id: string | null
+          contact_address: string | null
+          created_at: string
+          extra: Json | null
+          group_address: string | null
+          id: string
+          name: string | null
+          organization_address: string
+          organization_id: string
+          service: Database["public"]["Enums"]["service"]
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "conversations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       duplicate_chatbot_flow_draft: {
         Args: {
           p_created_by?: string
@@ -1901,6 +1968,10 @@ export type Database = {
           order: number
         }[]
       }
+      get_current_human_agent_id: {
+        Args: { p_organization_id: string }
+        Returns: string
+      }
       get_dashboard_metrics: {
         Args: { p_days?: number; p_organization_id: string }
         Returns: {
@@ -1918,6 +1989,10 @@ export type Database = {
           total_contacts: number
           unassigned_conversations: number
         }[]
+      }
+      get_request_organization_role: {
+        Args: { p_organization_id: string }
+        Returns: Database["public"]["Enums"]["role"]
       }
       init_data: {
         Args: {
@@ -2133,6 +2208,33 @@ export type Database = {
         Args: { p_credential_id: string; p_organization_id: string }
         Returns: Json
       }
+      role_rank: {
+        Args: { role: Database["public"]["Enums"]["role"] }
+        Returns: number
+      }
+      set_conversation_agent_assignment: {
+        Args: { p_agent_id: string; p_conversation_id: string }
+        Returns: {
+          assigned_agent_id: string | null
+          contact_address: string | null
+          created_at: string
+          extra: Json | null
+          group_address: string | null
+          id: string
+          name: string | null
+          organization_address: string
+          organization_id: string
+          service: Database["public"]["Enums"]["service"]
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "conversations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       start_campaign: {
         Args: { p_campaign_id: string; p_organization_id: string }
         Returns: number
@@ -2165,7 +2267,7 @@ export type Database = {
       campaign_audience_type: "all_contacts" | "active_24h" | "csv_upload"
       direction: "incoming" | "outgoing" | "internal"
       log_level: "info" | "warning" | "error"
-      role: "owner" | "admin" | "supervisor" | "member"
+      role: "owner" | "admin" | "supervisor" | "member" | "agent"
       service:
         | "whatsapp"
         | "instagram"
@@ -2859,7 +2961,7 @@ export const Constants = {
       campaign_audience_type: ["all_contacts", "active_24h", "csv_upload"],
       direction: ["incoming", "outgoing", "internal"],
       log_level: ["info", "warning", "error"],
-      role: ["owner", "admin", "supervisor", "member"],
+      role: ["owner", "admin", "supervisor", "member", "agent"],
       service: ["whatsapp", "instagram", "local", "slack", "discord", "teams"],
       webhook_operation: ["insert", "update"],
       webhook_table: [

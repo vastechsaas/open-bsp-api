@@ -1,34 +1,29 @@
-alter table public.messages enable row level security;
+revoke execute on function public.set_conversation_agent_assignment(uuid, uuid)
+from public;
+grant execute on function public.set_conversation_agent_assignment(uuid, uuid)
+to authenticated;
 
--- Note: messages cannot be edited or deleted by the user.
+revoke execute on function public.create_conversation_for_me(
+  uuid,
+  public.service,
+  text,
+  text,
+  text,
+  text,
+  jsonb
+) from public;
+grant execute on function public.create_conversation_for_me(
+  uuid,
+  public.service,
+  text,
+  text,
+  text,
+  text,
+  jsonb
+) to authenticated;
 
-create policy "members can read their orgs messages"
-on public.messages
-for select
-to authenticated, anon
-using (
-  organization_id in (
-    select public.get_authorized_orgs('member')
-  )
-);
-
-create policy "members can create their orgs messages"
-on public.messages
-for insert
-to authenticated, anon
-with check (
-  organization_id in (
-    select public.get_authorized_orgs('member')
-  )
-);
-
-create policy "agents can read visible conversation messages"
-on public.messages
-for select
-to authenticated
-using (
-  public.agent_can_read_conversation(organization_id, conversation_id)
-);
+drop policy "agents can create assigned conversation messages"
+on public.messages;
 
 create policy "agents can create assigned conversation messages"
 on public.messages

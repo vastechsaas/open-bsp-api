@@ -19,3 +19,11 @@ using (
     select public.get_authorized_orgs('supervisor')
   )
 );
+
+create policy "agents can read their orgs quick replies"
+on public.quick_replies
+for select
+to authenticated
+using (
+  public.get_request_organization_role(organization_id) = 'agent'::public.role
+);

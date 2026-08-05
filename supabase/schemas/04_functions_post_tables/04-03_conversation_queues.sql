@@ -11,17 +11,36 @@ language plpgsql
 stable
 set search_path to ''
 as $$
+declare
+  request_role public.role;
 begin
   if p_organization_id is not null
     and not exists (
       select 1
-      from public.get_authorized_orgs('member') as authorized_orgs(id)
+      from public.get_authorized_orgs('agent') as authorized_orgs(id)
       where authorized_orgs.id = p_organization_id
     )
   then
     raise exception using
       errcode = '42501',
       message = 'organization is not accessible to the authenticated user';
+  end if;
+
+  request_role := case
+    when p_organization_id is null then null
+    else public.get_request_organization_role(p_organization_id)
+  end;
+
+  if request_role = 'agent'::public.role then
+    return query
+    select q.key, q.label, q.sort_order as "order", q.enabled
+    from (
+      values
+        ('pending', 'Pending', 1, true),
+        ('assigned', 'Assigned', 2, true)
+    ) as q(key, label, sort_order, enabled)
+    order by q.sort_order;
+    return;
   end if;
 
   return query
@@ -57,6 +76,8 @@ as $$
 declare
   normalized_limit integer;
   normalized_offset integer;
+  request_role public.role;
+  current_agent_id uuid;
 begin
   if p_organization_id is null then
     raise exception using
@@ -79,12 +100,23 @@ begin
 
   if not exists (
     select 1
-    from public.get_authorized_orgs('member') as authorized_orgs(id)
+    from public.get_authorized_orgs('agent') as authorized_orgs(id)
     where authorized_orgs.id = p_organization_id
   ) then
     raise exception using
       errcode = '42501',
       message = 'organization is not accessible to the authenticated user';
+  end if;
+
+  request_role := public.get_request_organization_role(p_organization_id);
+  current_agent_id := public.get_current_human_agent_id(p_organization_id);
+
+  if request_role = 'agent'::public.role
+    and p_queue_key not in ('pending', 'assigned')
+  then
+    raise exception using
+      errcode = '42501',
+      message = 'conversation queue is not available to Agent users';
   end if;
 
   normalized_limit := least(greatest(coalesce(p_limit, 50), 1), 500);
@@ -110,6 +142,10 @@ begin
         p_queue_key = 'assigned'
         and c.status = 'active'
         and c.assigned_agent_id is not null
+        and (
+          request_role <> 'agent'::public.role
+          or c.assigned_agent_id = current_agent_id
+        )
       )
       or (
         p_queue_key = 'pending'

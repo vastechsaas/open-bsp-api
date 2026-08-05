@@ -76,7 +76,7 @@ with check (
   and extra->'invitation'->>'email' is not null
 );
 
-create policy "supervisors can send member invitations"
+create policy "admins and supervisors can send member or agent invitations"
 on public.agents
 for insert
 to authenticated
@@ -86,12 +86,12 @@ with check (
   )
   and user_id is null
   and ai = false
-  and extra->>'role' = 'member'
+  and extra->>'role' in ('member', 'agent')
   and extra->'invitation'->>'status' = 'pending'
   and extra->'invitation'->>'email' is not null
 );
 
-create policy "supervisors can update members"
+create policy "admins and supervisors can update members or agents"
 on public.agents
 for update
 to authenticated
@@ -100,7 +100,7 @@ using (
     select public.get_authorized_orgs('supervisor')
   )
   and ai = false
-  and extra->>'role' = 'member'
+  and extra->>'role' in ('member', 'agent')
 )
 with check (
   public.member_update_by_supervisor_rules(
@@ -112,7 +112,7 @@ with check (
   )
 );
 
-create policy "supervisors can delete members"
+create policy "admins and supervisors can delete members or agents"
 on public.agents
 for delete
 to authenticated
@@ -121,7 +121,7 @@ using (
     select public.get_authorized_orgs('supervisor')
   )
   and ai = false
-  and extra->>'role' = 'member'
+  and extra->>'role' in ('member', 'agent')
 );
 
 create policy "owners can update their orgs agents"
