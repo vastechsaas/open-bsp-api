@@ -229,7 +229,9 @@ Deno.serve(async (req) => {
     .map((m) =>
       m.content.version === "1" ? m : toV1(m as unknown as MessageRowV0)
     )
-    .filter(Boolean) as MessageRow[];
+    .filter((message) =>
+      Boolean(message) && message?.content.kind !== "private_note"
+    ) as MessageRow[];
 
   // Query was done in descending order to apply the limit.
   // We need the messages in chronological order, though.

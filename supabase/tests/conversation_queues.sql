@@ -69,8 +69,8 @@ select is(
     select count(*)::integer
     from public.get_conversation_queues()
   ),
-  6,
-  'default conversation queue config exposes six base queues'
+  7,
+  'default conversation queue config exposes the Mentioned queue'
 );
 
 select results_eq(
@@ -84,6 +84,7 @@ select results_eq(
       ('all_active'::text),
       ('assigned'::text),
       ('pending'::text),
+      ('mentioned'::text),
       ('spam'::text),
       ('closed'::text),
       ('expired'::text)
@@ -102,6 +103,7 @@ select results_eq(
       ('All (active)'::text),
       ('Assigned'::text),
       ('Pending'::text),
+      ('Mentioned'::text),
       ('Spam'::text),
       ('Closed'::text),
       ('Expired'::text)
@@ -131,8 +133,8 @@ select is(
       '11000000-0000-4000-8000-000000000001'
     )
   ),
-  6,
-  'an organization member can read queue config for their organization'
+  7,
+  'an organization member can read queue config including Mentioned'
 );
 
 select throws_ok(

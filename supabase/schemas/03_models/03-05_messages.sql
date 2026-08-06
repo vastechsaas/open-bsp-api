@@ -48,6 +48,10 @@ alter table only public.messages
 add constraint messages_pkey primary key (id);
 
 alter table only public.messages
+add constraint messages_organization_id_id_key
+unique (organization_id, id);
+
+alter table only public.messages
 add constraint messages_external_id_key unique (external_id);
 
 -- Declared NOT VALID (not inline) to match the deployed state. ~46k legacy

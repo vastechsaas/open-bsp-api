@@ -183,6 +183,18 @@ as $$
             c.status in ('spam', 'closed')
             and c.assigned_agent_id = public.get_current_human_agent_id(p_organization_id)
           )
+          or exists (
+            select 1
+            from public.message_mentions mention
+            join public.messages message
+              on message.organization_id = mention.organization_id
+              and message.id = mention.message_id
+            where mention.organization_id = p_organization_id
+              and mention.mentioned_agent_id = public.get_current_human_agent_id(
+                p_organization_id
+              )
+              and message.conversation_id = p_conversation_id
+          )
         )
     );
 $$;

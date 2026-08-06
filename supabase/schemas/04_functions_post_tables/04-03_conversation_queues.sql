@@ -38,9 +38,10 @@ begin
       values
         ('pending', 'Pending', 1, true),
         ('assigned', 'Assigned', 2, true),
-        ('spam', 'Spam', 3, true),
-        ('closed', 'Closed', 4, true),
-        ('expired', 'Expired', 5, true)
+        ('mentioned', 'Mentioned', 3, true),
+        ('spam', 'Spam', 4, true),
+        ('closed', 'Closed', 5, true),
+        ('expired', 'Expired', 6, true)
     ) as q(key, label, sort_order, enabled)
     order by q.sort_order;
     return;
@@ -57,9 +58,10 @@ begin
       ('all_active', 'All (active)', 1, true),
       ('assigned', 'Assigned', 2, true),
       ('pending', 'Pending', 3, true),
-      ('spam', 'Spam', 4, true),
-      ('closed', 'Closed', 5, true),
-      ('expired', 'Expired', 6, true)
+      ('mentioned', 'Mentioned', 4, true),
+      ('spam', 'Spam', 5, true),
+      ('closed', 'Closed', 6, true),
+      ('expired', 'Expired', 7, true)
   ) as q(key, label, sort_order, enabled)
   order by q.sort_order;
 end;
@@ -92,6 +94,7 @@ begin
     'all_active',
     'assigned',
     'pending',
+    'mentioned',
     'spam',
     'closed',
     'expired'
@@ -135,6 +138,16 @@ begin
       and m.conversation_id = c.id
       and m.direction = 'incoming'::public.direction
   ) incoming on true
+  left join lateral (
+    select max(mention.created_at) as latest_mention_at
+    from public.message_mentions mention
+    join public.messages message
+      on message.organization_id = mention.organization_id
+      and message.id = mention.message_id
+    where mention.organization_id = c.organization_id
+      and mention.mentioned_agent_id = current_agent_id
+      and message.conversation_id = c.id
+  ) mentioned on true
   where c.organization_id = p_organization_id
     and (
       (
@@ -154,6 +167,10 @@ begin
         p_queue_key = 'pending'
         and c.status = 'active'
         and c.assigned_agent_id is null
+      )
+      or (
+        p_queue_key = 'mentioned'
+        and mentioned.latest_mention_at is not null
       )
       or (
         p_queue_key = 'spam'
@@ -182,7 +199,12 @@ begin
         )
       )
     )
-  order by c.updated_at desc, c.id desc
+  order by
+    case
+      when p_queue_key = 'mentioned' then mentioned.latest_mention_at
+    end desc,
+    c.updated_at desc,
+    c.id desc
   limit normalized_limit
   offset normalized_offset;
 end;
