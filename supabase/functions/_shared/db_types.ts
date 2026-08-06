@@ -1363,6 +1363,42 @@ export type Database = {
           },
         ]
       }
+      message_mentions: {
+        Row: {
+          created_at: string
+          mentioned_agent_id: string
+          message_id: string
+          organization_id: string
+        }
+        Insert: {
+          created_at?: string
+          mentioned_agent_id: string
+          message_id: string
+          organization_id: string
+        }
+        Update: {
+          created_at?: string
+          mentioned_agent_id?: string
+          message_id?: string
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_mentions_agent_fkey"
+            columns: ["organization_id", "mentioned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "message_mentions_message_fkey"
+            columns: ["organization_id", "message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
       message_templates: {
         Row: {
           category: string
@@ -1881,6 +1917,37 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_private_note: {
+        Args: {
+          p_conversation_id: string
+          p_mentioned_agent_ids?: string[]
+          p_text: string
+        }
+        Returns: {
+          agent_id: string | null
+          contact_address: string | null
+          content: Json
+          conversation_id: string
+          created_at: string
+          direction: Database["public"]["Enums"]["direction"]
+          external_id: string | null
+          group_address: string | null
+          id: string
+          organization_address: string
+          organization_id: string
+          service: Database["public"]["Enums"]["service"]
+          status: Json
+          thread_id: string | null
+          timestamp: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "messages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       duplicate_chatbot_flow_draft: {
         Args: {
           p_created_by?: string
@@ -2085,6 +2152,46 @@ export type Database = {
           total_count: number
           updated_at: string
           user_id: string
+        }[]
+      }
+      list_mentionable_humans_page: {
+        Args: {
+          p_organization_id: string
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+        }
+        Returns: {
+          id: string
+          name: string
+          picture: string
+          role: Database["public"]["Enums"]["role"]
+          total_count: number
+        }[]
+      }
+      list_mentioned_conversations_page: {
+        Args: {
+          p_organization_id: string
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+        }
+        Returns: {
+          assigned_agent_id: string
+          contact_address: string
+          created_at: string
+          extra: Json
+          group_address: string
+          id: string
+          latest_mention_at: string
+          name: string
+          organization_address: string
+          organization_id: string
+          preview_message: Json
+          service: Database["public"]["Enums"]["service"]
+          status: string
+          total_count: number
+          updated_at: string
         }[]
       }
       list_message_templates_page: {

@@ -354,7 +354,7 @@ select throws_ok(
     select *
     from public.get_conversation_queue_conversations(
       '12000000-0000-4000-8000-000000000001',
-      'mentioned'
+      'not-a-queue'
     )
   $$,
   '22023',

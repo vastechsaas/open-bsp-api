@@ -20,6 +20,10 @@ with check (
   organization_id in (
     select public.get_authorized_orgs('member')
   )
+  and not (
+    direction = 'internal'::public.direction
+    and content->>'kind' = 'private_note'
+  )
 );
 
 create policy "agents can read visible conversation messages"

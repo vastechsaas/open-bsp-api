@@ -359,6 +359,14 @@ declare
   webhook_record record;
   headers jsonb;
 begin
+  if tg_table_name = 'messages' then
+    if new.direction = 'internal'::public.direction
+      and new.content->>'kind' = 'private_note'
+    then
+      return new;
+    end if;
+  end if;
+
   -- loop through all matching webhooks
   for webhook_record in
     select w.url, w.token
