@@ -137,9 +137,60 @@ select is(
   'the conversation is assigned directly to the target Agent'
 );
 
+select results_eq(
+  $$
+    select
+      topic,
+      event,
+      payload->>'organization_id',
+      payload->>'conversation_id',
+      payload->>'assigned_agent_id',
+      payload ? 'name'
+    from realtime.messages
+    where event = 'conversation_state_changed'
+      and payload->>'conversation_id' = '98400000-0000-4000-8000-000000000001'
+  $$,
+  $$ values (
+    'conversation-queue:98000000-0000-4000-8000-000000000001'::text,
+    'conversation_state_changed'::text,
+    '98000000-0000-4000-8000-000000000001'::text,
+    '98400000-0000-4000-8000-000000000001'::text,
+    '98200000-0000-4000-8000-000000000002'::text,
+    false
+  ) $$,
+  'assignment changes emit a tenant-scoped minimal queue reconciliation signal'
+);
+
 select set_config('request.jwt.claim.sub', '98100000-0000-4000-8000-000000000001', true);
 set local role authenticated;
 set local search_path = extensions, public, auth, storage;
+
+select set_config(
+  'realtime.topic',
+  'conversation-queue:98000000-0000-4000-8000-000000000001',
+  true
+);
+
+select results_eq(
+  $$
+    select event
+    from realtime.messages
+    where payload->>'conversation_id' = '98400000-0000-4000-8000-000000000001'
+  $$,
+  $$ values ('conversation_state_changed'::text) $$,
+  'an accepted human can authorize the private queue topic for their organization'
+);
+
+select set_config(
+  'realtime.topic',
+  'conversation-queue:98000000-0000-4000-8000-000000000002',
+  true
+);
+
+select is_empty(
+  $$ select event from realtime.messages $$,
+  'an accepted human cannot authorize another organization queue topic'
+);
 
 select is_empty(
   $$ select id from public.conversations where id = '98400000-0000-4000-8000-000000000001' $$,
