@@ -2346,6 +2346,14 @@ export type Database = {
         Args: { p_campaign_id: string; p_organization_id: string }
         Returns: number
       }
+      transfer_conversation_with_private_note: {
+        Args: {
+          p_conversation_id: string
+          p_target_agent_id: string
+          p_text: string
+        }
+        Returns: Json
+      }
       unassign_conversation_from_me: {
         Args: { p_conversation_id: string }
         Returns: {
