@@ -63,8 +63,8 @@ update public.messages
 set timestamp = now() - interval '25 hours'
 where id = '95500000-0000-4000-8000-000000000003';
 
-insert into public.quick_replies (id, organization_id, name, content) values
-  ('95600000-0000-4000-8000-000000000001', '95000000-0000-4000-8000-000000000001', 'Greeting', 'Hello');
+insert into public.quick_replies (id, organization_id, shortcut, content) values
+  ('95600000-0000-4000-8000-000000000001', '95000000-0000-4000-8000-000000000001', '/greeting', 'Hello');
 
 insert into public.message_templates (
   organization_id, id, organization_address, external_id, name, language,
@@ -111,7 +111,7 @@ select lives_ok($$ delete from public.contacts_addresses where organization_id =
 select lives_ok($$ delete from public.contacts where id = '95300000-0000-4000-8000-000000000003' $$, 'Agent can delete contacts');
 select is((select count(*) from public.contacts where organization_id = '95000000-0000-4000-8000-000000000002'), 0::bigint, 'Agent cannot read another organization contacts');
 select is((select count(*) from public.quick_replies), 1::bigint, 'Agent can read quick replies');
-select throws_like($$ insert into public.quick_replies (organization_id, name, content) values ('95000000-0000-4000-8000-000000000001', 'Blocked', 'Blocked') $$, '%row-level security%', 'Agent cannot manage quick replies');
+select throws_like($$ insert into public.quick_replies (organization_id, shortcut, content) values ('95000000-0000-4000-8000-000000000001', '/blocked', 'Blocked') $$, '%permission denied for table quick_replies%', 'Agent cannot manage quick replies');
 select results_eq($$ select status from public.message_templates $$, $$ values ('approved'::text) $$, 'Agent reads approved templates only');
 select is_empty($$ select id from public.campaigns $$, 'Agent cannot access campaigns');
 select results_eq($$ select assigned_agent_id from public.create_conversation_for_me('95000000-0000-4000-8000-000000000001', 'whatsapp', 'agent-org-a', '15559500001') $$, $$ values ('95200000-0000-4000-8000-000000000001'::uuid) $$, 'Agent-created conversation is persisted assigned to self');

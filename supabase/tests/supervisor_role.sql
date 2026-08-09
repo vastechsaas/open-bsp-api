@@ -159,10 +159,10 @@ values (
   now() - interval '1 day'
 );
 
-insert into public.quick_replies (id, organization_id, name, content)
+insert into public.quick_replies (id, organization_id, shortcut, content)
 values
-  ('70200000-0000-4000-8000-000000000001', '10200000-0000-4000-8000-000000000001', 'Greeting', 'Hello there'),
-  ('70200000-0000-4000-8000-000000000002', '10200000-0000-4000-8000-000000000002', 'Other', 'Other organization');
+  ('70200000-0000-4000-8000-000000000001', '10200000-0000-4000-8000-000000000001', '/greeting', 'Hello there'),
+  ('70200000-0000-4000-8000-000000000002', '10200000-0000-4000-8000-000000000002', '/other', 'Other organization');
 
 insert into public.message_templates (
   organization_id,
@@ -499,25 +499,31 @@ select is(
 
 select lives_ok(
   $$
-    insert into public.quick_replies (organization_id, name, content)
-    values ('10200000-0000-4000-8000-000000000001', 'Supervisor Reply', 'Created')
+    select public.create_quick_reply(
+      '10200000-0000-4000-8000-000000000001',
+      '/supervisor_reply',
+      'Created'
+    )
   $$,
   'Supervisor can create quick replies'
 );
 
 select lives_ok(
   $$
-    update public.quick_replies
-    set content = 'Updated'
-    where id = '70200000-0000-4000-8000-000000000001'
+    select public.update_quick_reply(
+      '70200000-0000-4000-8000-000000000001',
+      '/greeting',
+      'Updated'
+    )
   $$,
   'Supervisor can update quick replies'
 );
 
 select lives_ok(
   $$
-    delete from public.quick_replies
-    where id = '70200000-0000-4000-8000-000000000001'
+    select public.delete_quick_reply(
+      '70200000-0000-4000-8000-000000000001'
+    )
   $$,
   'Supervisor can delete quick replies'
 );

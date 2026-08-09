@@ -284,10 +284,10 @@ insert into billing.ledger (organization_id, product_id, type, quantity, agent_i
   ('3a182d8d-d6d8-44bd-b021-029915476b8c', 'ai_credits', 'consumption', -0.09, 'b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e', 'groq', 'openai/gpt-oss-20b', '{"input_tokens": 6000, "output_tokens": 1500}', true, '2025-12-15 10:00:00+00');
 
 -- Quick Replies (for Mountain Peaks)
-insert into public.quick_replies (organization_id, name, content) values
-  ('3a182d8d-d6d8-44bd-b021-029915476b8c', 'Greeting', 'Welcome to Mountain Peaks! How can I help you?'),
-  ('3a182d8d-d6d8-44bd-b021-029915476b8c', 'Hours', 'We are open 24/7 in the Overworld!'),
-  ('3a182d8d-d6d8-44bd-b021-029915476b8c', 'Goodbye', 'Safe travels! Watch out for powder snow!')
+insert into public.quick_replies (organization_id, shortcut, content) values
+  ('3a182d8d-d6d8-44bd-b021-029915476b8c', '/greeting', 'Welcome to Mountain Peaks! How can I help you?'),
+  ('3a182d8d-d6d8-44bd-b021-029915476b8c', '/hours', 'We are open 24/7 in the Overworld!'),
+  ('3a182d8d-d6d8-44bd-b021-029915476b8c', '/goodbye', 'Safe travels! Watch out for powder snow!')
 ;
 
 -- Webhooks (for Mountain Peaks)

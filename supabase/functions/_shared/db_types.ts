@@ -1668,24 +1668,24 @@ export type Database = {
           content: string
           created_at: string
           id: string
-          name: string
           organization_id: string
+          shortcut: string
           updated_at: string
         }
         Insert: {
           content: string
           created_at?: string
           id?: string
-          name: string
           organization_id: string
+          shortcut: string
           updated_at?: string
         }
         Update: {
           content?: string
           created_at?: string
           id?: string
-          name?: string
           organization_id?: string
+          shortcut?: string
           updated_at?: string
         }
         Relationships: [
@@ -1947,6 +1947,31 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      create_quick_reply: {
+        Args: {
+          p_content: string
+          p_organization_id: string
+          p_shortcut: string
+        }
+        Returns: {
+          content: string
+          created_at: string
+          id: string
+          organization_id: string
+          shortcut: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "quick_replies"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      delete_quick_reply: {
+        Args: { p_quick_reply_id: string }
+        Returns: string
       }
       duplicate_chatbot_flow_draft: {
         Args: {
@@ -2223,6 +2248,23 @@ export type Database = {
           updated_at: string
         }[]
       }
+      list_quick_replies_page: {
+        Args: {
+          p_organization_id: string
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+        }
+        Returns: {
+          content: string
+          created_at: string
+          id: string
+          organization_id: string
+          shortcut: string
+          total_count: number
+          updated_at: string
+        }[]
+      }
       member_self_update_rules: {
         Args: {
           p_ai: boolean
@@ -2246,6 +2288,10 @@ export type Database = {
       merge_update_jsonb: {
         Args: { object: Json; path: string[]; target: Json }
         Returns: Json
+      }
+      normalize_quick_reply_shortcut: {
+        Args: { p_shortcut: string }
+        Returns: string
       }
       org_update_by_admin_rules: {
         Args: { p_id: string; p_name: string }
@@ -2376,6 +2422,31 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      update_quick_reply: {
+        Args: {
+          p_content: string
+          p_quick_reply_id: string
+          p_shortcut: string
+        }
+        Returns: {
+          content: string
+          created_at: string
+          id: string
+          organization_id: string
+          shortcut: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "quick_replies"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      validate_quick_reply_input: {
+        Args: { p_content: string; p_shortcut: string }
+        Returns: undefined
       }
     }
     Enums: {
