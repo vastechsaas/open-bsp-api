@@ -1154,27 +1154,42 @@ export type Database = {
       }
       contacts: {
         Row: {
+          city: string | null
+          company: string | null
+          country: string | null
           created_at: string
+          email: string | null
           extra: Json | null
           id: string
+          job_title: string | null
           name: string | null
           organization_id: string
           status: string
           updated_at: string
         }
         Insert: {
+          city?: string | null
+          company?: string | null
+          country?: string | null
           created_at?: string
+          email?: string | null
           extra?: Json | null
           id?: string
+          job_title?: string | null
           name?: string | null
           organization_id: string
           status?: string
           updated_at?: string
         }
         Update: {
+          city?: string | null
+          company?: string | null
+          country?: string | null
           created_at?: string
+          email?: string | null
           extra?: Json | null
           id?: string
+          job_title?: string | null
           name?: string | null
           organization_id?: string
           status?: string

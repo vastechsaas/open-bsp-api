@@ -2,6 +2,11 @@ create table public.contacts (
   organization_id uuid not null,
   id uuid default gen_random_uuid() not null,
   name text,
+  email text,
+  company text,
+  job_title text,
+  city text,
+  country text,
   extra jsonb,
   status text default 'active'::text not null,
   created_at timestamp with time zone default now() not null,
@@ -17,6 +22,32 @@ add constraint contacts_organization_id_fkey
 foreign key (organization_id)
 references public.organizations(id)
 on delete cascade;
+
+alter table only public.contacts
+add constraint contacts_email_check
+check (
+  email is null
+  or (
+    char_length(email) <= 254
+    and email ~* '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'
+  )
+);
+
+alter table only public.contacts
+add constraint contacts_company_check
+check (company is null or char_length(company) <= 200);
+
+alter table only public.contacts
+add constraint contacts_job_title_check
+check (job_title is null or char_length(job_title) <= 120);
+
+alter table only public.contacts
+add constraint contacts_city_check
+check (city is null or char_length(city) <= 120);
+
+alter table only public.contacts
+add constraint contacts_country_check
+check (country is null or char_length(country) <= 120);
 
 create index contacts_organization_id_idx
 on public.contacts
