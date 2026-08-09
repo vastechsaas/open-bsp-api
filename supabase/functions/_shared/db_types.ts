@@ -2170,6 +2170,29 @@ export type Database = {
           updated_at: string
         }[]
       }
+      list_contacts_page: {
+        Args: {
+          p_organization_id: string
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+        }
+        Returns: {
+          addresses: Json
+          city: string
+          company: string
+          country: string
+          created_at: string
+          email: string
+          id: string
+          job_title: string
+          name: string
+          organization_id: string
+          status: string
+          total_count: number
+          updated_at: string
+        }[]
+      }
       list_members_page: {
         Args: {
           p_organization_id: string

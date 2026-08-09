@@ -25,10 +25,20 @@ insert into public.agents (
   ('a1200000-0000-4000-8000-000000000002', 'a1000000-0000-4000-8000-000000000002', 'a1100000-0000-4000-8000-000000000002', 'Other Customer Agent', false, '{"role":"agent"}');
 
 insert into public.contacts (
-  id, organization_id, name
+  id, organization_id, name, email, company, job_title, city, country,
+  created_at, updated_at
 ) values
-  ('a1300000-0000-4000-8000-000000000001', 'a1000000-0000-4000-8000-000000000001', 'New Customer'),
-  ('a1300000-0000-4000-8000-000000000002', 'a1000000-0000-4000-8000-000000000002', 'Other Customer');
+  ('a1300000-0000-4000-8000-000000000001', 'a1000000-0000-4000-8000-000000000001', 'New Customer', null, null, null, null, null, '2026-01-01 00:00:00+00', '2026-01-01 00:00:00+00'),
+  ('a1300000-0000-4000-8000-000000000002', 'a1000000-0000-4000-8000-000000000002', 'Other Customer', 'secret@example.test', null, null, null, null, '2026-01-01 00:00:00+00', '2026-01-01 00:00:00+00'),
+  ('a1300000-0000-4000-8000-000000000003', 'a1000000-0000-4000-8000-000000000001', 'Aisha Noor', 'aisha@example.test', 'Northstar Foods', 'Buyer', 'Karachi', 'Pakistan', '2026-01-03 00:00:00+00', '2026-01-03 00:00:00+00'),
+  ('a1300000-0000-4000-8000-000000000004', 'a1000000-0000-4000-8000-000000000001', 'Omar Shah', null, null, null, 'Islamabad', 'Pakistan', '2026-01-02 00:00:00+00', '2026-01-02 00:00:00+00');
+
+insert into public.contacts_addresses (
+  organization_id, contact_id, service, address, extra
+) values
+  ('a1000000-0000-4000-8000-000000000001', 'a1300000-0000-4000-8000-000000000001', 'whatsapp', '923001111111', '{"phone_number":"923001111111","name":"Sara Customer"}'),
+  ('a1000000-0000-4000-8000-000000000001', 'a1300000-0000-4000-8000-000000000003', 'instagram', 'aisha-ig-id', '{"username":"aisha.noor"}'),
+  ('a1000000-0000-4000-8000-000000000002', 'a1300000-0000-4000-8000-000000000002', 'whatsapp', '923009999999', '{"phone_number":"923009999999"}');
 
 select set_config('request.jwt.claim.sub', 'a1100000-0000-4000-8000-000000000001', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -48,6 +58,110 @@ select lives_ok(
     where id = 'a1300000-0000-4000-8000-000000000001'
   $$,
   'Agents can update structured customer details in their organization'
+);
+
+select results_eq(
+  $$
+    select name, total_count
+    from public.list_contacts_page(
+      'a1000000-0000-4000-8000-000000000001', 1, 1
+    )
+  $$,
+  $$ values ('Sara Customer'::text, 3::bigint) $$,
+  'Contact Manager returns a backend-paginated page and authoritative total'
+);
+
+select results_eq(
+  $$
+    select name
+    from public.list_contacts_page(
+      'a1000000-0000-4000-8000-000000000001', 2, 1
+    )
+  $$,
+  $$ values ('Aisha Noor'::text) $$,
+  'Contact Manager ordering is deterministic across pages'
+);
+
+select results_eq(
+  $$
+    select name
+    from public.list_contacts_page(
+      'a1000000-0000-4000-8000-000000000001',
+      p_search => 'NORTHSTAR'
+    )
+  $$,
+  $$ values ('Aisha Noor'::text) $$,
+  'Contact Manager searches structured customer fields case-insensitively'
+);
+
+select results_eq(
+  $$
+    select name
+    from public.list_contacts_page(
+      'a1000000-0000-4000-8000-000000000001',
+      p_search => 'aisha.noor'
+    )
+  $$,
+  $$ values ('Aisha Noor'::text) $$,
+  'Contact Manager searches linked channel identities'
+);
+
+select is(
+  (
+    select addresses->0->>'service'
+    from public.list_contacts_page(
+      'a1000000-0000-4000-8000-000000000001',
+      p_search => '923001111111'
+    )
+  ),
+  'whatsapp',
+  'Contact Manager returns channel data without a follow-up query'
+);
+
+select is(
+  (
+    select count(*)::integer
+    from public.list_contacts_page(
+      'a1000000-0000-4000-8000-000000000001',
+      p_search => 'secret@example.test'
+    )
+  ),
+  0,
+  'Contact Manager search never exposes another organization contact'
+);
+
+select throws_ok(
+  $$
+    select *
+    from public.list_contacts_page(
+      'a1000000-0000-4000-8000-000000000002'
+    )
+  $$,
+  '42501',
+  'organization is not accessible to the authenticated user',
+  'Contact Manager denies inaccessible organizations'
+);
+
+reset role;
+
+insert into public.contacts (organization_id, name)
+select
+  'a1000000-0000-4000-8000-000000000001',
+  'Generated Contact ' || value
+from generate_series(1, 52) as value;
+
+set local role authenticated;
+set local search_path = extensions, public, auth, storage;
+
+select results_eq(
+  $$
+    select count(*)::integer, max(total_count)::integer
+    from public.list_contacts_page(
+      'a1000000-0000-4000-8000-000000000001', 1, 500
+    )
+  $$,
+  $$ values (50, 55) $$,
+  'Contact Manager caps page size at 50 while preserving the full total'
 );
 
 select results_eq(
