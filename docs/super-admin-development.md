@@ -83,10 +83,10 @@ platform authorization separate from the organization roles `owner`, `admin`,
 
 ## Delivery log
 
-| Date       | Phase | Repository | Branch / commit                            | Migration                                   | Validation                                       | Environment | Notes                                                                  |
-| ---------- | ----- | ---------- | ------------------------------------------ | ------------------------------------------- | ------------------------------------------------ | ----------- | ---------------------------------------------------------------------- |
-| 2026-08-10 | 1     | Backend    | `super-admin-foundation-backend` / pending | `20260810175925_super_admin_foundation.sql` | Focused 35/35; full 498/498                      | Local       | Schema, RPCs, RLS, audit storage, migration, and generated types pass. |
-| 2026-08-10 | 1     | Frontend   | `super-admin-foundation-ui` / pending      | n/a                                         | Focused 14/14; full 171/171; lint and build pass | Local       | Platform routes, tenant selector, summaries, and access auditing pass. |
+| Date       | Phase | Repository | Branch / commit                              | Migration                                   | Validation                                       | Environment | Notes                                                                  |
+| ---------- | ----- | ---------- | -------------------------------------------- | ------------------------------------------- | ------------------------------------------------ | ----------- | ---------------------------------------------------------------------- |
+| 2026-08-10 | 1     | Backend    | `super-admin-foundation-backend` / `4a8fe3a` | `20260810175925_super_admin_foundation.sql` | Focused 35/35; full 498/498                      | Local       | Schema, RPCs, RLS, audit storage, migration, and generated types pass. |
+| 2026-08-10 | 1     | Frontend   | `super-admin-foundation-ui` / `23b1be1`      | n/a                                         | Focused 14/14; full 171/171; lint and build pass | Local       | Platform routes, tenant selector, summaries, and access auditing pass. |
 
 ## Deferred
 
