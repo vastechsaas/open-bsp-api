@@ -47,6 +47,31 @@ on public.contacts_addresses
 for each row
 execute function public.moddatetime('updated_at');
 
+create trigger create_contact_on_first_inbound_insert
+after insert
+on public.contacts_addresses
+for each row
+when (
+  new.service = 'whatsapp'::public.service
+  and new.contact_id is null
+  and new.extra->>'has_inbound_message' = 'true'
+)
+execute function public.manage_contact_on_first_inbound();
+
+-- Runs after set_extra (alphabetical trigger order) so the condition sees the
+-- merged JSON document during webhook upserts.
+create trigger zz_create_contact_on_first_inbound_update
+before update
+on public.contacts_addresses
+for each row
+when (
+  new.service = 'whatsapp'::public.service
+  and new.contact_id is null
+  and old.extra->>'has_inbound_message' is distinct from 'true'
+  and new.extra->>'has_inbound_message' = 'true'
+)
+execute function public.manage_contact_on_first_inbound();
+
 create trigger z_notify_webhook_contacts_addresses
 after insert or update
 on public.contacts_addresses

@@ -22,6 +22,10 @@ import {
   uploadToStorage,
 } from "../_shared/media.ts";
 import { whatsappToMarkdown } from "../_shared/markdown.ts";
+import {
+  contactAddressKey,
+  prepareContactAddresses,
+} from "./contact_addresses.ts";
 
 const API_VERSION = "v24.0";
 const VERIFY_TOKEN = Deno.env.get("WHATSAPP_VERIFY_TOKEN");
@@ -531,6 +535,7 @@ async function processMessage(request: Request): Promise<Response> {
   const messages: MessageInsert[] = [];
   const statuses: MessageInsert[] = [];
   const contacts_addresses: ContactAddressInsert[] = [];
+  const firstInboundContactKeys = new Set<string>();
   // Coexistence edit/revoke events modify existing rows by their ORIGINAL id,
   // so they are applied as UPDATEs after the upserts rather than batched.
   const edits: {
@@ -753,6 +758,15 @@ async function processMessage(request: Request): Promise<Response> {
           };
 
           messages.push(message);
+          if (field === "messages") {
+            firstInboundContactKeys.add(
+              contactAddressKey(
+                organization_id,
+                contact_address,
+                "whatsapp",
+              ),
+            );
+          }
         }
       }
 
@@ -1176,18 +1190,15 @@ async function processMessage(request: Request): Promise<Response> {
     // same contact multiple times in one payload (e.g. accumulated state sync
     // events). PostgreSQL's ON CONFLICT cannot affect the same row twice in a
     // single statement. Keep the last entry — most recent event wins.
-    const dedupedContactsAddresses = Array.from(
-      new Map(
-        contacts_addresses.map((ca) => [
-          `${ca.organization_id}|${ca.address}|${ca.service}`,
-          ca,
-        ]),
-      ).values(),
+    const dedupedContactsAddresses = prepareContactAddresses(
+      contacts_addresses,
+      firstInboundContactKeys,
     );
 
-    const { error: contactsError } = await client
-      .from("contacts_addresses")
-      .upsert(dedupedContactsAddresses);
+    const { error: contactsError } = await client.rpc(
+      "upsert_whatsapp_contact_addresses",
+      { p_addresses: dedupedContactsAddresses },
+    );
 
     if (contactsError) {
       log.error("Failed to upsert contacts_addresses", {

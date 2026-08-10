@@ -95,6 +95,7 @@ export type WhatsAppContactAddressExtra = {
   phone_number?: string;
   bsuid?: string;
   address_type?: "phone" | "bsuid";
+  has_inbound_message?: boolean;
   synced?: { // if the contact address was synced from WhatsApp
     name: string;
     action: "add" | "remove";

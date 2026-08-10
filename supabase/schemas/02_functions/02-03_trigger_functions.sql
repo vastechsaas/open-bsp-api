@@ -234,6 +234,61 @@ begin
 end;
 $$;
 
+-- Create and link the canonical Contact exactly once when a WhatsApp address
+-- first receives a normal incoming message. INSERT uses an AFTER trigger so an
+-- upsert conflict cannot create an orphan Contact; UPDATE uses a BEFORE trigger
+-- so the new contact_id is written as part of the existing row update.
+create function public.manage_contact_on_first_inbound() returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  created_contact_id uuid;
+  contact_name text;
+begin
+  -- A Meta user_id_update marks the old address with replaced_by_bsuid.
+  -- Reuse that Contact before deciding this is a genuinely new customer.
+  if nullif(btrim(new.extra->>'bsuid'), '') is not null then
+    select address.contact_id
+    into created_contact_id
+    from public.contacts_addresses as address
+    where address.organization_id = new.organization_id
+      and address.service = 'whatsapp'::public.service
+      and address.address <> new.address
+      and address.contact_id is not null
+      and address.extra->>'replaced_by_bsuid' = new.extra->>'bsuid'
+    order by address.updated_at desc
+    limit 1;
+  end if;
+
+  if created_contact_id is null then
+    contact_name := coalesce(
+      nullif(btrim(new.extra->>'name'), ''),
+      nullif(btrim(new.extra->>'username'), ''),
+      nullif(btrim(new.extra->>'phone_number'), ''),
+      new.address
+    );
+
+    insert into public.contacts (organization_id, name)
+    values (new.organization_id, contact_name)
+    returning id into created_contact_id;
+  end if;
+
+  if tg_op = 'UPDATE' then
+    new.contact_id := created_contact_id;
+    return new;
+  end if;
+
+  update public.contacts_addresses
+  set contact_id = created_contact_id
+  where organization_id = new.organization_id
+    and address = new.address
+    and contact_id is null;
+
+  return new;
+end;
+$$;
+
 -- AFTER trigger: cleans up orphaned contact when the last address that
 -- referenced it is unlinked via a REMOVE sync event.
 create function public.cleanup_orphaned_contact_on_sync() returns trigger
