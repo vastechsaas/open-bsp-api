@@ -1,6 +1,6 @@
 # Super Admin development
 
-- **Status:** Phase 1 in progress
+- **Status:** Phase 1 implemented locally; staging verification pending
 - **Last updated:** 2026-08-10
 - **Audience:** Internal platform builders
 - **Backend branch:** `super-admin-foundation-backend`
@@ -30,41 +30,41 @@ platform authorization separate from the organization roles `owner`, `admin`,
 - Existing tenant mutation permissions are not expanded for Super Admins.
 - Initial Super Admin accounts are provisioned through a trusted database
   operation. Emails are never hardcoded in migrations.
-- Platform lists use server-side pagination, search, deterministic ordering,
-  and page sizes of 10, 25, or 50.
+- Platform lists use server-side pagination, search, deterministic ordering, and
+  page sizes of 10, 25, or 50.
 
 ## Roadmap
 
-| Phase | Deliverable | Status | Exit criteria |
-| --- | --- | --- | --- |
-| 1 | Foundation and tenant selector | In progress | Authorized builders can open the global overview, search/select a tenant, view its operational summary, and produce an access audit event. |
-| 2 | Read-only tenant modules | Planned | Dashboard, Contacts, Team, Conversations, and Integrations reuse existing presentation components with explicit platform-scoped data adapters. |
-| 3 | Global and tenant reports | Planned | Reports are generated server-side for all tenants or one selected tenant and can be exported without client-side tenant loops. |
-| 4 | Administrative actions | Planned | Individually approved platform actions have explicit permissions, confirmation, audit history, and rollback/error behavior. |
+| Phase | Deliverable                    | Status      | Exit criteria                                                                                                                                  |
+| ----- | ------------------------------ | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | Foundation and tenant selector | In progress | Authorized builders can open the global overview, search/select a tenant, view its operational summary, and produce an access audit event.     |
+| 2     | Read-only tenant modules       | Planned     | Dashboard, Contacts, Team, Conversations, and Integrations reuse existing presentation components with explicit platform-scoped data adapters. |
+| 3     | Global and tenant reports      | Planned     | Reports are generated server-side for all tenants or one selected tenant and can be exported without client-side tenant loops.                 |
+| 4     | Administrative actions         | Planned     | Individually approved platform actions have explicit permissions, confirmation, audit history, and rollback/error behavior.                    |
 
 ## Phase 1 — Foundation and tenant selector
 
 ### Backend checklist
 
-- [ ] Add protected `platform_admins` storage with active/revoked state.
-- [ ] Add append-only, idempotent platform access events.
-- [ ] Add platform authorization and read-only overview RPCs.
-- [ ] Add paginated organization search and operational summaries.
-- [ ] Keep existing organization RLS and write permissions unchanged.
-- [ ] Generate and apply the migration locally.
-- [ ] Regenerate backend and frontend database types.
-- [ ] Pass focused database tests and full backend validation.
+- [x] Add protected `platform_admins` storage with active/revoked state.
+- [x] Add append-only, idempotent platform access events.
+- [x] Add platform authorization and read-only overview RPCs.
+- [x] Add paginated organization search and operational summaries.
+- [x] Keep existing organization RLS and write permissions unchanged.
+- [x] Generate and apply the migration locally.
+- [x] Regenerate backend and frontend database types.
+- [x] Pass focused database tests and full backend validation.
 
 ### Frontend checklist
 
-- [ ] Add the `/platform` layout and access guard.
-- [ ] Add automatic platform landing after login.
-- [ ] Add the global overview and paginated organization table.
-- [ ] Add the asynchronous tenant selector and selected-tenant summary.
-- [ ] Prevent stale data from appearing while tenant scope changes.
-- [ ] Skip ordinary tenant initialization and realtime work in platform mode.
-- [ ] Record one idempotent access event per route entry.
-- [ ] Pass focused frontend tests, build, lint, and full tests.
+- [x] Add the `/platform` layout and access guard.
+- [x] Add automatic platform landing after login.
+- [x] Add the global overview and paginated organization table.
+- [x] Add the asynchronous tenant selector and selected-tenant summary.
+- [x] Prevent stale data from appearing while tenant scope changes.
+- [x] Skip ordinary tenant initialization and realtime work in platform mode.
+- [x] Record one idempotent access event per route entry.
+- [x] Pass focused frontend tests, build, lint, and full tests.
 
 ### Acceptance scenario
 
@@ -83,10 +83,10 @@ platform authorization separate from the organization roles `owner`, `admin`,
 
 ## Delivery log
 
-| Date | Phase | Repository | Branch / commit | Migration | Validation | Environment | Notes |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 2026-08-10 | 1 | Backend | `super-admin-foundation-backend` / pending | pending | pending | Local | Tracking started. |
-| 2026-08-10 | 1 | Frontend | `super-admin-foundation-ui` / pending | n/a | pending | Local | Work begins after backend contract and generated types pass. |
+| Date       | Phase | Repository | Branch / commit                            | Migration                                   | Validation                                       | Environment | Notes                                                                  |
+| ---------- | ----- | ---------- | ------------------------------------------ | ------------------------------------------- | ------------------------------------------------ | ----------- | ---------------------------------------------------------------------- |
+| 2026-08-10 | 1     | Backend    | `super-admin-foundation-backend` / pending | `20260810175925_super_admin_foundation.sql` | Focused 35/35; full 498/498                      | Local       | Schema, RPCs, RLS, audit storage, migration, and generated types pass. |
+| 2026-08-10 | 1     | Frontend   | `super-admin-foundation-ui` / pending      | n/a                                         | Focused 14/14; full 171/171; lint and build pass | Local       | Platform routes, tenant selector, summaries, and access auditing pass. |
 
 ## Deferred
 
