@@ -70,3 +70,8 @@ entrypoint = "./functions/chatbot-management/index.ts"
 verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/chatbot-reply-webhook/index.ts"
+
+[functions.platform-report-export]
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/platform-report-export/index.ts"

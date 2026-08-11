@@ -1711,13 +1711,6 @@ export type Database = {
             referencedRelation: "platform_admins"
             referencedColumns: ["user_id"]
           },
-          {
-            foreignKeyName: "platform_admin_access_events_organization_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
         ]
       }
       platform_admins: {
@@ -1743,6 +1736,47 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      platform_report_export_events: {
+        Row: {
+          generated_at: string
+          id: string
+          organization_id: string
+          platform_admin_user_id: string
+          report_month: string
+          report_type: string
+          request_id: string
+          row_count: number
+        }
+        Insert: {
+          generated_at?: string
+          id?: string
+          organization_id: string
+          platform_admin_user_id: string
+          report_month: string
+          report_type: string
+          request_id: string
+          row_count: number
+        }
+        Update: {
+          generated_at?: string
+          id?: string
+          organization_id?: string
+          platform_admin_user_id?: string
+          report_month?: string
+          report_type?: string
+          request_id?: string
+          row_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_report_export_events_admin_fkey"
+            columns: ["platform_admin_user_id"]
+            isOneToOne: false
+            referencedRelation: "platform_admins"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       quick_replies: {
         Row: {
@@ -2381,6 +2415,69 @@ export type Database = {
           updated_at: string
         }[]
       }
+      list_platform_campaign_report_rows: {
+        Args: {
+          p_month: string
+          p_organization_id: string
+          p_page?: number
+          p_page_size?: number
+        }
+        Returns: {
+          accepted_count: number
+          audience_type: Database["public"]["Enums"]["campaign_audience_type"]
+          campaign_id: string
+          campaign_name: string
+          campaign_status: string
+          created_by_agent_id: string
+          created_by_agent_name: string
+          failed_count: number
+          last_updated_at_utc: string
+          launched_at_utc: string
+          organization_address: string
+          organization_id: string
+          organization_name: string
+          period_end_utc: string
+          period_start_utc: string
+          processing_count: number
+          queued_count: number
+          report_month: string
+          template_language: string
+          template_name: string
+          total_count: number
+          total_recipient_count: number
+        }[]
+      }
+      list_platform_conversation_report_rows: {
+        Args: {
+          p_month: string
+          p_organization_id: string
+          p_page?: number
+          p_page_size?: number
+        }
+        Returns: {
+          assigned_agent_id: string
+          assigned_agent_name: string
+          contact_address: string
+          contact_id: string
+          conversation_created_at: string
+          conversation_id: string
+          conversation_status: string
+          customer_name: string
+          first_activity_at_utc: string
+          incoming_message_count: number
+          last_activity_at_utc: string
+          organization_address: string
+          organization_id: string
+          organization_name: string
+          outgoing_message_count: number
+          period_end_utc: string
+          period_start_utc: string
+          report_month: string
+          service: Database["public"]["Enums"]["service"]
+          total_count: number
+          total_message_count: number
+        }[]
+      }
       list_platform_organizations_page: {
         Args: { p_page?: number; p_page_size?: number; p_search?: string }
         Returns: {
@@ -2516,6 +2613,16 @@ export type Database = {
         }
         Returns: string
       }
+      record_platform_report_export: {
+        Args: {
+          p_month: string
+          p_organization_id: string
+          p_report_type: string
+          p_request_id: string
+          p_row_count: number
+        }
+        Returns: string
+      }
       require_platform_admin: { Args: never; Returns: string }
       resolve_chatbot_webhook_credential: {
         Args: { p_credential_id: string; p_organization_id: string }
@@ -2603,10 +2710,6 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
-      }
-      upsert_whatsapp_contact_addresses: {
-        Args: { p_addresses: Json }
-        Returns: undefined
       }
       validate_quick_reply_input: {
         Args: { p_content: string; p_shortcut: string }

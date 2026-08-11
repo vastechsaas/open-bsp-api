@@ -1,10 +1,10 @@
 # Super Admin development
 
-- **Status:** Phase 1 complete on staging
+- **Status:** Phase 2 reporting in progress
 - **Last updated:** 2026-08-11
 - **Audience:** Internal platform builders
-- **Backend branch:** `super-admin-foundation-backend`
-- **Frontend branch:** `super-admin-foundation-ui`
+- **Backend branch:** `super-admin-reporting-backend`
+- **Frontend branch:** `super-admin-reporting-ui`
 
 ## Purpose
 
@@ -35,12 +35,12 @@ platform authorization separate from the organization roles `owner`, `admin`,
 
 ## Roadmap
 
-| Phase | Deliverable                    | Status   | Exit criteria                                                                                                                                  |
-| ----- | ------------------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | Foundation and tenant selector | Complete | Authorized builders can open the global overview, search/select a tenant, view its operational summary, and produce an access audit event.     |
-| 2     | Read-only tenant modules       | Planned  | Dashboard, Contacts, Team, Conversations, and Integrations reuse existing presentation components with explicit platform-scoped data adapters. |
-| 3     | Global and tenant reports      | Planned  | Reports are generated server-side for all tenants or one selected tenant and can be exported without client-side tenant loops.                 |
-| 4     | Administrative actions         | Planned  | Individually approved platform actions have explicit permissions, confirmation, audit history, and rollback/error behavior.                    |
+| Phase | Deliverable                    | Status      | Exit criteria                                                                                                                                  |
+| ----- | ------------------------------ | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | Foundation and tenant selector | Complete    | Authorized builders can open the global overview, search/select a tenant, view its operational summary, and produce an access audit event.     |
+| 2     | Monthly tenant reports         | In progress | A Platform Admin can select one tenant and download live monthly conversation and campaign CSV reports using UTC boundaries.                   |
+| 3     | Read-only tenant modules       | Planned     | Dashboard, Contacts, Team, Conversations, and Integrations reuse existing presentation components with explicit platform-scoped data adapters. |
+| 4     | Administrative actions         | Planned     | Individually approved platform actions have explicit permissions, confirmation, audit history, and rollback/error behavior.                    |
 
 ## Phase 1 — Foundation and tenant selector
 
@@ -85,21 +85,71 @@ The complete scenario passed on staging on 2026-08-11, including automatic
 landing, Tenant A/Tenant B switching without stale content, URL restoration,
 audit recording, revocation, and reactivation.
 
+## Phase 2 — Monthly tenant reports
+
+### Locked decisions
+
+- Reports are generated for one selected tenant at a time.
+- V1 exports CSV only and uses UTC calendar-month boundaries.
+- Reports are recalculated from live data and are not stored as snapshots.
+- The conversation report includes conversations with incoming or outgoing
+  message activity in the selected month. Internal notes are excluded.
+- The campaign report includes launched campaigns whose delivery snapshot was
+  created in the selected month. Draft campaigns are excluded.
+- Customer name and channel address are included in the conversation export.
+- Current conversation status and assignment reflect generation time.
+- Template-message reports, scheduled exports, Excel/PDF, and combined
+  all-tenant reports remain deferred.
+
+### Backend checklist
+
+- [x] Add protected, append-only report export audit events.
+- [x] Add Platform Admin-only monthly conversation and campaign report RPCs.
+- [x] Add the authenticated CSV export Edge Function.
+- [x] Generate/apply the migration and regenerate backend/frontend types.
+- [x] Pass focused reporting tests, the full database suite, and targeted Edge
+      Function checks.
+
+### Frontend checklist
+
+- [x] Add the selected-tenant Reports navigation and route.
+- [x] Add the UTC month selector and conversation/campaign download cards.
+- [x] Cancel downloads when tenant context changes.
+- [x] Show progress, empty, and error feedback without storing report files.
+- [x] Pass focused reporting tests and one full frontend validation.
+
+### Acceptance scenario
+
+1. A Platform Admin selects Tenant A and the previous UTC month.
+2. The conversation CSV contains only Tenant A conversations with external
+   message activity during that month.
+3. The campaign CSV contains only Tenant A campaigns launched during that month
+   and reports delivery counts from the delivery rows.
+4. A month with no data returns a valid header-only CSV.
+5. Switching to Tenant B cancels any Tenant A download and never leaks Tenant A
+   data into the new scope.
+6. A normal tenant user and a revoked Platform Admin cannot call reporting RPCs
+   or the export endpoint.
+7. Each successful export records one idempotent audit event.
+
 ## Delivery log
 
-| Date       | Phase | Repository | Branch / commit                              | Migration                                   | Validation                                       | Environment | Notes                                                                  |
-| ---------- | ----- | ---------- | -------------------------------------------- | ------------------------------------------- | ------------------------------------------------ | ----------- | ---------------------------------------------------------------------- |
-| 2026-08-10 | 1     | Backend    | `super-admin-foundation-backend` / `4a8fe3a` | `20260810175925_super_admin_foundation.sql` | Focused 35/35; full 498/498                      | Local       | Schema, RPCs, RLS, audit storage, migration, and generated types pass. |
-| 2026-08-10 | 1     | Frontend   | `super-admin-foundation-ui` / `23b1be1`      | n/a                                         | Focused 14/14; full 171/171; lint and build pass | Local       | Platform routes, tenant selector, summaries, and access auditing pass. |
-| 2026-08-10 | 1     | Backend    | `meta_vista_backend` / `fd31cc3`             | Applied remotely                            | Remote migration verified                        | Staging     | Initial builder provisioned; revocation and reactivation verified.     |
-| 2026-08-11 | 1     | Frontend   | `meta_vista_frontend` / `8f2af13`            | n/a                                         | Browser acceptance scenario passed               | Staging     | Added a loading guard so tenant switches never flash the old scope.    |
+| Date       | Phase | Repository | Branch / commit                              | Migration                                     | Validation                                                 | Environment | Notes                                                                                                                            |
+| ---------- | ----- | ---------- | -------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-10 | 1     | Backend    | `super-admin-foundation-backend` / `4a8fe3a` | `20260810175925_super_admin_foundation.sql`   | Focused 35/35; full 498/498                                | Local       | Schema, RPCs, RLS, audit storage, migration, and generated types pass.                                                           |
+| 2026-08-10 | 1     | Frontend   | `super-admin-foundation-ui` / `23b1be1`      | n/a                                           | Focused 14/14; full 171/171; lint and build pass           | Local       | Platform routes, tenant selector, summaries, and access auditing pass.                                                           |
+| 2026-08-10 | 1     | Backend    | `meta_vista_backend` / `fd31cc3`             | Applied remotely                              | Remote migration verified                                  | Staging     | Initial builder provisioned; revocation and reactivation verified.                                                               |
+| 2026-08-11 | 1     | Frontend   | `meta_vista_frontend` / `8f2af13`            | n/a                                           | Browser acceptance scenario passed                         | Staging     | Added a loading guard so tenant switches never flash the old scope.                                                              |
+| 2026-08-11 | 2     | Backend    | `super-admin-reporting-backend` / pending    | `20260811160347_platform_admin_reporting.sql` | Focused 20/20; full DB 518/518; CSV 3/3; Edge check passed | Local       | Repository Deno validation was blocked by an external `esm.sh` 408; the new function passed against the same pinned npm package. |
+| 2026-08-11 | 2     | Frontend   | `super-admin-reporting-ui` / pending         | n/a                                           | Focused 8/8; full 179/179; types, lint and build pass      | Local       | Tenant route, UTC month selection, cancellation, and CSV states pass.                                                            |
 
 ## Deferred
 
 - Editing tenant data from platform mode.
 - Impersonating tenant users.
 - Super Admin invitation or management UI.
-- Report generation and export.
+- Template-message reporting, stored report snapshots, scheduled exports, and
+  combined all-tenant reports.
 - Billing, quota, integration, assignment, or organization mutations.
 - Read-only reuse of full tenant modules beyond the Phase 1 summary.
 
