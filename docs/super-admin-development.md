@@ -1,6 +1,6 @@
 # Super Admin development
 
-- **Status:** Phase 2 reporting in progress
+- **Status:** Phase 2 reporting complete on staging
 - **Last updated:** 2026-08-11
 - **Audience:** Internal platform builders
 - **Backend branch:** `super-admin-reporting-backend`
@@ -38,7 +38,7 @@ platform authorization separate from the organization roles `owner`, `admin`,
 | Phase | Deliverable                    | Status      | Exit criteria                                                                                                                                  |
 | ----- | ------------------------------ | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1     | Foundation and tenant selector | Complete    | Authorized builders can open the global overview, search/select a tenant, view its operational summary, and produce an access audit event.     |
-| 2     | Monthly tenant reports         | In progress | A Platform Admin can select one tenant and download live monthly conversation and campaign CSV reports using UTC boundaries.                   |
+| 2     | Monthly tenant reports         | Complete    | A Platform Admin can select one tenant and download live monthly conversation and campaign CSV reports using UTC boundaries.                   |
 | 3     | Read-only tenant modules       | Planned     | Dashboard, Contacts, Team, Conversations, and Integrations reuse existing presentation components with explicit platform-scoped data adapters. |
 | 4     | Administrative actions         | Planned     | Individually approved platform actions have explicit permissions, confirmation, audit history, and rollback/error behavior.                    |
 
@@ -140,8 +140,10 @@ audit recording, revocation, and reactivation.
 | 2026-08-10 | 1     | Frontend   | `super-admin-foundation-ui` / `23b1be1`      | n/a                                           | Focused 14/14; full 171/171; lint and build pass           | Local       | Platform routes, tenant selector, summaries, and access auditing pass.                                                           |
 | 2026-08-10 | 1     | Backend    | `meta_vista_backend` / `fd31cc3`             | Applied remotely                              | Remote migration verified                                  | Staging     | Initial builder provisioned; revocation and reactivation verified.                                                               |
 | 2026-08-11 | 1     | Frontend   | `meta_vista_frontend` / `8f2af13`            | n/a                                           | Browser acceptance scenario passed                         | Staging     | Added a loading guard so tenant switches never flash the old scope.                                                              |
-| 2026-08-11 | 2     | Backend    | `super-admin-reporting-backend` / pending    | `20260811160347_platform_admin_reporting.sql` | Focused 20/20; full DB 518/518; CSV 3/3; Edge check passed | Local       | Repository Deno validation was blocked by an external `esm.sh` 408; the new function passed against the same pinned npm package. |
-| 2026-08-11 | 2     | Frontend   | `super-admin-reporting-ui` / pending         | n/a                                           | Focused 8/8; full 179/179; types, lint and build pass      | Local       | Tenant route, UTC month selection, cancellation, and CSV states pass.                                                            |
+| 2026-08-11 | 2     | Backend    | `super-admin-reporting-backend` / `2457718`  | `20260811160347_platform_admin_reporting.sql` | Focused 20/20; full DB 518/518; CSV 3/3; Edge check passed | Local       | Repository Deno validation was blocked by an external `esm.sh` 408; the new function passed against the same pinned npm package. |
+| 2026-08-11 | 2     | Frontend   | `super-admin-reporting-ui` / `f7f1312`       | n/a                                           | Focused 8/8; full 179/179; types, lint and build pass      | Local       | Tenant route, UTC month selection, cancellation, and CSV states pass.                                                            |
+| 2026-08-11 | 2     | Backend    | `meta_vista_backend` / `d4a2d43`             | Applied by staging deployment                 | Export endpoint returned authenticated CSV successfully    | Staging     | Tenant A July conversation export returned 6 rows; audit recording completed.                                                    |
+| 2026-08-11 | 2     | Frontend   | `meta_vista_frontend` / `06e6275`            | n/a                                           | Browser smoke test passed                                   | Staging     | Tenant B June campaign export returned a valid empty CSV; tenant routing, UTC selector, and readable labels verified.             |
 
 ## Deferred
 
