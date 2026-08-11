@@ -175,8 +175,22 @@ as $$
           (
             c.status = 'active'
             and (
-              c.assigned_agent_id is null
-              or c.assigned_agent_id = public.get_current_human_agent_id(p_organization_id)
+              c.assigned_agent_id = public.get_current_human_agent_id(p_organization_id)
+              or (
+                c.assigned_agent_id is null
+                and (
+                  c.routing_queue_id is null
+                  or exists (
+                    select 1
+                    from public.routing_queue_members queue_member
+                    where queue_member.organization_id = c.organization_id
+                      and queue_member.routing_queue_id = c.routing_queue_id
+                      and queue_member.agent_id = public.get_current_human_agent_id(
+                        p_organization_id
+                      )
+                  )
+                )
+              )
             )
           )
           or (
@@ -226,7 +240,9 @@ create function public.agent_conversation_update_rules(
   p_organization_address text,
   p_contact_address text,
   p_group_address text,
-  p_assigned_agent_id uuid
+  p_assigned_agent_id uuid,
+  p_routing_queue_id uuid,
+  p_routed_at timestamp with time zone
 ) returns boolean
 language sql
 stable
@@ -243,6 +259,8 @@ as $$
       and c.contact_address is not distinct from p_contact_address
       and c.group_address is not distinct from p_group_address
       and c.assigned_agent_id = p_assigned_agent_id
+      and c.routing_queue_id is not distinct from p_routing_queue_id
+      and c.routed_at is not distinct from p_routed_at
       and c.assigned_agent_id = public.get_current_human_agent_id(p_organization_id)
   );
 $$;

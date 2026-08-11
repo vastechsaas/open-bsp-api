@@ -466,7 +466,8 @@ create function public.commit_chatbot_flow_execution(
   p_error jsonb,
   p_outgoing_texts text[],
   p_outgoing_messages jsonb default '[]'::jsonb,
-  p_handoff_agent_id uuid default null
+  p_handoff_agent_id uuid default null,
+  p_handoff_routing_queue_id uuid default null
 ) returns table (
   outcome text,
   run_lock_version bigint,
@@ -483,6 +484,7 @@ declare
   previous_message public.messages;
   target_conversation public.conversations;
   handoff_agent public.agents;
+  handoff_queue public.routing_queues;
   outgoing_text text;
   outgoing_message jsonb;
   inserted_message_id uuid;
@@ -601,26 +603,48 @@ begin
   end if;
 
   if p_status = 'handed_off' then
-    select * into handoff_agent
-    from public.agents as agent
-    where agent.organization_id = target_run.organization_id
-      and agent.id = p_handoff_agent_id
-      and agent.ai = false
-      and agent.user_id is not null
-      and coalesce(
-        agent.extra->'invitation'->>'status',
-        'accepted'
-      ) = 'accepted';
-
-    if not found then
+    if (p_handoff_agent_id is null) = (p_handoff_routing_queue_id is null) then
       raise exception using
         errcode = '23514',
-        message = 'chatbot handoff requires an active human agent from the same organization';
+        message = 'chatbot handoff requires exactly one Agent or routing queue destination';
     end if;
-  elsif p_handoff_agent_id is not null then
+
+    if p_handoff_agent_id is not null then
+      select * into handoff_agent
+      from public.agents as agent
+      where agent.organization_id = target_run.organization_id
+        and agent.id = p_handoff_agent_id
+        and agent.ai = false
+        and agent.user_id is not null
+        and coalesce(
+          agent.extra->'invitation'->>'status',
+          'accepted'
+        ) = 'accepted';
+
+      if not found then
+        raise exception using
+          errcode = '23514',
+          message = 'chatbot handoff requires an active human agent from the same organization';
+      end if;
+    else
+      select * into handoff_queue
+      from public.routing_queues as queue
+      where queue.organization_id = target_run.organization_id
+        and queue.id = p_handoff_routing_queue_id
+        and queue.status = 'active';
+
+      if not found then
+        raise exception using
+          errcode = '23514',
+          message = 'chatbot handoff requires an active routing queue from the same organization';
+      end if;
+    end if;
+  elsif p_handoff_agent_id is not null
+    or p_handoff_routing_queue_id is not null
+  then
     raise exception using
       errcode = '23514',
-      message = 'only handed-off chatbot runs may specify a handoff agent';
+      message = 'only handed-off chatbot runs may specify a handoff destination';
   end if;
 
   foreach outgoing_text in array coalesce(p_outgoing_texts, array[]::text[])
@@ -698,9 +722,16 @@ begin
   returning * into target_run;
 
   if p_status = 'handed_off' then
-    update public.conversations as conversation
-    set assigned_agent_id = handoff_agent.id
-    where conversation.id = target_run.conversation_id;
+    if handoff_queue.id is not null then
+      perform public.route_conversation_to_queue(
+        target_run.conversation_id,
+        handoff_queue.id
+      );
+    else
+      update public.conversations as conversation
+      set assigned_agent_id = handoff_agent.id
+      where conversation.id = target_run.conversation_id;
+    end if;
   end if;
 
   foreach outgoing_text in array coalesce(p_outgoing_texts, array[]::text[])
@@ -803,6 +834,7 @@ revoke execute on function public.commit_chatbot_flow_execution(
   jsonb,
   text[],
   jsonb,
+  uuid,
   uuid
 ) from public, anon, authenticated;
 grant execute on function public.commit_chatbot_flow_execution(
@@ -816,5 +848,6 @@ grant execute on function public.commit_chatbot_flow_execution(
   jsonb,
   text[],
   jsonb,
+  uuid,
   uuid
 ) to service_role;

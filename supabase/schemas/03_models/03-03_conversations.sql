@@ -7,6 +7,8 @@ create table public.conversations (
   group_address text,   -- must be not null for whatsapp service
   name text,
   assigned_agent_id uuid,
+  routing_queue_id uuid,
+  routed_at timestamp with time zone,
   extra jsonb,
   status text default 'active'::text not null,
   created_at timestamp with time zone default now() not null,

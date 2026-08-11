@@ -333,3 +333,22 @@ Deno.test("assign_agent requests a terminal handoff", async () => {
     },
   );
 });
+
+Deno.test("assign_agent can request a routing queue handoff", async () => {
+  assertEquals(
+    await assignAgentNodeStrategy.execute(
+      {
+        id: "handoff",
+        type: "assign_agent",
+        config: {
+          routing_queue_id: "33333333-3333-4333-8333-333333333333",
+        },
+      },
+      { variables: {} },
+    ),
+    {
+      type: "handoff",
+      routing_queue_id: "33333333-3333-4333-8333-333333333333",
+    },
+  );
+});

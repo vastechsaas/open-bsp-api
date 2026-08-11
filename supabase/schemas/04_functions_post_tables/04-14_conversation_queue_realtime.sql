@@ -10,6 +10,8 @@ begin
       'organization_id', new.organization_id,
       'conversation_id', new.id,
       'assigned_agent_id', new.assigned_agent_id,
+      'routing_queue_id', new.routing_queue_id,
+      'routed_at', new.routed_at,
       'status', new.status,
       'updated_at', new.updated_at
     ),
@@ -23,10 +25,11 @@ end;
 $$;
 
 create trigger broadcast_conversation_queue_state_trigger
-after update of assigned_agent_id, status on public.conversations
+after update of assigned_agent_id, routing_queue_id, status on public.conversations
 for each row
 when (
   old.assigned_agent_id is distinct from new.assigned_agent_id
+  or old.routing_queue_id is distinct from new.routing_queue_id
   or old.status is distinct from new.status
 )
 execute function public.broadcast_conversation_queue_state();

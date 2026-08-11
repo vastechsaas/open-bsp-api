@@ -221,7 +221,9 @@ export const assignAgentNodeStrategy: NodeStrategy<AssignAgentNodeV1> = {
   execute(node): Promise<NodeResultV1> {
     return Promise.resolve({
       type: "handoff",
-      agent_id: node.config.agent_id,
+      ...("agent_id" in node.config
+        ? { agent_id: node.config.agent_id }
+        : { routing_queue_id: node.config.routing_queue_id }),
     });
   },
 };

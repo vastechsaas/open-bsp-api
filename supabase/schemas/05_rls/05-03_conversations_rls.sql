@@ -34,6 +34,8 @@ with check (
     organization_address,
     contact_address,
     group_address,
-    assigned_agent_id
+    assigned_agent_id,
+    routing_queue_id,
+    routed_at
   )
 );

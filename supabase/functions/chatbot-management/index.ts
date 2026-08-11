@@ -33,6 +33,8 @@ import {
 import {
   assignedHumanAgentIds,
   findUnavailableAgentIssues,
+  findUnavailableRoutingQueueIssues,
+  routingQueueIds,
 } from "./agent_references.ts";
 import { simulateChatbotFlow } from "./simulation.ts";
 
@@ -259,6 +261,31 @@ async function unavailableAgentIssues(
   return findUnavailableAgentIssues(definition, availableIds);
 }
 
+async function unavailableRoutingQueueIssues(
+  client: SupabaseClient<Database>,
+  organizationId: string,
+  definition: FlowDefinitionV1,
+) {
+  const referencedIds = routingQueueIds(definition);
+  if (referencedIds.length === 0) return [];
+
+  const { data, error } = await client
+    .from("routing_queues")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("status", "active")
+    .in("id", referencedIds);
+
+  if (error) {
+    throwDatabaseError(error, "Unable to validate chatbot routing queues");
+  }
+
+  return findUnavailableRoutingQueueIssues(
+    definition,
+    new Set(data.map((queue) => queue.id)),
+  );
+}
+
 async function unavailableWebhookCredentialIssues(
   client: SupabaseClient<Database>,
   organizationId: string,
@@ -306,6 +333,7 @@ async function externalReferenceIssues(
 ) {
   return [
     ...await unavailableAgentIssues(client, organizationId, definition),
+    ...await unavailableRoutingQueueIssues(client, organizationId, definition),
     ...await unavailableWebhookCredentialIssues(
       client,
       organizationId,

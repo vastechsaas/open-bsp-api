@@ -19,12 +19,25 @@ begin
       using errcode = '23514';
   end if;
 
+  if new.routing_queue_id is not null
+    and not exists (
+      select 1
+      from public.routing_queue_members member
+      where member.organization_id = new.organization_id
+        and member.routing_queue_id = new.routing_queue_id
+        and member.agent_id = new.assigned_agent_id
+    )
+  then
+    raise exception 'Conversation assignee must belong to its routing queue'
+      using errcode = '23514';
+  end if;
+
   return new;
 end;
 $$;
 
 create trigger enforce_human_conversation_assignee
-before insert or update of assigned_agent_id, organization_id
+before insert or update of assigned_agent_id, routing_queue_id, organization_id
 on public.conversations
 for each row
 execute function public.enforce_human_conversation_assignee();
@@ -60,6 +73,16 @@ begin
     and a.organization_id = c.organization_id
     and a.user_id = auth.uid()
     and a.ai = false
+    and (
+      c.routing_queue_id is null
+      or exists (
+        select 1
+        from public.routing_queue_members member
+        where member.organization_id = c.organization_id
+          and member.routing_queue_id = c.routing_queue_id
+          and member.agent_id = a.id
+      )
+    )
   returning c.* into updated_conversation;
 
   if found then
@@ -83,6 +106,18 @@ begin
       and organization_id in (
         select public.get_authorized_orgs('agent')
       )
+  ) then
+    raise exception using
+      errcode = '42501',
+      message = 'conversation is not accessible to the authenticated user';
+  end if;
+
+  if exists (
+    select 1
+    from public.conversations c
+    where c.id = p_conversation_id
+      and public.get_request_organization_role(c.organization_id) = 'agent'::public.role
+      and not public.agent_can_read_conversation(c.organization_id, c.id)
   ) then
     raise exception using
       errcode = '42501',
@@ -271,6 +306,21 @@ begin
     raise exception using
       errcode = '23514',
       message = 'assignee must be an accepted Agent in the same organization';
+  end if;
+
+  if p_agent_id is not null
+    and target_conversation.routing_queue_id is not null
+    and not exists (
+      select 1
+      from public.routing_queue_members member
+      where member.organization_id = target_conversation.organization_id
+        and member.routing_queue_id = target_conversation.routing_queue_id
+        and member.agent_id = p_agent_id
+    )
+  then
+    raise exception using
+      errcode = '23514',
+      message = 'assignee must belong to the conversation routing queue';
   end if;
 
   update public.conversations

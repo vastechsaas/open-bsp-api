@@ -1264,6 +1264,8 @@ export type Database = {
           name: string | null
           organization_address: string
           organization_id: string
+          routed_at: string | null
+          routing_queue_id: string | null
           service: Database["public"]["Enums"]["service"]
           status: string
           updated_at: string
@@ -1278,6 +1280,8 @@ export type Database = {
           name?: string | null
           organization_address: string
           organization_id: string
+          routed_at?: string | null
+          routing_queue_id?: string | null
           service: Database["public"]["Enums"]["service"]
           status?: string
           updated_at?: string
@@ -1292,6 +1296,8 @@ export type Database = {
           name?: string | null
           organization_address?: string
           organization_id?: string
+          routed_at?: string | null
+          routing_queue_id?: string | null
           service?: Database["public"]["Enums"]["service"]
           status?: string
           updated_at?: string
@@ -1324,6 +1330,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_organization_id_routing_queue_id_fkey"
+            columns: ["organization_id", "routing_queue_id"]
+            isOneToOne: false
+            referencedRelation: "routing_queues"
+            referencedColumns: ["organization_id", "id"]
           },
         ]
       }
@@ -1813,6 +1826,77 @@ export type Database = {
           },
         ]
       }
+      routing_queue_members: {
+        Row: {
+          agent_id: string
+          created_at: string
+          organization_id: string
+          routing_queue_id: string
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          organization_id: string
+          routing_queue_id: string
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          organization_id?: string
+          routing_queue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "routing_queue_members_agent_fkey"
+            columns: ["organization_id", "agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "routing_queue_members_queue_fkey"
+            columns: ["organization_id", "routing_queue_id"]
+            isOneToOne: false
+            referencedRelation: "routing_queues"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
+      routing_queues: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          organization_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          organization_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          organization_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "routing_queues_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       webhooks: {
         Row: {
           created_at: string
@@ -1875,6 +1959,8 @@ export type Database = {
           p_id: string
           p_organization_address: string
           p_organization_id: string
+          p_routed_at: string
+          p_routing_queue_id: string
           p_service: Database["public"]["Enums"]["service"]
         }
         Returns: boolean
@@ -1917,6 +2003,8 @@ export type Database = {
           name: string | null
           organization_address: string
           organization_id: string
+          routed_at: string | null
+          routing_queue_id: string | null
           service: Database["public"]["Enums"]["service"]
           status: string
           updated_at: string
@@ -1950,6 +2038,7 @@ export type Database = {
           p_error: Json
           p_expected_lock_version: number
           p_handoff_agent_id?: string
+          p_handoff_routing_queue_id?: string
           p_message_id: string
           p_outgoing_messages?: Json
           p_outgoing_texts: string[]
@@ -2021,6 +2110,8 @@ export type Database = {
           name: string | null
           organization_address: string
           organization_id: string
+          routed_at: string | null
+          routing_queue_id: string | null
           service: Database["public"]["Enums"]["service"]
           status: string
           updated_at: string
@@ -2080,6 +2171,27 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "quick_replies"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_routing_queue: {
+        Args: {
+          p_agent_ids?: string[]
+          p_name: string
+          p_organization_id: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          name: string
+          organization_id: string
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "routing_queues"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -2144,6 +2256,7 @@ export type Database = {
           p_offset?: number
           p_organization_id: string
           p_queue_key: string
+          p_routing_queue_id?: string
         }
         Returns: {
           assigned_agent_id: string | null
@@ -2155,6 +2268,8 @@ export type Database = {
           name: string | null
           organization_address: string
           organization_id: string
+          routed_at: string | null
+          routing_queue_id: string | null
           service: Database["public"]["Enums"]["service"]
           status: string
           updated_at: string
@@ -2380,6 +2495,8 @@ export type Database = {
           organization_address: string
           organization_id: string
           preview_message: Json
+          routed_at: string
+          routing_queue_id: string
           service: Database["public"]["Enums"]["service"]
           status: string
           total_count: number
@@ -2513,6 +2630,32 @@ export type Database = {
           updated_at: string
         }[]
       }
+      list_routing_queue_options: {
+        Args: { p_organization_id: string }
+        Returns: {
+          id: string
+          name: string
+        }[]
+      }
+      list_routing_queues_page: {
+        Args: {
+          p_organization_id: string
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          member_count: number
+          member_ids: string[]
+          name: string
+          organization_id: string
+          status: string
+          total_count: number
+          updated_at: string
+        }[]
+      }
       member_self_update_rules: {
         Args: {
           p_ai: boolean
@@ -2623,6 +2766,14 @@ export type Database = {
         }
         Returns: string
       }
+      replace_routing_queue_members: {
+        Args: {
+          p_agent_ids: string[]
+          p_organization_id: string
+          p_routing_queue_id: string
+        }
+        Returns: undefined
+      }
       require_platform_admin: { Args: never; Returns: string }
       resolve_chatbot_webhook_credential: {
         Args: { p_credential_id: string; p_organization_id: string }
@@ -2631,6 +2782,31 @@ export type Database = {
       role_rank: {
         Args: { role: Database["public"]["Enums"]["role"] }
         Returns: number
+      }
+      route_conversation_to_queue: {
+        Args: { p_conversation_id: string; p_routing_queue_id: string }
+        Returns: {
+          assigned_agent_id: string | null
+          contact_address: string | null
+          created_at: string
+          extra: Json | null
+          group_address: string | null
+          id: string
+          name: string | null
+          organization_address: string
+          organization_id: string
+          routed_at: string | null
+          routing_queue_id: string | null
+          service: Database["public"]["Enums"]["service"]
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "conversations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       set_conversation_agent_assignment: {
         Args: { p_agent_id: string; p_conversation_id: string }
@@ -2644,6 +2820,8 @@ export type Database = {
           name: string | null
           organization_address: string
           organization_id: string
+          routed_at: string | null
+          routing_queue_id: string | null
           service: Database["public"]["Enums"]["service"]
           status: string
           updated_at: string
@@ -2679,6 +2857,8 @@ export type Database = {
           name: string | null
           organization_address: string
           organization_id: string
+          routed_at: string | null
+          routing_queue_id: string | null
           service: Database["public"]["Enums"]["service"]
           status: string
           updated_at: string
@@ -2711,9 +2891,39 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_routing_queue: {
+        Args: {
+          p_agent_ids?: string[]
+          p_name: string
+          p_routing_queue_id: string
+          p_status: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          name: string
+          organization_id: string
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "routing_queues"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      upsert_whatsapp_contact_addresses: {
+        Args: { p_addresses: Json }
+        Returns: undefined
+      }
       validate_quick_reply_input: {
         Args: { p_content: string; p_shortcut: string }
         Returns: undefined
+      }
+      validate_routing_queue_agent_ids: {
+        Args: { p_agent_ids: string[]; p_organization_id: string }
+        Returns: string[]
       }
     }
     Enums: {

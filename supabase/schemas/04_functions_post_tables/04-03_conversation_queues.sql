@@ -71,7 +71,8 @@ create function public.get_conversation_queue_conversations(
   p_organization_id uuid,
   p_queue_key text,
   p_limit integer default 50,
-  p_offset integer default 0
+  p_offset integer default 0,
+  p_routing_queue_id uuid default null
 ) returns setof public.conversations
 language plpgsql
 stable
@@ -117,6 +118,29 @@ begin
   request_role := public.get_request_organization_role(p_organization_id);
   current_agent_id := public.get_current_human_agent_id(p_organization_id);
 
+  if p_routing_queue_id is not null
+    and not exists (
+      select 1
+      from public.routing_queues queue
+      where queue.organization_id = p_organization_id
+        and queue.id = p_routing_queue_id
+        and (
+          request_role <> 'agent'::public.role
+          or exists (
+            select 1
+            from public.routing_queue_members member
+            where member.organization_id = queue.organization_id
+              and member.routing_queue_id = queue.id
+              and member.agent_id = current_agent_id
+          )
+        )
+    )
+  then
+    raise exception using
+      errcode = '42501',
+      message = 'routing queue is not accessible to the authenticated user';
+  end if;
+
   if request_role = 'agent'::public.role
     and p_queue_key = 'all_active'
   then
@@ -149,6 +173,11 @@ begin
       and message.conversation_id = c.id
   ) mentioned on true
   where c.organization_id = p_organization_id
+    and (
+      p_queue_key = 'mentioned'
+      or p_routing_queue_id is null
+      or c.routing_queue_id = p_routing_queue_id
+    )
     and (
       (
         p_queue_key = 'all_active'

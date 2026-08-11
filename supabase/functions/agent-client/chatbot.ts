@@ -174,6 +174,11 @@ export async function processChatbotMessage(
       ...(interpreted.handoff_agent_id
         ? { p_handoff_agent_id: interpreted.handoff_agent_id }
         : {}),
+      ...(interpreted.handoff_routing_queue_id
+        ? {
+          p_handoff_routing_queue_id: interpreted.handoff_routing_queue_id,
+        }
+        : {}),
     },
   );
 

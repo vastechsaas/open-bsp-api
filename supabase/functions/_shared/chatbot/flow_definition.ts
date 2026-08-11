@@ -147,9 +147,10 @@ const conditionNodeSchema = z.object({
 const assignAgentNodeSchema = z.object({
   id: stableIdSchema,
   type: z.literal("assign_agent"),
-  config: z.object({
-    agent_id: agentIdSchema,
-  }).strict(),
+  config: z.union([
+    z.object({ agent_id: agentIdSchema }).strict(),
+    z.object({ routing_queue_id: agentIdSchema }).strict(),
+  ]),
 }).strict();
 
 const webhookHeaderSchema = z.object({
@@ -453,8 +454,16 @@ const completeResultSchema = z.object({
 
 const handoffResultSchema = z.object({
   type: z.literal("handoff"),
-  agent_id: agentIdSchema,
-}).strict();
+  agent_id: agentIdSchema.optional(),
+  routing_queue_id: agentIdSchema.optional(),
+}).strict().superRefine((result, context) => {
+  if ((result.agent_id ? 1 : 0) + (result.routing_queue_id ? 1 : 0) !== 1) {
+    context.addIssue({
+      code: "custom",
+      message: "Handoff must reference exactly one Agent or routing queue",
+    });
+  }
+});
 
 const failResultSchema = z.object({
   type: z.literal("fail"),

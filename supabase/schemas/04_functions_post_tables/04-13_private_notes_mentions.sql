@@ -250,6 +250,20 @@ begin
       message = 'transfer target must be another accepted Agent';
   end if;
 
+  if conversation_row.routing_queue_id is not null
+    and not exists (
+      select 1
+      from public.routing_queue_members member
+      where member.organization_id = conversation_row.organization_id
+        and member.routing_queue_id = conversation_row.routing_queue_id
+        and member.agent_id = p_target_agent_id
+    )
+  then
+    raise exception using
+      errcode = '22023',
+      message = 'transfer target must belong to the conversation routing queue';
+  end if;
+
   insert into public.messages (
     organization_id,
     conversation_id,
@@ -402,6 +416,8 @@ create function public.list_mentioned_conversations_page(
   group_address text,
   name text,
   assigned_agent_id uuid,
+  routing_queue_id uuid,
+  routed_at timestamp with time zone,
   extra jsonb,
   status text,
   created_at timestamp with time zone,
@@ -464,6 +480,8 @@ begin
     conversation.group_address,
     conversation.name,
     conversation.assigned_agent_id,
+    conversation.routing_queue_id,
+    conversation.routed_at,
     conversation.extra,
     conversation.status,
     conversation.created_at,

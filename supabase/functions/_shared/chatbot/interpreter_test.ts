@@ -385,6 +385,27 @@ Deno.test("assign_agent ends interpretation with a side-effect request", async (
   assertEquals(result.outgoing_messages, []);
 });
 
+Deno.test("assign_agent returns a routing queue handoff request", async () => {
+  const routingQueueId = "33333333-3333-4333-8333-333333333333";
+  const result = await interpretFlowDefinitionV1(
+    {
+      schema_version: 1,
+      start_node_id: "handoff",
+      nodes: [{
+        id: "handoff",
+        type: "assign_agent",
+        config: { routing_queue_id: routingQueueId },
+      }],
+      edges: [],
+    },
+    { current_node_id: "handoff", variables: {} },
+  );
+
+  assertEquals(result.status, "handed_off");
+  assertEquals(result.handoff_routing_queue_id, routingQueueId);
+  assertEquals(result.handoff_agent_id, undefined);
+});
+
 Deno.test("missing variables and missing edges become failure results", async () => {
   const missingVariable = await interpretFlowDefinitionV1(customerFlow, {
     current_node_id: "route-city",
