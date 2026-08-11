@@ -207,6 +207,10 @@ create index campaign_deliveries_organization_id_idx
 on public.campaign_deliveries
 using btree (organization_id);
 
+create index campaign_deliveries_organization_created_campaign_idx
+on public.campaign_deliveries
+using btree (organization_id, created_at, campaign_id);
+
 create index campaign_deliveries_campaign_status_idx
 on public.campaign_deliveries
 using btree (campaign_id, status, created_at);
