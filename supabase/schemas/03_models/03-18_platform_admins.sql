@@ -122,3 +122,49 @@ on public.platform_report_export_events (
   report_month desc,
   report_type
 );
+
+create table public.platform_admin_action_events (
+  id uuid default gen_random_uuid() not null,
+  platform_admin_user_id uuid not null,
+  organization_id uuid not null,
+  action_type text not null,
+  target_type text not null,
+  target_id uuid not null,
+  request_id uuid not null,
+  before_state jsonb,
+  after_state jsonb not null,
+  created_at timestamp with time zone default now() not null
+);
+
+alter table only public.platform_admin_action_events
+add constraint platform_admin_action_events_pkey
+primary key (id);
+
+alter table only public.platform_admin_action_events
+add constraint platform_admin_action_events_admin_fkey
+foreign key (platform_admin_user_id)
+references public.platform_admins(user_id);
+
+alter table only public.platform_admin_action_events
+add constraint platform_admin_action_events_organization_fkey
+foreign key (organization_id)
+references public.organizations(id)
+on delete cascade;
+
+alter table only public.platform_admin_action_events
+add constraint platform_admin_action_events_action_check
+check (action_type in ('routing_queue.create', 'routing_queue.update'));
+
+alter table only public.platform_admin_action_events
+add constraint platform_admin_action_events_target_check
+check (target_type = 'routing_queue');
+
+alter table only public.platform_admin_action_events
+add constraint platform_admin_action_events_request_key
+unique (platform_admin_user_id, request_id);
+
+create index platform_admin_action_events_organization_time_idx
+on public.platform_admin_action_events (
+  organization_id,
+  created_at desc
+);

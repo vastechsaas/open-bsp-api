@@ -253,6 +253,7 @@ create function public.get_platform_tenant_summary(
   tier_name text,
   plan_id text,
   human_member_count bigint,
+  accepted_agent_count bigint,
   active_contact_count bigint,
   active_conversation_count bigint,
   connected_whatsapp_account_count bigint,
@@ -291,6 +292,18 @@ begin
           agent.extra->'invitation' is null
           or agent.extra->'invitation'->>'status' = 'accepted'
         )
+    ),
+    (
+      select count(*)
+      from public.agents as agent
+      where agent.organization_id = organization.id
+        and agent.ai = false
+        and agent.user_id is not null
+        and agent.extra->>'role' = 'agent'
+        and coalesce(
+          agent.extra->'invitation'->>'status',
+          'accepted'
+        ) = 'accepted'
     ),
     (
       select count(*)

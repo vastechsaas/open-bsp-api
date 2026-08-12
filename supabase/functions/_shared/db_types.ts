@@ -1726,6 +1726,60 @@ export type Database = {
           },
         ]
       }
+      platform_admin_action_events: {
+        Row: {
+          action_type: string
+          after_state: Json
+          before_state: Json | null
+          created_at: string
+          id: string
+          organization_id: string
+          platform_admin_user_id: string
+          request_id: string
+          target_id: string
+          target_type: string
+        }
+        Insert: {
+          action_type: string
+          after_state: Json
+          before_state?: Json | null
+          created_at?: string
+          id?: string
+          organization_id: string
+          platform_admin_user_id: string
+          request_id: string
+          target_id: string
+          target_type: string
+        }
+        Update: {
+          action_type?: string
+          after_state?: Json
+          before_state?: Json | null
+          created_at?: string
+          id?: string
+          organization_id?: string
+          platform_admin_user_id?: string
+          request_id?: string
+          target_id?: string
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_admin_action_events_admin_fkey"
+            columns: ["platform_admin_user_id"]
+            isOneToOne: false
+            referencedRelation: "platform_admins"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "platform_admin_action_events_organization_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       platform_admins: {
         Row: {
           active: boolean
@@ -2123,6 +2177,28 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_platform_routing_queue: {
+        Args: {
+          p_agent_ids?: string[]
+          p_name: string
+          p_organization_id: string
+          p_request_id?: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          name: string
+          organization_id: string
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "routing_queues"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_private_note: {
         Args: {
           p_conversation_id: string
@@ -2326,6 +2402,7 @@ export type Database = {
       get_platform_tenant_summary: {
         Args: { p_organization_id: string }
         Returns: {
+          accepted_agent_count: number
           active_contact_count: number
           active_conversation_count: number
           connected_instagram_account_count: number
@@ -2343,6 +2420,10 @@ export type Database = {
       get_request_organization_role: {
         Args: { p_organization_id: string }
         Returns: Database["public"]["Enums"]["role"]
+      }
+      get_routing_queue_audit_state: {
+        Args: { p_routing_queue_id: string }
+        Returns: Json
       }
       init_data: {
         Args: {
@@ -2595,6 +2676,26 @@ export type Database = {
           total_message_count: number
         }[]
       }
+      list_platform_organization_agents_page: {
+        Args: {
+          p_organization_id: string
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+        }
+        Returns: {
+          created_at: string
+          email: string
+          id: string
+          name: string
+          organization_id: string
+          picture: string
+          queue_ids: string[]
+          queue_names: string[]
+          total_count: number
+          user_id: string
+        }[]
+      }
       list_platform_organizations_page: {
         Args: { p_page?: number; p_page_size?: number; p_search?: string }
         Returns: {
@@ -2611,6 +2712,28 @@ export type Database = {
           tier_id: string
           tier_name: string
           total_count: number
+        }[]
+      }
+      list_platform_routing_queues_page: {
+        Args: {
+          p_organization_id: string
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+          p_status?: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          member_count: number
+          member_ids: string[]
+          member_names: string[]
+          member_pictures: string[]
+          name: string
+          organization_id: string
+          status: string
+          total_count: number
+          updated_at: string
         }[]
       }
       list_quick_replies_page: {
@@ -2866,6 +2989,29 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "conversations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_platform_routing_queue: {
+        Args: {
+          p_agent_ids?: string[]
+          p_name: string
+          p_request_id?: string
+          p_routing_queue_id: string
+          p_status: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          name: string
+          organization_id: string
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "routing_queues"
           isOneToOne: true
           isSetofReturn: false
         }

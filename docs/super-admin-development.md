@@ -1,10 +1,10 @@
 # Super Admin development
 
-- **Status:** Phase 2 reporting complete on staging
-- **Last updated:** 2026-08-11
+- **Status:** Phase 3 selected-organization management in progress
+- **Last updated:** 2026-08-13
 - **Audience:** Internal platform builders
-- **Backend branch:** `super-admin-reporting-backend`
-- **Frontend branch:** `super-admin-reporting-ui`
+- **Backend branch:** `scrum-109-super-admin-organization-backend`
+- **Frontend branch:** `scrum-109-super-admin-organization-ui`
 
 ## Purpose
 
@@ -35,12 +35,13 @@ platform authorization separate from the organization roles `owner`, `admin`,
 
 ## Roadmap
 
-| Phase | Deliverable                    | Status      | Exit criteria                                                                                                                                  |
-| ----- | ------------------------------ | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | Foundation and tenant selector | Complete    | Authorized builders can open the global overview, search/select a tenant, view its operational summary, and produce an access audit event.     |
-| 2     | Monthly tenant reports         | Complete    | A Platform Admin can select one tenant and download live monthly conversation and campaign CSV reports using UTC boundaries.                   |
-| 3     | Read-only tenant modules       | Planned     | Dashboard, Contacts, Team, Conversations, and Integrations reuse existing presentation components with explicit platform-scoped data adapters. |
-| 4     | Administrative actions         | Planned     | Individually approved platform actions have explicit permissions, confirmation, audit history, and rollback/error behavior.                    |
+| Phase | Deliverable                       | Status      | Exit criteria                                                                                                                                  |
+| ----- | --------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | Foundation and tenant selector    | Complete    | Authorized builders can open the global overview, search/select a tenant, view its operational summary, and produce an access audit event.     |
+| 2     | Monthly tenant reports            | Complete    | A Platform Admin can select one tenant and download live monthly conversation and campaign CSV reports using UTC boundaries.                   |
+| 3     | Selected organization management  | In progress | The global tenant selector opens a reusable detail shell where Platform Admins can inspect the tenant and manage routing queues with auditing. |
+| 4     | Read-only tenant modules          | Planned     | Contacts, Conversations, Integrations, and other tenant modules reuse presentation components with explicit platform-scoped data adapters.     |
+| 5     | Additional administrative actions | Planned     | Individually approved platform actions have explicit permissions, confirmation, audit history, and rollback/error behavior.                    |
 
 ## Phase 1 — Foundation and tenant selector
 
@@ -132,22 +133,54 @@ audit recording, revocation, and reactivation.
    or the export endpoint.
 7. Each successful export records one idempotent audit event.
 
+## Phase 3 — Selected organization management
+
+### Locked decisions
+
+- The existing searchable tenant dropdown is the only organization selector; no
+  separate Organizations table or route is added.
+- Selecting a tenant opens `/platform/<organization-id>` and exposes Overview,
+  Queues, Agents, and Reports within one organization-detail shell.
+- Organization setup state is derived from connected WhatsApp accounts; no
+  organization suspension lifecycle is introduced.
+- Routing queues remain manual-assignment queues. Round robin and other
+  automatic assignment strategies remain deferred.
+- Platform Admin queue mutations are atomic, idempotent, and append-only audited
+  without granting tenant organization roles.
+- The Agents tab is read-only; queue membership changes happen from Queues.
+
+### Checklist
+
+- [x] Remove the duplicate organization table from Platform Overview.
+- [x] Add the selected-organization detail shell and navigation.
+- [x] Add Platform Admin queue and accepted-Agent list RPCs.
+- [x] Add audited Platform Admin queue create/update/archive/member operations.
+- [x] Reuse the tenant queue presentation without coupling platform scope to
+      `activeOrgId`.
+- [x] Add the read-only Agents tab with queue memberships.
+- [x] Generate/apply the migration and synchronize database types.
+- [x] Pass focused and final backend/frontend validation.
+- [ ] Merge backend staging before frontend staging and smoke-test tenant
+      switching and queue management.
+
 ## Delivery log
 
-| Date       | Phase | Repository | Branch / commit                              | Migration                                     | Validation                                                 | Environment | Notes                                                                                                                            |
-| ---------- | ----- | ---------- | -------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-08-10 | 1     | Backend    | `super-admin-foundation-backend` / `4a8fe3a` | `20260810175925_super_admin_foundation.sql`   | Focused 35/35; full 498/498                                | Local       | Schema, RPCs, RLS, audit storage, migration, and generated types pass.                                                           |
-| 2026-08-10 | 1     | Frontend   | `super-admin-foundation-ui` / `23b1be1`      | n/a                                           | Focused 14/14; full 171/171; lint and build pass           | Local       | Platform routes, tenant selector, summaries, and access auditing pass.                                                           |
-| 2026-08-10 | 1     | Backend    | `meta_vista_backend` / `fd31cc3`             | Applied remotely                              | Remote migration verified                                  | Staging     | Initial builder provisioned; revocation and reactivation verified.                                                               |
-| 2026-08-11 | 1     | Frontend   | `meta_vista_frontend` / `8f2af13`            | n/a                                           | Browser acceptance scenario passed                         | Staging     | Added a loading guard so tenant switches never flash the old scope.                                                              |
-| 2026-08-11 | 2     | Backend    | `super-admin-reporting-backend` / `2457718`  | `20260811160347_platform_admin_reporting.sql` | Focused 20/20; full DB 518/518; CSV 3/3; Edge check passed | Local       | Repository Deno validation was blocked by an external `esm.sh` 408; the new function passed against the same pinned npm package. |
-| 2026-08-11 | 2     | Frontend   | `super-admin-reporting-ui` / `f7f1312`       | n/a                                           | Focused 8/8; full 179/179; types, lint and build pass      | Local       | Tenant route, UTC month selection, cancellation, and CSV states pass.                                                            |
-| 2026-08-11 | 2     | Backend    | `meta_vista_backend` / `d4a2d43`             | Applied by staging deployment                 | Export endpoint returned authenticated CSV successfully    | Staging     | Tenant A July conversation export returned 6 rows; audit recording completed.                                                    |
-| 2026-08-11 | 2     | Frontend   | `meta_vista_frontend` / `06e6275`            | n/a                                           | Browser smoke test passed                                   | Staging     | Tenant B June campaign export returned a valid empty CSV; tenant routing, UTC selector, and readable labels verified.             |
+| Date       | Phase | Repository | Branch / commit                              | Migration                                                          | Validation                                                       | Environment | Notes                                                                                                                            |
+| ---------- | ----- | ---------- | -------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-10 | 1     | Backend    | `super-admin-foundation-backend` / `4a8fe3a` | `20260810175925_super_admin_foundation.sql`                        | Focused 35/35; full 498/498                                      | Local       | Schema, RPCs, RLS, audit storage, migration, and generated types pass.                                                           |
+| 2026-08-10 | 1     | Frontend   | `super-admin-foundation-ui` / `23b1be1`      | n/a                                                                | Focused 14/14; full 171/171; lint and build pass                 | Local       | Platform routes, tenant selector, summaries, and access auditing pass.                                                           |
+| 2026-08-10 | 1     | Backend    | `meta_vista_backend` / `fd31cc3`             | Applied remotely                                                   | Remote migration verified                                        | Staging     | Initial builder provisioned; revocation and reactivation verified.                                                               |
+| 2026-08-11 | 1     | Frontend   | `meta_vista_frontend` / `8f2af13`            | n/a                                                                | Browser acceptance scenario passed                               | Staging     | Added a loading guard so tenant switches never flash the old scope.                                                              |
+| 2026-08-11 | 2     | Backend    | `super-admin-reporting-backend` / `2457718`  | `20260811160347_platform_admin_reporting.sql`                      | Focused 20/20; full DB 518/518; CSV 3/3; Edge check passed       | Local       | Repository Deno validation was blocked by an external `esm.sh` 408; the new function passed against the same pinned npm package. |
+| 2026-08-11 | 2     | Frontend   | `super-admin-reporting-ui` / `f7f1312`       | n/a                                                                | Focused 8/8; full 179/179; types, lint and build pass            | Local       | Tenant route, UTC month selection, cancellation, and CSV states pass.                                                            |
+| 2026-08-11 | 2     | Backend    | `meta_vista_backend` / `d4a2d43`             | Applied by staging deployment                                      | Export endpoint returned authenticated CSV successfully          | Staging     | Tenant A July conversation export returned 6 rows; audit recording completed.                                                    |
+| 2026-08-11 | 2     | Frontend   | `meta_vista_frontend` / `06e6275`            | n/a                                                                | Browser smoke test passed                                        | Staging     | Tenant B June campaign export returned a valid empty CSV; tenant routing, UTC selector, and readable labels verified.            |
+| 2026-08-13 | 3     | Backend    | `scrum-109-super-admin-organization-backend` | `20260812161816_scrum_109_super_admin_organization_management.sql` | Focused 13/13; full DB 555/555; Deno lint/check pass             | Local       | Platform queue authorization, tenant isolation, membership validation, idempotent mutations, and audit history pass.             |
+| 2026-08-13 | 3     | Frontend   | `scrum-109-super-admin-organization-ui`      | n/a                                                                | Focused 6/6; full 197/197; types, lint and production build pass | Local       | Global selector, organization shell, queue management, read-only Agents, shared editor, and nested Reports pass.                 |
 
 ## Deferred
 
-- Editing tenant data from platform mode.
+- Tenant mutations other than the explicitly audited routing-queue actions.
 - Impersonating tenant users.
 - Super Admin invitation or management UI.
 - Template-message reporting, stored report snapshots, scheduled exports, and
