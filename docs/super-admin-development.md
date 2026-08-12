@@ -1,6 +1,6 @@
 # Super Admin development
 
-- **Status:** Phase 3 selected-organization management in progress
+- **Status:** Phase 3 selected-organization management complete on staging
 - **Last updated:** 2026-08-13
 - **Audience:** Internal platform builders
 - **Backend branch:** `scrum-109-super-admin-organization-backend`
@@ -160,7 +160,7 @@ audit recording, revocation, and reactivation.
 - [x] Add the read-only Agents tab with queue memberships.
 - [x] Generate/apply the migration and synchronize database types.
 - [x] Pass focused and final backend/frontend validation.
-- [ ] Merge backend staging before frontend staging and smoke-test tenant
+- [x] Merge backend staging before frontend staging and smoke-test tenant
       switching and queue management.
 
 ## Delivery log
@@ -177,6 +177,8 @@ audit recording, revocation, and reactivation.
 | 2026-08-11 | 2     | Frontend   | `meta_vista_frontend` / `06e6275`            | n/a                                                                | Browser smoke test passed                                        | Staging     | Tenant B June campaign export returned a valid empty CSV; tenant routing, UTC selector, and readable labels verified.            |
 | 2026-08-13 | 3     | Backend    | `scrum-109-super-admin-organization-backend` | `20260812161816_scrum_109_super_admin_organization_management.sql` | Focused 13/13; full DB 555/555; Deno lint/check pass             | Local       | Platform queue authorization, tenant isolation, membership validation, idempotent mutations, and audit history pass.             |
 | 2026-08-13 | 3     | Frontend   | `scrum-109-super-admin-organization-ui`      | n/a                                                                | Focused 6/6; full 197/197; types, lint and production build pass | Local       | Global selector, organization shell, queue management, read-only Agents, shared editor, and nested Reports pass.                 |
+| 2026-08-13 | 3     | Backend    | `meta_vista_backend` / `c31201e`             | Applied by staging deployment                                      | Platform queue and Agent RPCs loaded successfully                | Staging     | Backend was merged before frontend; protected queue lists and tenant summary are available.                                      |
+| 2026-08-13 | 3     | Frontend   | `meta_vista_frontend` / `404a9d5`            | n/a                                                                | Browser smoke test passed                                        | Staging     | The global selector opened Hamza_WABA; Overview, Queues, Agents, and Reports loaded in one tenant detail shell.                  |
 
 ## Deferred
 
