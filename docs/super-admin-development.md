@@ -1,10 +1,10 @@
 # Super Admin development
 
-- **Status:** Phase 4 WABA Health in progress
+- **Status:** Phase 4 WABA Health complete on staging
 - **Last updated:** 2026-08-14
 - **Audience:** Internal platform builders
-- **Backend branch:** `scrum-109-super-admin-organization-backend`
-- **Frontend branch:** `scrum-109-super-admin-organization-ui`
+- **Backend branch:** `super-admin-waba-health-backend`
+- **Frontend branch:** `super-admin-waba-health-ui`
 
 ## Purpose
 
@@ -40,7 +40,7 @@ platform authorization separate from the organization roles `owner`, `admin`,
 | 1     | Foundation and tenant selector    | Complete    | Authorized builders can open the global overview, search/select a tenant, view its operational summary, and produce an access audit event.     |
 | 2     | Monthly tenant reports            | Complete    | A Platform Admin can select one tenant and download live monthly conversation and campaign CSV reports using UTC boundaries.                   |
 | 3     | Selected organization management  | Complete    | The global tenant selector opens a reusable detail shell where Platform Admins can inspect the tenant and manage routing queues with auditing. |
-| 4     | Selected-tenant WABA Health       | In progress | Platform Admins can diagnose each tenant WhatsApp account and run protected, audited health, profile-refresh, and template-sync actions.       |
+| 4     | Selected-tenant WABA Health       | Complete    | Platform Admins can diagnose each tenant WhatsApp account and run protected, audited health, profile-refresh, and template-sync actions.       |
 | 5     | Read-only tenant modules          | Planned     | Contacts, Conversations, and other tenant modules reuse presentation components with explicit platform-scoped data adapters.                   |
 | 6     | Additional administrative actions | Planned     | Individually approved platform actions have explicit permissions, confirmation, audit history, and rollback/error behavior.                    |
 
@@ -187,8 +187,16 @@ audit recording, revocation, and reactivation.
 - [x] Add the flat WABA Health list and account-detail routes.
 - [x] Generate/apply the migration and synchronize database types.
 - [x] Pass focused and final backend/frontend validation.
-- [ ] Merge backend staging before frontend staging and smoke-test health
+- [x] Merge backend staging before frontend staging and smoke-test health
       states.
+
+The staging smoke test passed on 2026-08-14. Hamza_WABA automatically refreshed
+from Unknown to Healthy, the account detail and audited Test Connection action
+worked, Staging Test Organization displayed a Disconnected account, tenant
+switching preserved the WABA Health route, and the status filter returned the
+correct empty state. No live tenant currently has a Warning account, so Warning
+rendering and precedence remain covered by the passing backend/frontend tests
+rather than fabricated staging data.
 
 ## Delivery log
 
@@ -206,8 +214,10 @@ audit recording, revocation, and reactivation.
 | 2026-08-13 | 3     | Frontend   | `scrum-109-super-admin-organization-ui`      | n/a                                                                | Focused 6/6; full 197/197; types, lint and production build pass | Local       | Global selector, organization shell, queue management, read-only Agents, shared editor, and nested Reports pass.                 |
 | 2026-08-13 | 3     | Backend    | `meta_vista_backend` / `c31201e`             | Applied by staging deployment                                      | Platform queue and Agent RPCs loaded successfully                | Staging     | Backend was merged before frontend; protected queue lists and tenant summary are available.                                      |
 | 2026-08-13 | 3     | Frontend   | `meta_vista_frontend` / `404a9d5`            | n/a                                                                | Browser smoke test passed                                        | Staging     | The global selector opened Hamza_WABA; Overview, Queues, Agents, and Reports loaded in one tenant detail shell.                  |
-| 2026-08-14 | 4     | Backend    | `super-admin-waba-health-backend`            | `20260813210246_super_admin_waba_health.sql`                       | Focused 24/24; quick and full validation pass                    | Local       | Health snapshots, webhook heartbeat, protected RPCs, audited actions, and synchronized database types pass.                      |
-| 2026-08-14 | 4     | Frontend   | `super-admin-waba-health-ui`                 | n/a                                                                | Focused 7/7; full 205/205; types, lint, and build pass           | Local       | Flat health list/detail routes, status filtering, three-action concurrency, cancellation, and translations pass.                 |
+| 2026-08-14 | 4     | Backend    | `super-admin-waba-health-backend` / `05c0b46` | `20260813210246_super_admin_waba_health.sql`                       | Focused 24/24; quick and full validation pass                    | Local       | Health snapshots, webhook heartbeat, protected RPCs, audited actions, and synchronized database types pass.                      |
+| 2026-08-14 | 4     | Frontend   | `super-admin-waba-health-ui` / `d81c145`      | n/a                                                                | Focused 7/7; full 205/205; types, lint, and build pass           | Local       | Flat health list/detail routes, status filtering, three-action concurrency, cancellation, and translations pass.                 |
+| 2026-08-14 | 4     | Backend    | `meta_vista_backend` / `05c0b46`              | Applied by staging deployment                                      | Protected RPCs and authenticated action endpoint succeeded       | Staging     | Backend deployed before frontend; cached health and manual connection checks updated the live snapshot.                          |
+| 2026-08-14 | 4     | Frontend   | `meta_vista_frontend` / `d81c145`             | n/a                                                                | Browser smoke test passed                                        | Staging     | Healthy and Disconnected accounts, detail sections, actions, filtering, and tenant switching passed; no live Warning fixture exists. |
 
 ## Deferred
 
