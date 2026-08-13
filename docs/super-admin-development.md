@@ -1,7 +1,7 @@
 # Super Admin development
 
-- **Status:** Phase 3 selected-organization management complete on staging
-- **Last updated:** 2026-08-13
+- **Status:** Phase 4 WABA Health in progress
+- **Last updated:** 2026-08-14
 - **Audience:** Internal platform builders
 - **Backend branch:** `scrum-109-super-admin-organization-backend`
 - **Frontend branch:** `scrum-109-super-admin-organization-ui`
@@ -39,9 +39,10 @@ platform authorization separate from the organization roles `owner`, `admin`,
 | ----- | --------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1     | Foundation and tenant selector    | Complete    | Authorized builders can open the global overview, search/select a tenant, view its operational summary, and produce an access audit event.     |
 | 2     | Monthly tenant reports            | Complete    | A Platform Admin can select one tenant and download live monthly conversation and campaign CSV reports using UTC boundaries.                   |
-| 3     | Selected organization management  | In progress | The global tenant selector opens a reusable detail shell where Platform Admins can inspect the tenant and manage routing queues with auditing. |
-| 4     | Read-only tenant modules          | Planned     | Contacts, Conversations, Integrations, and other tenant modules reuse presentation components with explicit platform-scoped data adapters.     |
-| 5     | Additional administrative actions | Planned     | Individually approved platform actions have explicit permissions, confirmation, audit history, and rollback/error behavior.                    |
+| 3     | Selected organization management  | Complete    | The global tenant selector opens a reusable detail shell where Platform Admins can inspect the tenant and manage routing queues with auditing. |
+| 4     | Selected-tenant WABA Health       | In progress | Platform Admins can diagnose each tenant WhatsApp account and run protected, audited health, profile-refresh, and template-sync actions.       |
+| 5     | Read-only tenant modules          | Planned     | Contacts, Conversations, and other tenant modules reuse presentation components with explicit platform-scoped data adapters.                   |
+| 6     | Additional administrative actions | Planned     | Individually approved platform actions have explicit permissions, confirmation, audit history, and rollback/error behavior.                    |
 
 ## Phase 1 — Foundation and tenant selector
 
@@ -163,6 +164,32 @@ audit recording, revocation, and reactivation.
 - [x] Merge backend staging before frontend staging and smoke-test tenant
       switching and queue management.
 
+## Phase 4 — Selected-tenant WABA Health
+
+### Locked decisions
+
+- V1 is selected-tenant only and shows connected and disconnected WhatsApp
+  accounts.
+- Cached health is refreshed when missing or older than five minutes; no cron,
+  alerts, global health overview, or reconnect flow is included.
+- Health states are Healthy, Warning, Disconnected, and Unknown. Lack of message
+  activity alone never makes an integration unhealthy.
+- Webhook operational errors use a rolling 24-hour window.
+- Platform APIs never return Meta access tokens, verify tokens, or raw sensitive
+  error payloads.
+
+### Checklist
+
+- [x] Add protected WhatsApp health snapshots and webhook heartbeats.
+- [x] Add Platform Admin-only paginated health and account-detail RPCs.
+- [x] Add audited Test Connection, Refresh Account, and Re-sync Templates
+      actions.
+- [x] Add the flat WABA Health list and account-detail routes.
+- [x] Generate/apply the migration and synchronize database types.
+- [x] Pass focused and final backend/frontend validation.
+- [ ] Merge backend staging before frontend staging and smoke-test health
+      states.
+
 ## Delivery log
 
 | Date       | Phase | Repository | Branch / commit                              | Migration                                                          | Validation                                                       | Environment | Notes                                                                                                                            |
@@ -179,6 +206,8 @@ audit recording, revocation, and reactivation.
 | 2026-08-13 | 3     | Frontend   | `scrum-109-super-admin-organization-ui`      | n/a                                                                | Focused 6/6; full 197/197; types, lint and production build pass | Local       | Global selector, organization shell, queue management, read-only Agents, shared editor, and nested Reports pass.                 |
 | 2026-08-13 | 3     | Backend    | `meta_vista_backend` / `c31201e`             | Applied by staging deployment                                      | Platform queue and Agent RPCs loaded successfully                | Staging     | Backend was merged before frontend; protected queue lists and tenant summary are available.                                      |
 | 2026-08-13 | 3     | Frontend   | `meta_vista_frontend` / `404a9d5`            | n/a                                                                | Browser smoke test passed                                        | Staging     | The global selector opened Hamza_WABA; Overview, Queues, Agents, and Reports loaded in one tenant detail shell.                  |
+| 2026-08-14 | 4     | Backend    | `super-admin-waba-health-backend`            | `20260813210246_super_admin_waba_health.sql`                       | Focused 24/24; quick and full validation pass                    | Local       | Health snapshots, webhook heartbeat, protected RPCs, audited actions, and synchronized database types pass.                      |
+| 2026-08-14 | 4     | Frontend   | `super-admin-waba-health-ui`                 | n/a                                                                | Focused 7/7; full 205/205; types, lint, and build pass           | Local       | Flat health list/detail routes, status filtering, three-action concurrency, cancellation, and translations pass.                 |
 
 ## Deferred
 

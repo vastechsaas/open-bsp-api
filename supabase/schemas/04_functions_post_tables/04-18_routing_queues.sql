@@ -633,7 +633,7 @@ begin
 
     select queue.* into created_queue
     from public.routing_queues queue
-    where queue.id = existing_event.target_id;
+    where queue.id = existing_event.target_id::uuid;
     return created_queue;
   end if;
 
@@ -675,7 +675,7 @@ begin
     created_queue.organization_id,
     'routing_queue.create',
     'routing_queue',
-    created_queue.id,
+    created_queue.id::text,
     p_request_id,
     public.get_routing_queue_audit_state(created_queue.id)
   );
@@ -726,7 +726,7 @@ begin
 
   if found then
     if existing_event.action_type <> 'routing_queue.update'
-      or existing_event.target_id <> p_routing_queue_id
+      or existing_event.target_id <> p_routing_queue_id::text
     then
       raise exception using
         errcode = '22023',
@@ -793,7 +793,7 @@ begin
     updated_queue.organization_id,
     'routing_queue.update',
     'routing_queue',
-    updated_queue.id,
+    updated_queue.id::text,
     p_request_id,
     before_state,
     public.get_routing_queue_audit_state(updated_queue.id)

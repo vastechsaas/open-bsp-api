@@ -129,7 +129,7 @@ create table public.platform_admin_action_events (
   organization_id uuid not null,
   action_type text not null,
   target_type text not null,
-  target_id uuid not null,
+  target_id text not null,
   request_id uuid not null,
   before_state jsonb,
   after_state jsonb not null,
@@ -153,11 +153,22 @@ on delete cascade;
 
 alter table only public.platform_admin_action_events
 add constraint platform_admin_action_events_action_check
-check (action_type in ('routing_queue.create', 'routing_queue.update'));
+check (
+  action_type in (
+    'routing_queue.create',
+    'routing_queue.update',
+    'whatsapp.health_check',
+    'whatsapp.profile_refresh',
+    'whatsapp.template_sync'
+  )
+);
 
 alter table only public.platform_admin_action_events
 add constraint platform_admin_action_events_target_check
-check (target_type = 'routing_queue');
+check (
+  (target_type = 'routing_queue' and action_type like 'routing_queue.%')
+  or (target_type = 'whatsapp_account' and action_type like 'whatsapp.%')
+);
 
 alter table only public.platform_admin_action_events
 add constraint platform_admin_action_events_request_key

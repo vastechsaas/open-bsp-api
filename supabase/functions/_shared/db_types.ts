@@ -1992,6 +1992,71 @@ export type Database = {
           },
         ]
       }
+      whatsapp_integration_health: {
+        Row: {
+          created_at: string
+          failure_code: string | null
+          failure_message: string | null
+          last_check_attempted_at: string | null
+          last_check_succeeded_at: string | null
+          last_webhook_error_at: string | null
+          last_webhook_received_at: string | null
+          last_webhook_succeeded_at: string | null
+          organization_id: string
+          phone_number_id: string
+          token_expires_at: string | null
+          token_status: string
+          token_validated_at: string | null
+          updated_at: string
+          webhook_subscription_status: string
+          webhook_validated_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          failure_code?: string | null
+          failure_message?: string | null
+          last_check_attempted_at?: string | null
+          last_check_succeeded_at?: string | null
+          last_webhook_error_at?: string | null
+          last_webhook_received_at?: string | null
+          last_webhook_succeeded_at?: string | null
+          organization_id: string
+          phone_number_id: string
+          token_expires_at?: string | null
+          token_status?: string
+          token_validated_at?: string | null
+          updated_at?: string
+          webhook_subscription_status?: string
+          webhook_validated_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          failure_code?: string | null
+          failure_message?: string | null
+          last_check_attempted_at?: string | null
+          last_check_succeeded_at?: string | null
+          last_webhook_error_at?: string | null
+          last_webhook_received_at?: string | null
+          last_webhook_succeeded_at?: string | null
+          organization_id?: string
+          phone_number_id?: string
+          token_expires_at?: string | null
+          token_status?: string
+          token_validated_at?: string | null
+          updated_at?: string
+          webhook_subscription_status?: string
+          webhook_validated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_integration_health_account_fkey"
+            columns: ["organization_id", "phone_number_id"]
+            isOneToOne: true
+            referencedRelation: "organizations_addresses"
+            referencedColumns: ["organization_id", "address"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -2417,6 +2482,51 @@ export type Database = {
           tier_name: string
         }[]
       }
+      get_platform_whatsapp_action_result: {
+        Args: {
+          p_action_type: string
+          p_organization_id: string
+          p_phone_number_id: string
+          p_request_id: string
+        }
+        Returns: Json
+      }
+      get_platform_whatsapp_health: {
+        Args: { p_organization_id: string; p_phone_number_id: string }
+        Returns: {
+          application_id: string
+          business_id: string
+          connection_status: string
+          display_name: string
+          display_phone: string
+          failure_code: string
+          failure_message: string
+          health_status: string
+          last_check_attempted_at: string
+          last_check_succeeded_at: string
+          last_incoming_message_at: string
+          last_message_activity_at: string
+          last_outgoing_message_at: string
+          last_webhook_error_at: string
+          last_webhook_received_at: string
+          last_webhook_succeeded_at: string
+          messaging_limit_tier: string
+          organization_id: string
+          phone_number_id: string
+          phone_number_status: string
+          profile_synced_at: string
+          quality_rating: string
+          template_status_summary: Json
+          token_expires_at: string
+          token_status: string
+          token_validated_at: string
+          total_count: number
+          waba_id: string
+          webhook_error_count_24h: number
+          webhook_status: string
+          webhook_validated_at: string
+        }[]
+      }
       get_request_organization_role: {
         Args: { p_organization_id: string }
         Returns: Database["public"]["Enums"]["role"]
@@ -2736,6 +2846,48 @@ export type Database = {
           updated_at: string
         }[]
       }
+      list_platform_whatsapp_health_page: {
+        Args: {
+          p_organization_id: string
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+          p_status?: string
+        }
+        Returns: {
+          application_id: string
+          business_id: string
+          connection_status: string
+          display_name: string
+          display_phone: string
+          failure_code: string
+          failure_message: string
+          health_status: string
+          last_check_attempted_at: string
+          last_check_succeeded_at: string
+          last_incoming_message_at: string
+          last_message_activity_at: string
+          last_outgoing_message_at: string
+          last_webhook_error_at: string
+          last_webhook_received_at: string
+          last_webhook_succeeded_at: string
+          messaging_limit_tier: string
+          organization_id: string
+          phone_number_id: string
+          phone_number_status: string
+          profile_synced_at: string
+          quality_rating: string
+          template_status_summary: Json
+          token_expires_at: string
+          token_status: string
+          token_validated_at: string
+          total_count: number
+          waba_id: string
+          webhook_error_count_24h: number
+          webhook_status: string
+          webhook_validated_at: string
+        }[]
+      }
       list_quick_replies_page: {
         Args: {
           p_organization_id: string
@@ -2810,6 +2962,20 @@ export type Database = {
       org_update_by_admin_rules: {
         Args: { p_id: string; p_name: string }
         Returns: boolean
+      }
+      platform_whatsapp_health_state: {
+        Args: {
+          p_connection_status: string
+          p_failure_code: string
+          p_last_check_attempted_at: string
+          p_last_check_succeeded_at: string
+          p_last_webhook_error_at: string
+          p_quality_rating: string
+          p_token_expires_at: string
+          p_token_status: string
+          p_webhook_status: string
+        }
+        Returns: string
       }
       prepare_chatbot_flow_execution: {
         Args: {
@@ -2886,6 +3052,16 @@ export type Database = {
           p_report_type: string
           p_request_id: string
           p_row_count: number
+        }
+        Returns: string
+      }
+      record_platform_whatsapp_action: {
+        Args: {
+          p_action_type: string
+          p_after_state: Json
+          p_organization_id: string
+          p_phone_number_id: string
+          p_request_id: string
         }
         Returns: string
       }

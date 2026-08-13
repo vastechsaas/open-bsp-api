@@ -531,6 +531,27 @@ async function processMessage(request: Request): Promise<Response> {
   // Collect all unique organization addresses and build lookup map
   const uniqueOrgAddresses = collectOrgAddresses(payload);
   const orgAddressMap = await buildOrgAddressMap(client, uniqueOrgAddresses);
+  const webhookReceivedAt = new Date().toISOString();
+  const heartbeatAccountMap = new Map(
+    Array.from(orgAddressMap.values()).map((account) => [
+      `${account.organization_id}:${account.address}`,
+      {
+        organization_id: account.organization_id,
+        phone_number_id: account.address,
+        last_webhook_received_at: webhookReceivedAt,
+      },
+    ]),
+  );
+  const initialHeartbeatAccounts = Array.from(heartbeatAccountMap.values());
+
+  if (initialHeartbeatAccounts.length > 0) {
+    await client
+      .from("whatsapp_integration_health")
+      .upsert(initialHeartbeatAccounts, {
+        onConflict: "organization_id,phone_number_id",
+      })
+      .throwOnError();
+  }
 
   const messages: MessageInsert[] = [];
   const statuses: MessageInsert[] = [];
@@ -568,6 +589,22 @@ async function processMessage(request: Request): Promise<Response> {
             value,
           );
           continue;
+        }
+
+        const heartbeatKey = `${address.organization_id}:${address.address}`;
+        if (!heartbeatAccountMap.has(heartbeatKey)) {
+          const heartbeat = {
+            organization_id: address.organization_id,
+            phone_number_id: address.address,
+            last_webhook_received_at: webhookReceivedAt,
+          };
+          heartbeatAccountMap.set(heartbeatKey, heartbeat);
+          await client
+            .from("whatsapp_integration_health")
+            .upsert(heartbeat, {
+              onConflict: "organization_id,phone_number_id",
+            })
+            .throwOnError();
         }
 
         log.info("Account update event", {
@@ -1275,6 +1312,20 @@ async function processMessage(request: Request): Promise<Response> {
       .from("messages")
       .update({ status: { deleted: timestamp } })
       .eq("external_id", original_message_id)
+      .throwOnError();
+  }
+
+  const heartbeatAccounts = Array.from(heartbeatAccountMap.values());
+  if (heartbeatAccounts.length > 0) {
+    await client
+      .from("whatsapp_integration_health")
+      .upsert(
+        heartbeatAccounts.map((account) => ({
+          ...account,
+          last_webhook_succeeded_at: new Date().toISOString(),
+        })),
+        { onConflict: "organization_id,phone_number_id" },
+      )
       .throwOnError();
   }
 
