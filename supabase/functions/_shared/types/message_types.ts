@@ -99,6 +99,12 @@ export type PrivateNotePart = {
     from_agent_id: string;
     to_agent_id: string;
   };
+  routing_transfer?: {
+    from_queue_id: string | null;
+    from_queue_name: string | null;
+    to_queue_id: string;
+    to_queue_name: string;
+  };
   artifacts?: never;
 };
 

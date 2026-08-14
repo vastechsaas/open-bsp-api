@@ -329,6 +329,10 @@ set search_path to ''
 as $$
 declare
   target_conversation public.conversations;
+  destination_queue public.routing_queues;
+  previous_routing_queue_id uuid;
+  previous_queue_name text;
+  route_time timestamp with time zone := now();
 begin
   select conversation.* into target_conversation
   from public.conversations conversation
@@ -347,24 +351,57 @@ begin
       message = 'only active conversations can be routed';
   end if;
 
-  if not exists (
-    select 1
-    from public.routing_queues queue
-    where queue.id = p_routing_queue_id
-      and queue.organization_id = target_conversation.organization_id
-      and queue.status = 'active'
-  ) then
+  select queue.* into destination_queue
+  from public.routing_queues queue
+  where queue.id = p_routing_queue_id
+    and queue.organization_id = target_conversation.organization_id
+    and queue.status = 'active';
+
+  if not found then
     raise exception using
       errcode = '23514',
       message = 'routing destination must be an active queue in the same organization';
   end if;
 
+  previous_routing_queue_id := target_conversation.routing_queue_id;
+
+  if previous_routing_queue_id is not null then
+    select queue.name into previous_queue_name
+    from public.routing_queues queue
+    where queue.id = previous_routing_queue_id
+      and queue.organization_id = target_conversation.organization_id;
+  end if;
+
   update public.conversations conversation
   set routing_queue_id = p_routing_queue_id,
-      routed_at = now(),
+      routed_at = route_time,
       assigned_agent_id = null
   where conversation.id = p_conversation_id
   returning * into target_conversation;
+
+  insert into public.conversation_routing_events (
+    organization_id,
+    conversation_id,
+    previous_routing_queue_id,
+    previous_routing_queue_name,
+    destination_routing_queue_id,
+    destination_routing_queue_name,
+    actor_agent_id,
+    source,
+    explanation,
+    created_at
+  ) values (
+    target_conversation.organization_id,
+    target_conversation.id,
+    previous_routing_queue_id,
+    previous_queue_name,
+    destination_queue.id,
+    destination_queue.name,
+    null,
+    'chatbot_handoff',
+    null,
+    route_time
+  );
 
   return target_conversation;
 end;
