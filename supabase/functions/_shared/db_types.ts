@@ -1253,6 +1253,70 @@ export type Database = {
           },
         ]
       }
+      conversation_routing_events: {
+        Row: {
+          actor_agent_id: string | null
+          conversation_id: string
+          created_at: string
+          destination_routing_queue_id: string
+          destination_routing_queue_name: string
+          explanation: string | null
+          id: string
+          organization_id: string
+          previous_routing_queue_id: string | null
+          previous_routing_queue_name: string | null
+          source: string
+        }
+        Insert: {
+          actor_agent_id?: string | null
+          conversation_id: string
+          created_at?: string
+          destination_routing_queue_id: string
+          destination_routing_queue_name: string
+          explanation?: string | null
+          id?: string
+          organization_id: string
+          previous_routing_queue_id?: string | null
+          previous_routing_queue_name?: string | null
+          source: string
+        }
+        Update: {
+          actor_agent_id?: string | null
+          conversation_id?: string
+          created_at?: string
+          destination_routing_queue_id?: string
+          destination_routing_queue_name?: string
+          explanation?: string | null
+          id?: string
+          organization_id?: string
+          previous_routing_queue_id?: string | null
+          previous_routing_queue_name?: string | null
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_routing_events_actor_fkey"
+            columns: ["actor_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_routing_events_conversation_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_routing_events_organization_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversations: {
         Row: {
           assigned_agent_id: string | null
@@ -2931,6 +2995,13 @@ export type Database = {
           updated_at: string
         }[]
       }
+      list_transferable_routing_queue_options: {
+        Args: { p_conversation_id: string }
+        Returns: {
+          id: string
+          name: string
+        }[]
+      }
       member_self_update_rules: {
         Args: {
           p_ai: boolean
@@ -3135,6 +3206,14 @@ export type Database = {
       start_campaign: {
         Args: { p_campaign_id: string; p_organization_id: string }
         Returns: number
+      }
+      transfer_conversation_to_queue_with_private_note: {
+        Args: {
+          p_conversation_id: string
+          p_target_routing_queue_id: string
+          p_text: string
+        }
+        Returns: Json
       }
       transfer_conversation_with_private_note: {
         Args: {
