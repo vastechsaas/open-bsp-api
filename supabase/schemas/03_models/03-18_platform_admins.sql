@@ -157,6 +157,7 @@ check (
   action_type in (
     'routing_queue.create',
     'routing_queue.update',
+    'organization_automation.update',
     'whatsapp.health_check',
     'whatsapp.profile_refresh',
     'whatsapp.template_sync'
@@ -167,6 +168,10 @@ alter table only public.platform_admin_action_events
 add constraint platform_admin_action_events_target_check
 check (
   (target_type = 'routing_queue' and action_type like 'routing_queue.%')
+  or (
+    target_type = 'organization_automation'
+    and action_type = 'organization_automation.update'
+  )
   or (target_type = 'whatsapp_account' and action_type like 'whatsapp.%')
 );
 

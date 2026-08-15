@@ -1693,6 +1693,38 @@ export type Database = {
           },
         ]
       }
+      organization_automation_settings: {
+        Row: {
+          auto_save_whatsapp_contacts: boolean
+          organization_id: string
+          updated_at: string
+          updated_by_scope: string
+          updated_by_user_id: string | null
+        }
+        Insert: {
+          auto_save_whatsapp_contacts?: boolean
+          organization_id: string
+          updated_at?: string
+          updated_by_scope?: string
+          updated_by_user_id?: string | null
+        }
+        Update: {
+          auto_save_whatsapp_contacts?: boolean
+          organization_id?: string
+          updated_at?: string
+          updated_by_scope?: string
+          updated_by_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_automation_settings_organization_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           created_at: string
@@ -2517,6 +2549,38 @@ export type Database = {
           unassigned_conversations: number
         }[]
       }
+      get_organization_automation_settings: {
+        Args: { p_organization_id: string }
+        Returns: {
+          auto_save_whatsapp_contacts: boolean
+          organization_id: string
+          updated_at: string
+          updated_by_scope: string
+          updated_by_user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organization_automation_settings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      get_platform_organization_automation_settings: {
+        Args: { p_organization_id: string }
+        Returns: {
+          auto_save_whatsapp_contacts: boolean
+          organization_id: string
+          updated_at: string
+          updated_by_scope: string
+          updated_by_user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organization_automation_settings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_platform_overview: {
         Args: never
         Returns: {
@@ -2610,6 +2674,10 @@ export type Database = {
         Returns: Json
       }
       is_platform_admin: { Args: never; Returns: boolean }
+      is_whatsapp_contact_auto_save_enabled: {
+        Args: { p_organization_id: string }
+        Returns: boolean
+      }
       list_campaigns_page: {
         Args: {
           p_audience_type?: Database["public"]["Enums"]["campaign_audience_type"]
@@ -3244,6 +3312,42 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "conversations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_organization_contact_auto_save: {
+        Args: { p_enabled: boolean; p_organization_id: string }
+        Returns: {
+          auto_save_whatsapp_contacts: boolean
+          organization_id: string
+          updated_at: string
+          updated_by_scope: string
+          updated_by_user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organization_automation_settings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_platform_organization_contact_auto_save: {
+        Args: {
+          p_enabled: boolean
+          p_organization_id: string
+          p_request_id: string
+        }
+        Returns: {
+          auto_save_whatsapp_contacts: boolean
+          organization_id: string
+          updated_at: string
+          updated_by_scope: string
+          updated_by_user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organization_automation_settings"
           isOneToOne: true
           isSetofReturn: false
         }

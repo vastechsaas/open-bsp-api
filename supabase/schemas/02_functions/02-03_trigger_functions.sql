@@ -246,6 +246,13 @@ declare
   created_contact_id uuid;
   contact_name text;
 begin
+  -- This trigger runs only on the first real inbound identity transition. A
+  -- disabled organization deliberately leaves the address unlinked while the
+  -- inbound marker remains set, so enabling later never backfills it.
+  if not public.is_whatsapp_contact_auto_save_enabled(new.organization_id) then
+    return new;
+  end if;
+
   -- A Meta user_id_update marks the old address with replaced_by_bsuid.
   -- Reuse that Contact before deciding this is a genuinely new customer.
   if nullif(btrim(new.extra->>'bsuid'), '') is not null then
@@ -284,6 +291,20 @@ begin
   where organization_id = new.organization_id
     and address = new.address
     and contact_id is null;
+
+  return new;
+end;
+$$;
+
+create function public.initialize_organization_automation_settings() returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into public.organization_automation_settings (organization_id)
+  values (new.id)
+  on conflict (organization_id) do nothing;
 
   return new;
 end;
