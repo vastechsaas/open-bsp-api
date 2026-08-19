@@ -8,6 +8,7 @@ import {
 } from "../_shared/supabase.ts";
 import {
   parseChatbotReplyPayload,
+  resolveExternalReplyId,
   toOutgoingMessageContent,
   UnsupportedMessageTypeError,
 } from "./payload.ts";
@@ -107,6 +108,7 @@ Deno.serve(async (request) => {
   }
 
   const serviceClient = createUnsecureClient();
+  const externalId = resolveExternalReplyId(payload.wamid);
 
   const { data: address, error: addressError } = await serviceClient
     .from("organizations_addresses")
@@ -149,7 +151,7 @@ Deno.serve(async (request) => {
       p_agent_id: agentId,
       p_phone_number_id: payload.phone_number_id,
       p_recipient: payload.recipient,
-      p_wamid: payload.wamid,
+      p_wamid: externalId,
       p_sent_at: payload.sent_at,
       p_content: content as unknown as Json,
     },
@@ -171,13 +173,14 @@ Deno.serve(async (request) => {
   log.info("Recorded external chatbot reply", {
     organization_id: apiKey.organization_id,
     message_id: result.message_id,
-    external_id: payload.wamid,
+    external_id: externalId,
+    wamid_provided: payload.wamid !== undefined,
     outcome: result.outcome,
   });
 
   return jsonResponse({
     outcome: result.outcome,
     message_id: result.message_id,
-    external_id: payload.wamid,
+    external_id: externalId,
   }, result.outcome === "stored" ? 201 : 200);
 });
