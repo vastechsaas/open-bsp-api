@@ -2,6 +2,7 @@ import { assertEquals, assertThrows } from "../_shared/test_assert.ts";
 import {
   chatbotReplyPayloadSchema,
   parseChatbotReplyPayload,
+  resolveExternalReplyId,
   toOutgoingMessageContent,
 } from "./payload.ts";
 
@@ -45,6 +46,25 @@ Deno.test("text reply payload normalizes tenant identifiers and content", () => 
     kind: "text",
     text: "Welcome to PSDF",
   });
+});
+
+Deno.test("outgoing WAMID may be omitted temporarily", () => {
+  const { wamid: _wamid, ...payloadWithoutWamid } = basePayload;
+  const payload = parseChatbotReplyPayload({
+    ...payloadWithoutWamid,
+    message: {
+      type: "text",
+      text: { body: "Reply without an outgoing WAMID" },
+    },
+  });
+
+  assertEquals(payload.wamid, undefined);
+  assertEquals(
+    resolveExternalReplyId(payload.wamid).startsWith(
+      "wamid.openbsp.",
+    ),
+    true,
+  );
 });
 
 Deno.test("button replies preserve stable IDs and titles", () => {

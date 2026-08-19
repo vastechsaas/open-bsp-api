@@ -38,7 +38,7 @@ not be supplied in the payload.
 | ----------------- | -------- | ------------------------------------------------------------------------------ |
 | `phone_number_id` | Yes      | Meta ID of the connected WhatsApp business phone number.                       |
 | `recipient`       | Yes      | Customer WhatsApp number in digits-only international format.                  |
-| `wamid`           | Yes      | WAMID returned by Meta for this physical send.                                 |
+| `wamid`           | No       | WAMID returned by Meta for this physical send. Strongly recommended.           |
 | `sent_at`         | Yes      | ISO 8601 timestamp, including an offset, captured when Meta accepted the send. |
 | `chatbot.key`     | Yes      | Stable tenant-specific key, for example `psdf`.                                |
 | `chatbot.name`    | Yes      | Display name used when the sender is first created, for example `PSDF`.        |
@@ -256,6 +256,11 @@ Successful response:
 - Retry network failures and `5xx` responses with bounded exponential backoff.
 - Reuse the exact same WAMID and payload on every retry. Never generate another
   WAMID and never send the WhatsApp message again.
+- When `wamid` is omitted, delivery/read statuses cannot be matched and callback
+  retries can create duplicate Chat Center messages. OpenBSP generates a local
+  fallback identifier only so the reply can be stored without a database schema
+  change. Do not automatically retry a callback without a WAMID after an
+  ambiguous network failure.
 - Do not automatically retry `400`, `401`, `404`, `409`, or `422`. Correct the
   payload or configuration first.
 - A `409` requires investigation because the WAMID is already associated with
