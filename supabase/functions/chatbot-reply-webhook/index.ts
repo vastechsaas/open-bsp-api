@@ -174,7 +174,7 @@ Deno.serve(async (request) => {
     organization_id: apiKey.organization_id,
     message_id: result.message_id,
     external_id: externalId,
-    wamid_provided: payload.wamid !== undefined,
+    wamid_provided: payload.wamid != null,
     outcome: result.outcome,
   });
 

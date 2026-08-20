@@ -67,6 +67,25 @@ Deno.test("outgoing WAMID may be omitted temporarily", () => {
   );
 });
 
+Deno.test("PHP chatbot payload may send a null outgoing WAMID", () => {
+  const payload = parseChatbotReplyPayload({
+    ...basePayload,
+    wamid: null,
+    message: {
+      type: "text",
+      text: { body: "Reply while Meta WAMID is unavailable" },
+    },
+  });
+
+  assertEquals(payload.wamid, null);
+  assertEquals(
+    resolveExternalReplyId(payload.wamid).startsWith(
+      "wamid.openbsp.",
+    ),
+    true,
+  );
+});
+
 Deno.test("button replies preserve stable IDs and titles", () => {
   const payload = parseChatbotReplyPayload({
     ...basePayload,
