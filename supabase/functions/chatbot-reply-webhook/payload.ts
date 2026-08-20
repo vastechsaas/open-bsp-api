@@ -76,7 +76,7 @@ const interactiveMessageSchema = z.object({
 export const chatbotReplyPayloadSchema = z.object({
   phone_number_id: digitsSchema,
   recipient: digitsSchema,
-  wamid: wamidSchema.optional(),
+  wamid: wamidSchema.nullable().optional(),
   sent_at: z.string().datetime({ offset: true }),
   chatbot: z.object({
     key: z.string()
@@ -101,7 +101,7 @@ export class UnsupportedMessageTypeError extends Error {
   }
 }
 
-export function resolveExternalReplyId(wamid?: string): string {
+export function resolveExternalReplyId(wamid?: string | null): string {
   return wamid ?? `wamid.openbsp.${crypto.randomUUID()}`;
 }
 
