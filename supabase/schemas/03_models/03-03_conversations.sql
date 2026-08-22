@@ -26,6 +26,10 @@ add constraint conversations_pkey
 primary key (id);
 
 alter table only public.conversations
+add constraint conversations_organization_id_id_key
+unique (organization_id, id);
+
+alter table only public.conversations
 add constraint conversations_organization_address_fkey
 foreign key (organization_id, organization_address)
 references public.organizations_addresses(organization_id, address)

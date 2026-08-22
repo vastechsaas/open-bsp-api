@@ -236,6 +236,8 @@ as $$
 declare
   target_conversation public.conversations;
   caller_role public.role;
+  actor_agent_id uuid;
+  previous_assigned_agent_id uuid;
 begin
   if auth.uid() is null then
     raise exception using
@@ -257,6 +259,10 @@ begin
   caller_role := public.get_request_organization_role(
     target_conversation.organization_id
   );
+  actor_agent_id := public.get_current_human_agent_id(
+    target_conversation.organization_id
+  );
+  previous_assigned_agent_id := target_conversation.assigned_agent_id;
 
   if caller_role not in (
     'owner'::public.role,
@@ -327,6 +333,28 @@ begin
   set assigned_agent_id = p_agent_id
   where id = p_conversation_id
   returning * into target_conversation;
+
+  if p_agent_id is not null
+    and p_agent_id is distinct from previous_assigned_agent_id
+  then
+    perform public.enqueue_user_notification(
+      target_conversation.organization_id,
+      p_agent_id,
+      actor_agent_id,
+      target_conversation.id,
+      'conversation_assigned',
+      format(
+        'conversation_assignment:%s:%s:%s',
+        target_conversation.id,
+        p_agent_id,
+        txid_current()
+      ),
+      jsonb_build_object(
+        'previous_assigned_agent_id', previous_assigned_agent_id,
+        'assigned_agent_id', p_agent_id
+      )
+    );
+  end if;
 
   return target_conversation;
 end;

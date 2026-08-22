@@ -95,6 +95,22 @@ set local search_path = extensions, public, auth, storage;
 
 select results_eq(
   $$
+    select recipient_agent_id, actor_agent_id, conversation_id, notification_type,
+      payload->>'text'
+    from public.user_notifications
+  $$,
+  $$ values (
+    '98200000-0000-4000-8000-000000000002'::uuid,
+    '98200000-0000-4000-8000-000000000001'::uuid,
+    '98400000-0000-4000-8000-000000000001'::uuid,
+    'conversation_transferred_to_agent'::text,
+    '@Sara Please take over this marketing question'::text
+  ) $$,
+  'the destination Agent receives one transfer notification'
+);
+
+select results_eq(
+  $$
     select
       direction::text,
       agent_id,

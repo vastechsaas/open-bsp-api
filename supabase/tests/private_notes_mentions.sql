@@ -114,6 +114,31 @@ select is(
 );
 
 reset role;
+
+select results_eq(
+  $$
+    select recipient_agent_id, actor_agent_id, notification_type, payload->>'text'
+    from public.user_notifications
+    where notification_type = 'private_note_mention'
+    order by recipient_agent_id
+  $$,
+  $$ values
+    (
+      '96200000-0000-4000-8000-000000000002'::uuid,
+      '96200000-0000-4000-8000-000000000001'::uuid,
+      'private_note_mention'::text,
+      'Please review this customer'::text
+    ),
+    (
+      '96200000-0000-4000-8000-000000000006'::uuid,
+      '96200000-0000-4000-8000-000000000001'::uuid,
+      'private_note_mention'::text,
+      'Please review this customer'::text
+    )
+  $$,
+  'each mentioned human receives one private-note notification'
+);
+
 select is(
   (
     select count(*)
