@@ -240,6 +240,28 @@ begin
   where conversation.id = conversation_row.id
   returning * into updated_conversation;
 
+  perform public.enqueue_user_notification(
+    updated_conversation.organization_id,
+    member.agent_id,
+    author_agent_id,
+    updated_conversation.id,
+    'conversation_transferred_to_queue',
+    format('conversation_queue_transfer:%s', routing_event.id),
+    jsonb_build_object(
+      'message_id', note.id,
+      'routing_event_id', routing_event.id,
+      'from_queue_id', conversation_row.routing_queue_id,
+      'from_queue_name', previous_queue_name,
+      'to_queue_id', destination_queue.id,
+      'to_queue_name', destination_queue.name,
+      'text', normalized_text
+    )
+  )
+  from public.routing_queue_members member
+  where member.organization_id = updated_conversation.organization_id
+    and member.routing_queue_id = destination_queue.id
+    and member.agent_id is distinct from author_agent_id;
+
   return jsonb_build_object(
     'conversation', to_jsonb(updated_conversation),
     'note', to_jsonb(note),

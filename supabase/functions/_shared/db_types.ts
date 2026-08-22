@@ -2047,6 +2047,77 @@ export type Database = {
           },
         ]
       }
+      user_notifications: {
+        Row: {
+          actor_agent_id: string | null
+          conversation_id: string | null
+          created_at: string
+          id: string
+          notification_type: string
+          organization_id: string
+          payload: Json
+          read_at: string | null
+          recipient_agent_id: string
+          resolved_at: string | null
+          source_event_key: string
+        }
+        Insert: {
+          actor_agent_id?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          notification_type: string
+          organization_id: string
+          payload?: Json
+          read_at?: string | null
+          recipient_agent_id: string
+          resolved_at?: string | null
+          source_event_key: string
+        }
+        Update: {
+          actor_agent_id?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          notification_type?: string
+          organization_id?: string
+          payload?: Json
+          read_at?: string | null
+          recipient_agent_id?: string
+          resolved_at?: string | null
+          source_event_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_notifications_actor_agent_fkey"
+            columns: ["organization_id", "actor_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "user_notifications_conversation_fkey"
+            columns: ["organization_id", "conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "user_notifications_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_notifications_recipient_agent_fkey"
+            columns: ["organization_id", "recipient_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
       webhooks: {
         Row: {
           created_at: string
@@ -2451,6 +2522,18 @@ export type Database = {
           flow_id: string
         }[]
       }
+      enqueue_user_notification: {
+        Args: {
+          p_actor_agent_id: string
+          p_conversation_id: string
+          p_notification_type: string
+          p_organization_id: string
+          p_payload?: Json
+          p_recipient_agent_id: string
+          p_source_event_key: string
+        }
+        Returns: string
+      }
       ensure_chatbot_runtime_agent: {
         Args: { p_organization_id: string }
         Returns: string
@@ -2662,6 +2745,10 @@ export type Database = {
       get_routing_queue_audit_state: {
         Args: { p_routing_queue_id: string }
         Returns: Json
+      }
+      get_unread_notification_count: {
+        Args: { p_organization_id: string }
+        Returns: number
       }
       init_data: {
         Args: {
@@ -3069,6 +3156,54 @@ export type Database = {
           id: string
           name: string
         }[]
+      }
+      list_user_notifications_page: {
+        Args: {
+          p_organization_id: string
+          p_page?: number
+          p_page_size?: number
+          p_unread_only?: boolean
+        }
+        Returns: {
+          actor_agent_id: string
+          conversation_id: string
+          created_at: string
+          id: string
+          notification_type: string
+          organization_id: string
+          payload: Json
+          read_at: string
+          recipient_agent_id: string
+          resolved_at: string
+          source_event_key: string
+          total_count: number
+        }[]
+      }
+      mark_all_user_notifications_read: {
+        Args: { p_organization_id: string }
+        Returns: number
+      }
+      mark_user_notification_read: {
+        Args: { p_notification_id: string }
+        Returns: {
+          actor_agent_id: string | null
+          conversation_id: string | null
+          created_at: string
+          id: string
+          notification_type: string
+          organization_id: string
+          payload: Json
+          read_at: string | null
+          recipient_agent_id: string
+          resolved_at: string | null
+          source_event_key: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "user_notifications"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       member_self_update_rules: {
         Args: {

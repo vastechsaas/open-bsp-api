@@ -436,3 +436,99 @@ begin
   );
 end;
 $$;
+create or replace function public.enqueue_user_notification(
+  p_organization_id uuid,
+  p_recipient_agent_id uuid,
+  p_actor_agent_id uuid,
+  p_conversation_id uuid,
+  p_notification_type text,
+  p_source_event_key text,
+  p_payload jsonb default '{}'::jsonb
+) returns uuid
+language plpgsql
+volatile
+security definer
+set search_path to ''
+as $$
+declare
+  notification_id uuid;
+begin
+  if not exists (
+    select 1
+    from public.agents recipient
+    where recipient.organization_id = p_organization_id
+      and recipient.id = p_recipient_agent_id
+      and recipient.ai = false
+      and recipient.user_id is not null
+      and recipient.extra->>'role' in (
+        'owner',
+        'admin',
+        'supervisor',
+        'member',
+        'agent'
+      )
+      and (
+        recipient.extra->'invitation' is null
+        or recipient.extra->'invitation'->>'status' = 'accepted'
+      )
+  ) then
+    raise exception using
+      errcode = '23514',
+      message = 'notification recipient must be an accepted human in the organization';
+  end if;
+
+  insert into public.user_notifications (
+    organization_id,
+    recipient_agent_id,
+    actor_agent_id,
+    conversation_id,
+    notification_type,
+    source_event_key,
+    payload
+  ) values (
+    p_organization_id,
+    p_recipient_agent_id,
+    p_actor_agent_id,
+    p_conversation_id,
+    p_notification_type,
+    p_source_event_key,
+    coalesce(p_payload, '{}'::jsonb)
+  )
+  on conflict (
+    organization_id,
+    recipient_agent_id,
+    source_event_key
+  ) do nothing
+  returning id into notification_id;
+
+  if notification_id is null then
+    select notification.id into notification_id
+    from public.user_notifications notification
+    where notification.organization_id = p_organization_id
+      and notification.recipient_agent_id = p_recipient_agent_id
+      and notification.source_event_key = p_source_event_key;
+  end if;
+
+  return notification_id;
+end;
+$$;
+
+revoke execute on function public.enqueue_user_notification(
+  uuid,
+  uuid,
+  uuid,
+  uuid,
+  text,
+  text,
+  jsonb
+) from public, anon, authenticated;
+
+grant execute on function public.enqueue_user_notification(
+  uuid,
+  uuid,
+  uuid,
+  uuid,
+  text,
+  text,
+  jsonb
+) to service_role;

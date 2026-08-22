@@ -201,6 +201,22 @@ set local search_path = extensions, public, auth, storage;
 
 select results_eq(
   $$
+    select recipient_agent_id, actor_agent_id, conversation_id, notification_type,
+      payload->>'to_queue_name'
+    from public.user_notifications
+  $$,
+  $$ values (
+    'aa200000-0000-4000-8000-000000000002'::uuid,
+    'aa200000-0000-4000-8000-000000000001'::uuid,
+    'aa500000-0000-4000-8000-000000000001'::uuid,
+    'conversation_transferred_to_queue'::text,
+    'Marketing'::text
+  ) $$,
+  'each destination queue member receives one queue-transfer notification'
+);
+
+select results_eq(
+  $$
     select
       direction::text,
       agent_id,

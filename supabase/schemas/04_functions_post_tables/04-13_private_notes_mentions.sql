@@ -152,6 +152,20 @@ begin
     note.created_at
   from unnest(normalized_mentions) as mentioned(mentioned_id);
 
+  perform public.enqueue_user_notification(
+    note.organization_id,
+    mentioned_id,
+    author_agent_id,
+    note.conversation_id,
+    'private_note_mention',
+    format('private_note_mention:%s', note.id),
+    jsonb_build_object(
+      'message_id', note.id,
+      'text', normalized_text
+    )
+  )
+  from unnest(normalized_mentions) as mentioned(mentioned_id);
+
   return note;
 end;
 $$;
@@ -323,6 +337,21 @@ begin
       errcode = '23505',
       message = 'conversation assignment changed before transfer completed';
   end if;
+
+  perform public.enqueue_user_notification(
+    updated_conversation.organization_id,
+    p_target_agent_id,
+    author_agent_id,
+    updated_conversation.id,
+    'conversation_transferred_to_agent',
+    format('conversation_agent_transfer:%s', note.id),
+    jsonb_build_object(
+      'message_id', note.id,
+      'from_agent_id', author_agent_id,
+      'to_agent_id', p_target_agent_id,
+      'text', normalized_text
+    )
+  );
 
   return jsonb_build_object(
     'conversation', to_jsonb(updated_conversation),
