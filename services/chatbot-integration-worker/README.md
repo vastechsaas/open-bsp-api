@@ -80,6 +80,11 @@ npm run publish:fixture -- fixtures/chatbot-reply.json
 Replace every placeholder WAMID, signature, account identifier and timestamp
 with values from the same real conversation before a staging smoke test.
 
+For Postman-based producer testing, import both files from `postman/`, select
+the imported environment, fill its placeholders, start the worker, then run the
+incoming request before the chatbot-reply request. The malformed request is a
+DLQ-only test.
+
 ## Operations
 
 - `GET /healthz` proves the process is alive.
