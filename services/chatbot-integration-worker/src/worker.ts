@@ -3,7 +3,7 @@ import { type IntegrationEvent, integrationEventSchema } from "./contracts.js";
 import type { ForwardResult } from "./forwarder.js";
 import type { Logger } from "./logger.js";
 import type { WorkerState } from "./state.js";
-import { topology } from "./topology.js";
+import { defaultTopology, type QueueTopology } from "./topology.js";
 
 export type ForwardEvent = (event: IntegrationEvent) => Promise<ForwardResult>;
 
@@ -32,6 +32,7 @@ async function deadLetter(
   channel: ConfirmChannel,
   message: ConsumeMessage,
   reason: string,
+  topology: QueueTopology,
   status?: number,
 ) {
   channel.publish(
@@ -60,11 +61,18 @@ export function createMessageHandler({
   forward,
   logger,
   state,
+  topology = defaultTopology,
+  acceptedEventTypes = new Set<IntegrationEvent["event_type"]>([
+    "whatsapp_webhook",
+    "chatbot_reply",
+  ]),
 }: {
   channel: ConfirmChannel;
   forward: ForwardEvent;
   logger: Logger;
   state: WorkerState;
+  topology?: QueueTopology;
+  acceptedEventTypes?: ReadonlySet<IntegrationEvent["event_type"]>;
 }) {
   return async (message: ConsumeMessage | null) => {
     if (!message) return;
@@ -74,7 +82,12 @@ export function createMessageHandler({
       try {
         input = JSON.parse(message.content.toString("utf8"));
       } catch {
-        await deadLetter(channel, message, "message is not valid JSON");
+        await deadLetter(
+          channel,
+          message,
+          "message is not valid JSON",
+          topology,
+        );
         state.deadLettered += 1;
         state.lastFailureAt = new Date().toISOString();
         return;
@@ -82,7 +95,12 @@ export function createMessageHandler({
 
       const parsed = integrationEventSchema.safeParse(input);
       if (!parsed.success) {
-        await deadLetter(channel, message, "event contract validation failed");
+        await deadLetter(
+          channel,
+          message,
+          "event contract validation failed",
+          topology,
+        );
         state.deadLettered += 1;
         state.lastFailureAt = new Date().toISOString();
         logger.warn("Event sent to dead-letter queue", {
@@ -94,6 +112,18 @@ export function createMessageHandler({
         return;
       }
 
+      if (!acceptedEventTypes.has(parsed.data.event_type)) {
+        await deadLetter(
+          channel,
+          message,
+          "event type is not enabled for this worker instance",
+          topology,
+        );
+        state.deadLettered += 1;
+        state.lastFailureAt = new Date().toISOString();
+        return;
+      }
+
       const result = await forward(parsed.data);
       if (result.outcome === "success") {
         channel.ack(message);
@@ -102,7 +132,13 @@ export function createMessageHandler({
         return;
       }
 
-      await deadLetter(channel, message, result.reason, result.status);
+      await deadLetter(
+        channel,
+        message,
+        result.reason,
+        topology,
+        result.status,
+      );
       state.deadLettered += 1;
       state.lastFailureAt = new Date().toISOString();
       logger.warn("Event sent to dead-letter queue", {

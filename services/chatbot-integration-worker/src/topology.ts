@@ -1,15 +1,30 @@
 import type { ConfirmChannel } from "amqplib";
 
-export const topology = {
+export type QueueTopology = {
+  exchange: string;
+  queue: string;
+  routingKey: string;
+  deadLetterExchange: string;
+  deadLetterQueue: string;
+  deadLetterRoutingKey: string;
+};
+
+export const defaultTopology: QueueTopology = {
   exchange: "openbsp.integration",
   queue: "openbsp.chatbot.events.v1",
   routingKey: "chatbot.event.v1",
   deadLetterExchange: "openbsp.integration.dlx",
   deadLetterQueue: "openbsp.chatbot.events.dlq.v1",
   deadLetterRoutingKey: "chatbot.event.dlq.v1",
-} as const;
+};
 
-export async function assertTopology(channel: ConfirmChannel) {
+// Backward-compatible default used by the fixture publisher and tests.
+export const topology = defaultTopology;
+
+export async function assertTopology(
+  channel: ConfirmChannel,
+  topology: QueueTopology = defaultTopology,
+) {
   await channel.assertExchange(topology.exchange, "direct", { durable: true });
   await channel.assertExchange(topology.deadLetterExchange, "direct", {
     durable: true,

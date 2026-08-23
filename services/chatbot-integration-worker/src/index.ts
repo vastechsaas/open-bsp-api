@@ -5,7 +5,7 @@ import { createForwarder } from "./forwarder.js";
 import { startHealthServer } from "./health.js";
 import { createLogger } from "./logger.js";
 import { createWorkerState } from "./state.js";
-import { assertTopology, topology } from "./topology.js";
+import { assertTopology } from "./topology.js";
 import { createMessageHandler } from "./worker.js";
 
 const reconnectDelayMs = 5_000;
@@ -64,15 +64,17 @@ async function main() {
     try {
       connection = await connect(config.cloudAmqpUrl);
       channel = await connection.createConfirmChannel();
-      await assertTopology(channel);
+      await assertTopology(channel, config.topology);
       const handleMessage = createMessageHandler({
         channel,
         forward,
         logger,
         state,
+        topology: config.topology,
+        acceptedEventTypes: config.acceptedEventTypes,
       });
       const consumer = await channel.consume(
-        topology.queue,
+        config.topology.queue,
         (message) => {
           void handleMessage(message);
         },
@@ -82,7 +84,7 @@ async function main() {
       state.connected = true;
       state.consuming = true;
       logger.info("CloudAMQP consumer ready", {
-        queue: topology.queue,
+        queue: config.topology.queue,
         prefetch: 1,
       });
       await Promise.race([

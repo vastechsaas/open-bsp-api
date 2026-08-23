@@ -52,6 +52,23 @@ Copy `.env.example` to `.env` and supply real secrets outside source control.
 `OPENBSP_ACCOUNT_CONFIG_JSON` maps the public `integration_key` to its expected
 Phone Number ID, Meta App ID, chatbot identity and tenant API key.
 
+The queue topology is configurable while retaining safe ordered defaults:
+
+```text
+RABBITMQ_EXCHANGE=openbsp.integration
+RABBITMQ_QUEUE=openbsp.chatbot.events.v1
+RABBITMQ_ROUTING_KEY=chatbot.event.v1
+RABBITMQ_DLX=openbsp.integration.dlx
+RABBITMQ_DLQ=openbsp.chatbot.events.dlq.v1
+RABBITMQ_DLQ_ROUTING_KEY=chatbot.event.dlq.v1
+WORKER_EVENT_TYPES=whatsapp_webhook,chatbot_reply
+```
+
+Keep both event types on the default queue for V1. A future deployment can run
+separate worker instances with different queue/routing-key values and one event
+type each, but only after an ordering safeguard prevents replies from overtaking
+their customer messages.
+
 Publish a reviewed fixture:
 
 ```powershell

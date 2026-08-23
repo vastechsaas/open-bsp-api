@@ -127,3 +127,21 @@ test("requeues an unexpected processing failure without acknowledging", async ()
   assert.equal(calls.ack, 0);
   assert.equal(calls.nack, 1);
 });
+
+test("dead-letters an event type disabled for this worker instance", async () => {
+  const { channel, calls } = channelMock();
+  let forwarded = false;
+  await createMessageHandler({
+    channel,
+    logger: silentLogger,
+    state: createWorkerState(),
+    acceptedEventTypes: new Set(["whatsapp_webhook"]),
+    forward: () => {
+      forwarded = true;
+      return Promise.resolve({ outcome: "success", status: 200, attempts: 1 });
+    },
+  })(message(replyEvent));
+  assert.equal(forwarded, false);
+  assert.equal(calls.publish, 1);
+  assert.equal(calls.ack, 1);
+});

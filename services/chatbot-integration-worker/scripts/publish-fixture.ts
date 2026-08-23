@@ -3,10 +3,24 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { connect } from "amqplib";
 import { integrationEventSchema } from "../src/contracts.js";
-import { assertTopology, topology } from "../src/topology.js";
+import {
+  assertTopology,
+  defaultTopology,
+  type QueueTopology,
+} from "../src/topology.js";
 
 const fixturePath = process.argv[2];
 const cloudAmqpUrl = process.env.CLOUDAMQP_URL;
+const topology: QueueTopology = {
+  exchange: process.env.RABBITMQ_EXCHANGE ?? defaultTopology.exchange,
+  queue: process.env.RABBITMQ_QUEUE ?? defaultTopology.queue,
+  routingKey: process.env.RABBITMQ_ROUTING_KEY ?? defaultTopology.routingKey,
+  deadLetterExchange: process.env.RABBITMQ_DLX ??
+    defaultTopology.deadLetterExchange,
+  deadLetterQueue: process.env.RABBITMQ_DLQ ?? defaultTopology.deadLetterQueue,
+  deadLetterRoutingKey: process.env.RABBITMQ_DLQ_ROUTING_KEY ??
+    defaultTopology.deadLetterRoutingKey,
+};
 if (!fixturePath || !cloudAmqpUrl) {
   console.error(
     "Usage: CLOUDAMQP_URL=<url> npm run publish:fixture -- <fixture.json>",
@@ -26,7 +40,7 @@ const event = integrationEventSchema.parse(fixture);
 
 const connection = await connect(cloudAmqpUrl);
 const channel = await connection.createConfirmChannel();
-await assertTopology(channel);
+await assertTopology(channel, topology);
 channel.publish(
   topology.exchange,
   topology.routingKey,
