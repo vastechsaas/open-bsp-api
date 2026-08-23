@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "event_id": "00000000-0000-4000-8000-000000000001",
+  "event_type": "whatsapp_webhook",
+  "integration_key": "psdf",
+  "occurred_at": "2026-08-23T10:00:00Z",
+  "payload": {
+    "raw_body": "{\"object\":\"whatsapp_business_account\",\"entry\":[]}",
+    "x_hub_signature_256": "sha256=0000000000000000000000000000000000000000000000000000000000000000",
+    "app_id": "123456789012345"
+  }
+}
