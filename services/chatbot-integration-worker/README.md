@@ -85,6 +85,11 @@ the imported environment, fill its placeholders, start the worker, then run the
 incoming request before the chatbot-reply request. The malformed request is a
 DLQ-only test.
 
+Before queue testing, the `OpenBSP-Direct-WhatsApp-Webhook` collection can send
+the exact Meta body directly to the Edge Function. It generates the matching
+signature from a local Postman secret. A successful persistence log confirms the
+payload independently of RabbitMQ and the worker.
+
 ## Operations
 
 - `GET /healthz` proves the process is alive.
