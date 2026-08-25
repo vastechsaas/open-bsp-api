@@ -1693,6 +1693,41 @@ export type Database = {
           },
         ]
       }
+      organization_agent_capacity: {
+        Row: {
+          created_at: string
+          max_agent_seats: number | null
+          organization_id: string
+          updated_at: string
+          updated_by: string | null
+          updated_by_scope: string
+        }
+        Insert: {
+          created_at?: string
+          max_agent_seats?: number | null
+          organization_id: string
+          updated_at?: string
+          updated_by?: string | null
+          updated_by_scope?: string
+        }
+        Update: {
+          created_at?: string
+          max_agent_seats?: number | null
+          organization_id?: string
+          updated_at?: string
+          updated_by?: string | null
+          updated_by_scope?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_agent_capacity_organization_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_automation_settings: {
         Row: {
           auto_save_whatsapp_contacts: boolean
@@ -2349,6 +2384,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      count_organization_agent_seats: {
+        Args: { p_organization_id: string }
+        Returns: number
+      }
       create_chatbot_flow_draft: {
         Args: {
           p_created_by?: string
@@ -2405,6 +2444,31 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "conversations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_platform_organization_agent_invitation: {
+        Args: {
+          p_email: string
+          p_name: string
+          p_organization_id: string
+          p_request_id: string
+        }
+        Returns: {
+          ai: boolean
+          created_at: string
+          extra: Json | null
+          id: string
+          name: string
+          organization_id: string
+          picture: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agents"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -2648,6 +2712,20 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_platform_organization_agent_audit_state: {
+        Args: { p_agent_id: string }
+        Returns: Json
+      }
+      get_platform_organization_agent_capacity: {
+        Args: { p_organization_id: string }
+        Returns: {
+          max_agent_seats: number
+          organization_id: string
+          over_limit: boolean
+          updated_at: string
+          used_agent_seats: number
+        }[]
+      }
       get_platform_organization_automation_settings: {
         Args: { p_organization_id: string }
         Returns: {
@@ -2759,6 +2837,10 @@ export type Database = {
           p_until?: string
         }
         Returns: Json
+      }
+      is_counted_agent_seat: {
+        Args: { p_ai: boolean; p_extra: Json }
+        Returns: boolean
       }
       is_platform_admin: { Args: never; Returns: boolean }
       is_whatsapp_contact_auto_save_enabled: {
@@ -3016,6 +3098,7 @@ export type Database = {
           created_at: string
           email: string
           id: string
+          invitation_status: string
           name: string
           organization_id: string
           picture: string
@@ -3339,6 +3422,10 @@ export type Database = {
         }
         Returns: string
       }
+      remove_platform_organization_agent: {
+        Args: { p_agent_id: string; p_request_id: string }
+        Returns: boolean
+      }
       replace_routing_queue_members: {
         Args: {
           p_agent_ids: string[]
@@ -3466,6 +3553,45 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      update_platform_organization_agent: {
+        Args: {
+          p_agent_id: string
+          p_name: string
+          p_request_id?: string
+          p_routing_queue_ids?: string[]
+        }
+        Returns: {
+          ai: boolean
+          created_at: string
+          extra: Json | null
+          id: string
+          name: string
+          organization_id: string
+          picture: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agents"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_platform_organization_agent_capacity: {
+        Args: {
+          p_max_agent_seats: number
+          p_organization_id: string
+          p_request_id: string
+        }
+        Returns: {
+          max_agent_seats: number
+          organization_id: string
+          over_limit: boolean
+          updated_at: string
+          used_agent_seats: number
+        }[]
       }
       update_platform_organization_contact_auto_save: {
         Args: {
