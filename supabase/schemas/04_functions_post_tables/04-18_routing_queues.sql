@@ -549,6 +549,7 @@ create function public.list_platform_organization_agents_page(
   name text,
   email text,
   picture text,
+  invitation_status text,
   queue_ids uuid[],
   queue_names text[],
   created_at timestamp with time zone,
@@ -574,26 +575,29 @@ begin
   end if;
 
   return query
-  with accepted_agents as (
+  with platform_agents as (
     select
       agent.*,
       coalesce(
         nullif(agent.extra->'invitation'->>'email', ''),
         auth_user.email
-      ) as resolved_email
+      ) as resolved_email,
+      coalesce(
+        agent.extra->'invitation'->>'status',
+        'accepted'
+      ) as resolved_invitation_status
     from public.agents agent
     left join auth.users auth_user on auth_user.id = agent.user_id
     where agent.organization_id = p_organization_id
       and agent.ai = false
-      and agent.user_id is not null
       and agent.extra->>'role' = 'agent'
       and coalesce(
         agent.extra->'invitation'->>'status',
         'accepted'
-      ) = 'accepted'
+      ) in ('pending', 'accepted')
   ), filtered as (
     select agent.*
-    from accepted_agents agent
+    from platform_agents agent
     where normalized_search = ''
       or lower(agent.name) like '%' || normalized_search || '%'
       or lower(coalesce(agent.resolved_email, '')) like '%' || normalized_search || '%'
@@ -605,6 +609,7 @@ begin
     agent.name,
     agent.resolved_email,
     agent.picture,
+    agent.resolved_invitation_status,
     coalesce(queues.queue_ids, array[]::uuid[]),
     coalesce(queues.queue_names, array[]::text[]),
     agent.created_at,

@@ -1,10 +1,10 @@
 # Super Admin development
 
-- **Status:** Phase 4 WABA Health complete on staging
-- **Last updated:** 2026-08-14
+- **Status:** Phase 5 Agent management and capacity in development
+- **Last updated:** 2026-08-26
 - **Audience:** Internal platform builders
-- **Backend branch:** `super-admin-waba-health-backend`
-- **Frontend branch:** `super-admin-waba-health-ui`
+- **Backend branch:** `scrum-112-platform-agent-management-backend`
+- **Frontend branch:** `scrum-112-platform-agent-management-ui`
 
 ## Purpose
 
@@ -41,8 +41,9 @@ platform authorization separate from the organization roles `owner`, `admin`,
 | 2     | Monthly tenant reports            | Complete    | A Platform Admin can select one tenant and download live monthly conversation and campaign CSV reports using UTC boundaries.                   |
 | 3     | Selected organization management  | Complete    | The global tenant selector opens a reusable detail shell where Platform Admins can inspect the tenant and manage routing queues with auditing. |
 | 4     | Selected-tenant WABA Health       | Complete    | Platform Admins can diagnose each tenant WhatsApp account and run protected, audited health, profile-refresh, and template-sync actions.       |
-| 5     | Read-only tenant modules          | Planned     | Contacts, Conversations, and other tenant modules reuse presentation components with explicit platform-scoped data adapters.                   |
-| 6     | Additional administrative actions | Planned     | Individually approved platform actions have explicit permissions, confirmation, audit history, and rollback/error behavior.                    |
+| 5     | Agent management and capacity     | In progress | Platform Admins can configure tenant Agent capacity and manage pending/accepted Agents through protected, audited operations.                  |
+| 6     | Read-only tenant modules          | Planned     | Contacts, Conversations, and other tenant modules reuse presentation components with explicit platform-scoped data adapters.                   |
+| 7     | Additional administrative actions | Planned     | Individually approved platform actions have explicit permissions, confirmation, audit history, and rollback/error behavior.                    |
 
 ## Phase 1 — Foundation and tenant selector
 
@@ -198,25 +199,51 @@ correct empty state. No live tenant currently has a Warning account, so Warning
 rendering and precedence remain covered by the passing backend/frontend tests
 rather than fabricated staging data.
 
+## Phase 5 — Agent management and capacity
+
+### Locked decisions
+
+- Capacity is unlimited until a Platform Admin configures a positive limit.
+- Accepted and pending human Agents and Supervisors consume capacity; the
+  management table itself lists Agents only.
+- Invitations reuse the existing pending membership flow and reserve capacity.
+- Platform Admins may edit Agent names and, after acceptance, routing-queue
+  memberships. They cannot edit email, role, password, or authentication users.
+- Lowering capacity below current usage is allowed and blocks additional
+  capacity-consuming invitations until usage falls below the limit.
+
+### Checklist
+
+- [x] Add protected tenant Agent-capacity storage and shared concurrent-write
+      enforcement.
+- [x] Add Platform Admin capacity, invite, edit, remove, and paginated Agent
+      interfaces with idempotent auditing.
+- [x] Add focused database coverage for capacity, authorization, invitations,
+      queue membership, removal, and audit state.
+- [ ] Synchronize database types and complete backend validation.
+- [ ] Add the Platform Agent management table, capacity state, and dialogs.
+- [ ] Complete frontend validation, merge backend before frontend, and verify
+      the DKR five-seat scenario on staging.
+
 ## Delivery log
 
-| Date       | Phase | Repository | Branch / commit                              | Migration                                                          | Validation                                                       | Environment | Notes                                                                                                                            |
-| ---------- | ----- | ---------- | -------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-08-10 | 1     | Backend    | `super-admin-foundation-backend` / `4a8fe3a` | `20260810175925_super_admin_foundation.sql`                        | Focused 35/35; full 498/498                                      | Local       | Schema, RPCs, RLS, audit storage, migration, and generated types pass.                                                           |
-| 2026-08-10 | 1     | Frontend   | `super-admin-foundation-ui` / `23b1be1`      | n/a                                                                | Focused 14/14; full 171/171; lint and build pass                 | Local       | Platform routes, tenant selector, summaries, and access auditing pass.                                                           |
-| 2026-08-10 | 1     | Backend    | `meta_vista_backend` / `fd31cc3`             | Applied remotely                                                   | Remote migration verified                                        | Staging     | Initial builder provisioned; revocation and reactivation verified.                                                               |
-| 2026-08-11 | 1     | Frontend   | `meta_vista_frontend` / `8f2af13`            | n/a                                                                | Browser acceptance scenario passed                               | Staging     | Added a loading guard so tenant switches never flash the old scope.                                                              |
-| 2026-08-11 | 2     | Backend    | `super-admin-reporting-backend` / `2457718`  | `20260811160347_platform_admin_reporting.sql`                      | Focused 20/20; full DB 518/518; CSV 3/3; Edge check passed       | Local       | Repository Deno validation was blocked by an external `esm.sh` 408; the new function passed against the same pinned npm package. |
-| 2026-08-11 | 2     | Frontend   | `super-admin-reporting-ui` / `f7f1312`       | n/a                                                                | Focused 8/8; full 179/179; types, lint and build pass            | Local       | Tenant route, UTC month selection, cancellation, and CSV states pass.                                                            |
-| 2026-08-11 | 2     | Backend    | `meta_vista_backend` / `d4a2d43`             | Applied by staging deployment                                      | Export endpoint returned authenticated CSV successfully          | Staging     | Tenant A July conversation export returned 6 rows; audit recording completed.                                                    |
-| 2026-08-11 | 2     | Frontend   | `meta_vista_frontend` / `06e6275`            | n/a                                                                | Browser smoke test passed                                        | Staging     | Tenant B June campaign export returned a valid empty CSV; tenant routing, UTC selector, and readable labels verified.            |
-| 2026-08-13 | 3     | Backend    | `scrum-109-super-admin-organization-backend` | `20260812161816_scrum_109_super_admin_organization_management.sql` | Focused 13/13; full DB 555/555; Deno lint/check pass             | Local       | Platform queue authorization, tenant isolation, membership validation, idempotent mutations, and audit history pass.             |
-| 2026-08-13 | 3     | Frontend   | `scrum-109-super-admin-organization-ui`      | n/a                                                                | Focused 6/6; full 197/197; types, lint and production build pass | Local       | Global selector, organization shell, queue management, read-only Agents, shared editor, and nested Reports pass.                 |
-| 2026-08-13 | 3     | Backend    | `meta_vista_backend` / `c31201e`             | Applied by staging deployment                                      | Platform queue and Agent RPCs loaded successfully                | Staging     | Backend was merged before frontend; protected queue lists and tenant summary are available.                                      |
-| 2026-08-13 | 3     | Frontend   | `meta_vista_frontend` / `404a9d5`            | n/a                                                                | Browser smoke test passed                                        | Staging     | The global selector opened Hamza_WABA; Overview, Queues, Agents, and Reports loaded in one tenant detail shell.                  |
-| 2026-08-14 | 4     | Backend    | `super-admin-waba-health-backend` / `05c0b46` | `20260813210246_super_admin_waba_health.sql`                       | Focused 24/24; quick and full validation pass                    | Local       | Health snapshots, webhook heartbeat, protected RPCs, audited actions, and synchronized database types pass.                      |
-| 2026-08-14 | 4     | Frontend   | `super-admin-waba-health-ui` / `d81c145`      | n/a                                                                | Focused 7/7; full 205/205; types, lint, and build pass           | Local       | Flat health list/detail routes, status filtering, three-action concurrency, cancellation, and translations pass.                 |
-| 2026-08-14 | 4     | Backend    | `meta_vista_backend` / `05c0b46`              | Applied by staging deployment                                      | Protected RPCs and authenticated action endpoint succeeded       | Staging     | Backend deployed before frontend; cached health and manual connection checks updated the live snapshot.                          |
+| Date       | Phase | Repository | Branch / commit                               | Migration                                                          | Validation                                                       | Environment | Notes                                                                                                                                |
+| ---------- | ----- | ---------- | --------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-08-10 | 1     | Backend    | `super-admin-foundation-backend` / `4a8fe3a`  | `20260810175925_super_admin_foundation.sql`                        | Focused 35/35; full 498/498                                      | Local       | Schema, RPCs, RLS, audit storage, migration, and generated types pass.                                                               |
+| 2026-08-10 | 1     | Frontend   | `super-admin-foundation-ui` / `23b1be1`       | n/a                                                                | Focused 14/14; full 171/171; lint and build pass                 | Local       | Platform routes, tenant selector, summaries, and access auditing pass.                                                               |
+| 2026-08-10 | 1     | Backend    | `meta_vista_backend` / `fd31cc3`              | Applied remotely                                                   | Remote migration verified                                        | Staging     | Initial builder provisioned; revocation and reactivation verified.                                                                   |
+| 2026-08-11 | 1     | Frontend   | `meta_vista_frontend` / `8f2af13`             | n/a                                                                | Browser acceptance scenario passed                               | Staging     | Added a loading guard so tenant switches never flash the old scope.                                                                  |
+| 2026-08-11 | 2     | Backend    | `super-admin-reporting-backend` / `2457718`   | `20260811160347_platform_admin_reporting.sql`                      | Focused 20/20; full DB 518/518; CSV 3/3; Edge check passed       | Local       | Repository Deno validation was blocked by an external `esm.sh` 408; the new function passed against the same pinned npm package.     |
+| 2026-08-11 | 2     | Frontend   | `super-admin-reporting-ui` / `f7f1312`        | n/a                                                                | Focused 8/8; full 179/179; types, lint and build pass            | Local       | Tenant route, UTC month selection, cancellation, and CSV states pass.                                                                |
+| 2026-08-11 | 2     | Backend    | `meta_vista_backend` / `d4a2d43`              | Applied by staging deployment                                      | Export endpoint returned authenticated CSV successfully          | Staging     | Tenant A July conversation export returned 6 rows; audit recording completed.                                                        |
+| 2026-08-11 | 2     | Frontend   | `meta_vista_frontend` / `06e6275`             | n/a                                                                | Browser smoke test passed                                        | Staging     | Tenant B June campaign export returned a valid empty CSV; tenant routing, UTC selector, and readable labels verified.                |
+| 2026-08-13 | 3     | Backend    | `scrum-109-super-admin-organization-backend`  | `20260812161816_scrum_109_super_admin_organization_management.sql` | Focused 13/13; full DB 555/555; Deno lint/check pass             | Local       | Platform queue authorization, tenant isolation, membership validation, idempotent mutations, and audit history pass.                 |
+| 2026-08-13 | 3     | Frontend   | `scrum-109-super-admin-organization-ui`       | n/a                                                                | Focused 6/6; full 197/197; types, lint and production build pass | Local       | Global selector, organization shell, queue management, read-only Agents, shared editor, and nested Reports pass.                     |
+| 2026-08-13 | 3     | Backend    | `meta_vista_backend` / `c31201e`              | Applied by staging deployment                                      | Platform queue and Agent RPCs loaded successfully                | Staging     | Backend was merged before frontend; protected queue lists and tenant summary are available.                                          |
+| 2026-08-13 | 3     | Frontend   | `meta_vista_frontend` / `404a9d5`             | n/a                                                                | Browser smoke test passed                                        | Staging     | The global selector opened Hamza_WABA; Overview, Queues, Agents, and Reports loaded in one tenant detail shell.                      |
+| 2026-08-14 | 4     | Backend    | `super-admin-waba-health-backend` / `05c0b46` | `20260813210246_super_admin_waba_health.sql`                       | Focused 24/24; quick and full validation pass                    | Local       | Health snapshots, webhook heartbeat, protected RPCs, audited actions, and synchronized database types pass.                          |
+| 2026-08-14 | 4     | Frontend   | `super-admin-waba-health-ui` / `d81c145`      | n/a                                                                | Focused 7/7; full 205/205; types, lint, and build pass           | Local       | Flat health list/detail routes, status filtering, three-action concurrency, cancellation, and translations pass.                     |
+| 2026-08-14 | 4     | Backend    | `meta_vista_backend` / `05c0b46`              | Applied by staging deployment                                      | Protected RPCs and authenticated action endpoint succeeded       | Staging     | Backend deployed before frontend; cached health and manual connection checks updated the live snapshot.                              |
 | 2026-08-14 | 4     | Frontend   | `meta_vista_frontend` / `d81c145`             | n/a                                                                | Browser smoke test passed                                        | Staging     | Healthy and Disconnected accounts, detail sections, actions, filtering, and tenant switching passed; no live Warning fixture exists. |
 
 ## Deferred

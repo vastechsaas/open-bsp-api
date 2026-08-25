@@ -62,8 +62,8 @@ select results_eq(
       'b1000000-0000-4000-8000-000000000001', 1, 10, null
     )
   $$,
-  $$ values ('Ali'::text), ('Sara'::text) $$,
-  'Platform Admin lists accepted tenant Agents in deterministic order'
+  $$ values ('Ali'::text), ('Pending Agent'::text), ('Sara'::text) $$,
+  'Platform Admin lists accepted and pending tenant Agents in deterministic order'
 );
 
 select results_eq(
