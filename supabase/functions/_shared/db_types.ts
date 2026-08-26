@@ -579,6 +579,38 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_assignment_presence: {
+        Row: {
+          agent_id: string
+          available: boolean
+          last_heartbeat_at: string | null
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id: string
+          available?: boolean
+          last_heartbeat_at?: string | null
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string
+          available?: boolean
+          last_heartbeat_at?: string | null
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_assignment_presence_organization_id_agent_id_fkey"
+            columns: ["organization_id", "agent_id"]
+            isOneToOne: true
+            referencedRelation: "agents"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
       agents: {
         Row: {
           ai: boolean
@@ -1253,6 +1285,90 @@ export type Database = {
           },
         ]
       }
+      conversation_assignment_events: {
+        Row: {
+          actor_agent_id: string | null
+          assigned_agent_id: string | null
+          assigned_agent_name: string | null
+          conversation_id: string
+          created_at: string
+          id: string
+          organization_id: string
+          previous_agent_id: string | null
+          previous_agent_name: string | null
+          routing_queue_id: string | null
+          routing_queue_name: string | null
+          source: string
+          strategy: string
+        }
+        Insert: {
+          actor_agent_id?: string | null
+          assigned_agent_id?: string | null
+          assigned_agent_name?: string | null
+          conversation_id: string
+          created_at?: string
+          id?: string
+          organization_id: string
+          previous_agent_id?: string | null
+          previous_agent_name?: string | null
+          routing_queue_id?: string | null
+          routing_queue_name?: string | null
+          source: string
+          strategy: string
+        }
+        Update: {
+          actor_agent_id?: string | null
+          assigned_agent_id?: string | null
+          assigned_agent_name?: string | null
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          organization_id?: string
+          previous_agent_id?: string | null
+          previous_agent_name?: string | null
+          routing_queue_id?: string | null
+          routing_queue_name?: string | null
+          source?: string
+          strategy?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_assignment_event_organization_id_actor_agent__fkey"
+            columns: ["organization_id", "actor_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "conversation_assignment_event_organization_id_assigned_age_fkey"
+            columns: ["organization_id", "assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "conversation_assignment_event_organization_id_conversation_fkey"
+            columns: ["organization_id", "conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "conversation_assignment_event_organization_id_previous_age_fkey"
+            columns: ["organization_id", "previous_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "conversation_assignment_event_organization_id_routing_queu_fkey"
+            columns: ["organization_id", "routing_queue_id"]
+            isOneToOne: false
+            referencedRelation: "routing_queues"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
       conversation_routing_events: {
         Row: {
           actor_agent_id: string | null
@@ -1730,6 +1846,7 @@ export type Database = {
       }
       organization_automation_settings: {
         Row: {
+          auto_assign_conversations: boolean
           auto_save_whatsapp_contacts: boolean
           organization_id: string
           updated_at: string
@@ -1737,6 +1854,7 @@ export type Database = {
           updated_by_user_id: string | null
         }
         Insert: {
+          auto_assign_conversations?: boolean
           auto_save_whatsapp_contacts?: boolean
           organization_id: string
           updated_at?: string
@@ -1744,6 +1862,7 @@ export type Database = {
           updated_by_user_id?: string | null
         }
         Update: {
+          auto_assign_conversations?: boolean
           auto_save_whatsapp_contacts?: boolean
           organization_id?: string
           updated_at?: string
@@ -2011,6 +2130,42 @@ export type Database = {
           },
         ]
       }
+      routing_queue_assignment_state: {
+        Row: {
+          last_assigned_agent_id: string | null
+          organization_id: string
+          routing_queue_id: string
+          updated_at: string
+        }
+        Insert: {
+          last_assigned_agent_id?: string | null
+          organization_id: string
+          routing_queue_id: string
+          updated_at?: string
+        }
+        Update: {
+          last_assigned_agent_id?: string | null
+          organization_id?: string
+          routing_queue_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "routing_queue_assignment_stat_organization_id_last_assigne_fkey"
+            columns: ["organization_id", "last_assigned_agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "routing_queue_assignment_stat_organization_id_routing_queu_fkey"
+            columns: ["organization_id", "routing_queue_id"]
+            isOneToOne: true
+            referencedRelation: "routing_queues"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
       routing_queue_members: {
         Row: {
           agent_id: string
@@ -2049,6 +2204,7 @@ export type Database = {
       }
       routing_queues: {
         Row: {
+          assignment_strategy: string
           created_at: string
           id: string
           name: string
@@ -2057,6 +2213,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          assignment_strategy?: string
           created_at?: string
           id?: string
           name: string
@@ -2065,6 +2222,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          assignment_strategy?: string
           created_at?: string
           id?: string
           name?: string
@@ -2481,6 +2639,7 @@ export type Database = {
           p_request_id?: string
         }
         Returns: {
+          assignment_strategy: string
           created_at: string
           id: string
           name: string
@@ -2554,6 +2713,7 @@ export type Database = {
           p_organization_id: string
         }
         Returns: {
+          assignment_strategy: string
           created_at: string
           id: string
           name: string
@@ -2696,9 +2856,19 @@ export type Database = {
           unassigned_conversations: number
         }[]
       }
+      get_my_assignment_availability: {
+        Args: { p_organization_id: string }
+        Returns: {
+          available: boolean
+          eligible: boolean
+          last_heartbeat_at: string
+          updated_at: string
+        }[]
+      }
       get_organization_automation_settings: {
         Args: { p_organization_id: string }
         Returns: {
+          auto_assign_conversations: boolean
           auto_save_whatsapp_contacts: boolean
           organization_id: string
           updated_at: string
@@ -2729,6 +2899,7 @@ export type Database = {
       get_platform_organization_automation_settings: {
         Args: { p_organization_id: string }
         Returns: {
+          auto_assign_conversations: boolean
           auto_save_whatsapp_contacts: boolean
           organization_id: string
           updated_at: string
@@ -2827,6 +2998,15 @@ export type Database = {
       get_unread_notification_count: {
         Args: { p_organization_id: string }
         Returns: number
+      }
+      heartbeat_my_assignment_availability: {
+        Args: { p_organization_id: string }
+        Returns: {
+          available: boolean
+          eligible: boolean
+          last_heartbeat_at: string
+          updated_at: string
+        }[]
       }
       init_data: {
         Args: {
@@ -3135,7 +3315,9 @@ export type Database = {
           p_status?: string
         }
         Returns: {
+          assignment_strategy: string
           created_at: string
+          eligible_member_count: number
           id: string
           member_count: number
           member_ids: string[]
@@ -3222,7 +3404,9 @@ export type Database = {
           p_search?: string
         }
         Returns: {
+          assignment_strategy: string
           created_at: string
+          eligible_member_count: number
           id: string
           member_count: number
           member_ids: string[]
@@ -3351,6 +3535,15 @@ export type Database = {
           run_variables: Json
           run_waiting_for: string
         }[]
+      }
+      process_auto_assignment_backlog: {
+        Args: {
+          p_limit?: number
+          p_organization_id?: string
+          p_routing_queue_id?: string
+          p_source?: string
+        }
+        Returns: number
       }
       publish_chatbot_flow_draft: {
         Args: {
@@ -3493,6 +3686,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      set_my_assignment_availability: {
+        Args: { p_available: boolean; p_organization_id: string }
+        Returns: {
+          available: boolean
+          eligible: boolean
+          last_heartbeat_at: string
+          updated_at: string
+        }[]
+      }
       start_campaign: {
         Args: { p_campaign_id: string; p_organization_id: string }
         Returns: number
@@ -3512,6 +3714,31 @@ export type Database = {
           p_text: string
         }
         Returns: Json
+      }
+      try_auto_assign_conversation: {
+        Args: { p_conversation_id: string; p_source?: string }
+        Returns: {
+          assigned_agent_id: string | null
+          contact_address: string | null
+          created_at: string
+          extra: Json | null
+          group_address: string | null
+          id: string
+          name: string | null
+          organization_address: string
+          organization_id: string
+          routed_at: string | null
+          routing_queue_id: string | null
+          service: Database["public"]["Enums"]["service"]
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "conversations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       unassign_conversation_from_me: {
         Args: { p_conversation_id: string }
@@ -3538,9 +3765,27 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_organization_auto_assignment: {
+        Args: { p_enabled: boolean; p_organization_id: string }
+        Returns: {
+          auto_assign_conversations: boolean
+          auto_save_whatsapp_contacts: boolean
+          organization_id: string
+          updated_at: string
+          updated_by_scope: string
+          updated_by_user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organization_automation_settings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_organization_contact_auto_save: {
         Args: { p_enabled: boolean; p_organization_id: string }
         Returns: {
+          auto_assign_conversations: boolean
           auto_save_whatsapp_contacts: boolean
           organization_id: string
           updated_at: string
@@ -3593,6 +3838,27 @@ export type Database = {
           used_agent_seats: number
         }[]
       }
+      update_platform_organization_auto_assignment: {
+        Args: {
+          p_enabled: boolean
+          p_organization_id: string
+          p_request_id: string
+        }
+        Returns: {
+          auto_assign_conversations: boolean
+          auto_save_whatsapp_contacts: boolean
+          organization_id: string
+          updated_at: string
+          updated_by_scope: string
+          updated_by_user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organization_automation_settings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       update_platform_organization_contact_auto_save: {
         Args: {
           p_enabled: boolean
@@ -3600,6 +3866,7 @@ export type Database = {
           p_request_id: string
         }
         Returns: {
+          auto_assign_conversations: boolean
           auto_save_whatsapp_contacts: boolean
           organization_id: string
           updated_at: string
@@ -3622,6 +3889,30 @@ export type Database = {
           p_status: string
         }
         Returns: {
+          assignment_strategy: string
+          created_at: string
+          id: string
+          name: string
+          organization_id: string
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "routing_queues"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_platform_routing_queue_assignment_strategy: {
+        Args: {
+          p_organization_id: string
+          p_request_id: string
+          p_routing_queue_id: string
+          p_strategy: string
+        }
+        Returns: {
+          assignment_strategy: string
           created_at: string
           id: string
           name: string
@@ -3665,6 +3956,25 @@ export type Database = {
           p_status: string
         }
         Returns: {
+          assignment_strategy: string
+          created_at: string
+          id: string
+          name: string
+          organization_id: string
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "routing_queues"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_routing_queue_assignment_strategy: {
+        Args: { p_routing_queue_id: string; p_strategy: string }
+        Returns: {
+          assignment_strategy: string
           created_at: string
           id: string
           name: string

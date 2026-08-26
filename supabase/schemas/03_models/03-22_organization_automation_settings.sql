@@ -1,6 +1,7 @@
 create table public.organization_automation_settings (
   organization_id uuid not null,
   auto_save_whatsapp_contacts boolean default true not null,
+  auto_assign_conversations boolean default false not null,
   updated_at timestamp with time zone default now() not null,
   updated_by_user_id uuid,
   updated_by_scope text default 'system' not null

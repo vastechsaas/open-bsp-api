@@ -108,6 +108,22 @@ export type PrivateNotePart = {
   artifacts?: never;
 };
 
+export type AssignmentEventPart = {
+  type: "text";
+  kind: "assignment_event";
+  text: string;
+  assignment_event: {
+    id: string;
+    agent_id: string;
+    agent_name: string;
+    queue_id: string;
+    queue_name: string;
+    strategy: "round_robin";
+    source: string;
+  };
+  artifacts?: never;
+};
+
 // File based
 
 export const MediaTypes = [
@@ -209,7 +225,8 @@ export type Part =
   | TextPart
   | DataPart
   | FilePart
-  | SharePart;
+  | SharePart
+  | AssignmentEventPart;
 
 // Parts type is not used yet. It is a proof of concept.
 export type Parts = {

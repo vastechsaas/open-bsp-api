@@ -262,6 +262,11 @@ begin
     and member.routing_queue_id = destination_queue.id
     and member.agent_id is distinct from author_agent_id;
 
+  updated_conversation := public.try_auto_assign_conversation(
+    updated_conversation.id,
+    'queue_transfer'
+  );
+
   return jsonb_build_object(
     'conversation', to_jsonb(updated_conversation),
     'note', to_jsonb(note),

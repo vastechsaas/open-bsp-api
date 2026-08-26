@@ -1,10 +1,10 @@
 # Super Admin development
 
-- **Status:** Phase 5 Agent management and capacity in development
+- **Status:** Phase 6 Round Robin auto-assignment in development
 - **Last updated:** 2026-08-26
 - **Audience:** Internal platform builders
-- **Backend branch:** `scrum-112-platform-agent-management-backend`
-- **Frontend branch:** `scrum-112-platform-agent-management-ui`
+- **Backend branch:** `scrum-113-auto-assignment-backend`
+- **Frontend branch:** `scrum-113-auto-assignment-ui`
 
 ## Purpose
 
@@ -42,8 +42,26 @@ platform authorization separate from the organization roles `owner`, `admin`,
 | 3     | Selected organization management  | Complete    | The global tenant selector opens a reusable detail shell where Platform Admins can inspect the tenant and manage routing queues with auditing. |
 | 4     | Selected-tenant WABA Health       | Complete    | Platform Admins can diagnose each tenant WhatsApp account and run protected, audited health, profile-refresh, and template-sync actions.       |
 | 5     | Agent management and capacity     | In progress | Platform Admins can configure tenant Agent capacity and manage pending/accepted Agents through protected, audited operations.                  |
-| 6     | Read-only tenant modules          | Planned     | Contacts, Conversations, and other tenant modules reuse presentation components with explicit platform-scoped data adapters.                   |
-| 7     | Additional administrative actions | Planned     | Individually approved platform actions have explicit permissions, confirmation, audit history, and rollback/error behavior.                    |
+| 6     | Round Robin auto-assignment       | In progress | Routed Pending conversations are assigned atomically to available queue-member Agents with history, notifications, and recovery.               |
+| 7     | Read-only tenant modules          | Planned     | Contacts, Conversations, and other tenant modules reuse presentation components with explicit platform-scoped data adapters.                   |
+| 8     | Additional administrative actions | Planned     | Individually approved platform actions have explicit permissions, confirmation, audit history, and rollback/error behavior.                    |
+
+## Phase 6 — Round Robin auto-assignment
+
+- **Jira:** SCRUM-113
+- **Migration:** `20260826111651_scrum_113_auto_assignment.sql`
+- Organization automation and new queues remain disabled/manual by default.
+- Eligible Agents explicitly select Available and maintain a 30-second
+  heartbeat; eligibility expires after two minutes without changing existing
+  assignments.
+- The database resolver locks each conversation and queue cursor, assigns only
+  accepted available queue members, and atomically records history, a timeline
+  event, and a notification.
+- Chatbot handoff, queue transfer, manual unassignment, setting changes, Agent
+  availability, and a one-minute recovery job all use the same resolver.
+- Capacity, least-loaded/weighted strategies, schedules, skills, fallbacks,
+  offline redistribution, reopen policy, analytics, and SLA escalation remain
+  deferred.
 
 ## Phase 1 — Foundation and tenant selector
 

@@ -3,6 +3,7 @@ create table public.routing_queues (
   id uuid default gen_random_uuid() not null,
   name text not null,
   status text default 'active'::text not null,
+  assignment_strategy text default 'manual'::text not null,
   created_at timestamp with time zone default now() not null,
   updated_at timestamp with time zone default now() not null
 );
@@ -27,6 +28,10 @@ check (char_length(btrim(name)) between 1 and 80);
 alter table only public.routing_queues
 add constraint routing_queues_status_check
 check (status in ('active', 'archived'));
+
+alter table only public.routing_queues
+add constraint routing_queues_assignment_strategy_check
+check (assignment_strategy in ('manual', 'round_robin'));
 
 create unique index routing_queues_organization_name_key
 on public.routing_queues (organization_id, lower(name));
