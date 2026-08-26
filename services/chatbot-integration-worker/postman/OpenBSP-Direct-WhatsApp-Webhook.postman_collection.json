@@ -1,0 +1,57 @@
+{
+  "info": {
+    "_postman_id": "85854b52-c9ba-4cee-8b26-a0b1d881bbaa",
+    "name": "OpenBSP Direct WhatsApp Webhook Test",
+    "description": "Tests a Meta WhatsApp webhook payload directly against OpenBSP before publishing the same raw body and signature through CloudAMQP.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "POST WhatsApp webhook",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const CryptoJS = pm.require('npm:crypto-js@4.2.0');",
+              "const rawBody = pm.environment.get('meta_raw_body');",
+              "const appSecret = pm.environment.get('meta_app_secret');",
+              "if (!rawBody || !appSecret) throw new Error('meta_raw_body and meta_app_secret are required');",
+              "JSON.parse(rawBody);",
+              "const signature = CryptoJS.HmacSHA256(rawBody, appSecret).toString(CryptoJS.enc.Hex);",
+              "pm.variables.set('generated_meta_signature', `sha256=${signature}`);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('OpenBSP accepted the HTTP request', function () { pm.response.to.have.status(200); });",
+              "console.log('A 200 can also represent an ignored invalid webhook. Confirm Persisted messages in Edge Function logs.');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          {
+            "key": "X-Hub-Signature-256",
+            "value": "{{generated_meta_signature}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{{meta_raw_body}}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{openbsp_functions_base_url}}/whatsapp-webhook?app_id={{meta_app_id}}",
+        "description": "The body is sent exactly as stored in meta_raw_body. Use a unique WAMID and current timestamp for a synthetic staging test. Confirm persistence in the whatsapp-webhook logs."
+      }
+    }
+  ]
+}

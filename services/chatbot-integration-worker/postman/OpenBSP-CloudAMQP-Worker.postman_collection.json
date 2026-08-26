@@ -1,0 +1,176 @@
+{
+  "info": {
+    "_postman_id": "a76f7594-9693-47d7-a777-4baa03dc61cc",
+    "name": "OpenBSP CloudAMQP Worker",
+    "description": "Publishes PHP-style integration events to CloudAMQP. Run the incoming customer webhook before the chatbot reply.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "basic",
+    "basic": [
+      {
+        "key": "username",
+        "value": "{{cloudamqp_username}}",
+        "type": "string"
+      },
+      { "key": "password", "value": "{{cloudamqp_password}}", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "exchange", "value": "openbsp.integration" },
+    { "key": "routing_key", "value": "chatbot.event.v1" },
+    { "key": "integration_key", "value": "psdf" },
+    { "key": "event_id_override", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Publish incoming customer webhook",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const eventId = pm.collectionVariables.get('event_id_override') || pm.variables.replaceIn('{{$guid}}');",
+              "const rawBody = pm.environment.get('meta_raw_body');",
+              "if (!rawBody) { throw new Error('meta_raw_body is required and must be the exact raw Meta webhook body'); }",
+              "const event = {",
+              "  version: 1,",
+              "  event_id: eventId,",
+              "  event_type: 'whatsapp_webhook',",
+              "  integration_key: pm.collectionVariables.get('integration_key'),",
+              "  occurred_at: new Date().toISOString(),",
+              "  payload: {",
+              "    raw_body: rawBody,",
+              "    x_hub_signature_256: pm.environment.get('meta_signature'),",
+              "    app_id: pm.environment.get('meta_app_id')",
+              "  }",
+              "};",
+              "pm.variables.set('rabbit_request_body', JSON.stringify({",
+              "  properties: { delivery_mode: 2, content_type: 'application/json', message_id: eventId, type: event.event_type },",
+              "  routing_key: pm.collectionVariables.get('routing_key'),",
+              "  payload: JSON.stringify(event),",
+              "  payload_encoding: 'string'",
+              "}));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('CloudAMQP accepted and routed the event', function () {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(pm.response.json().routed).to.eql(true);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{{rabbit_request_body}}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{cloudamqp_http_base}}/api/exchanges/{{cloudamqp_vhost}}/{{exchange}}/publish",
+        "description": "Requires the exact raw Meta body and its matching X-Hub-Signature-256. A synthetic body with a real signature will fail verification."
+      }
+    },
+    {
+      "name": "2. Publish chatbot reply",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const eventId = pm.collectionVariables.get('event_id_override') || pm.variables.replaceIn('{{$guid}}');",
+              "const payload = {",
+              "  phone_number_id: pm.environment.get('phone_number_id'),",
+              "  recipient: pm.environment.get('customer_number'),",
+              "  wamid: pm.environment.get('outgoing_wamid'),",
+              "  sent_at: new Date().toISOString(),",
+              "  message: { type: 'text', text: { body: pm.environment.get('chatbot_reply_text') || 'Testing chatbot reply through CloudAMQP' } }",
+              "};",
+              "const replyTo = pm.environment.get('incoming_wamid');",
+              "if (replyTo) payload.reply_to_wamid = replyTo;",
+              "const event = { version: 1, event_id: eventId, event_type: 'chatbot_reply', integration_key: pm.collectionVariables.get('integration_key'), occurred_at: new Date().toISOString(), payload };",
+              "pm.variables.set('rabbit_request_body', JSON.stringify({",
+              "  properties: { delivery_mode: 2, content_type: 'application/json', message_id: eventId, type: event.event_type },",
+              "  routing_key: pm.collectionVariables.get('routing_key'),",
+              "  payload: JSON.stringify(event),",
+              "  payload_encoding: 'string'",
+              "}));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('CloudAMQP accepted and routed the event', function () {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(pm.response.json().routed).to.eql(true);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{{rabbit_request_body}}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{cloudamqp_http_base}}/api/exchanges/{{cloudamqp_vhost}}/{{exchange}}/publish",
+        "description": "Publish only after Meta returns the real outgoing WAMID. reply_to_wamid is omitted when incoming_wamid is empty."
+      }
+    },
+    {
+      "name": "3. Publish malformed event (DLQ test)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const eventId = pm.variables.replaceIn('{{$guid}}');",
+              "const event = { version: 99, event_id: eventId, event_type: 'chatbot_reply', integration_key: pm.collectionVariables.get('integration_key'), occurred_at: new Date().toISOString(), payload: {} };",
+              "pm.variables.set('rabbit_request_body', JSON.stringify({ properties: { delivery_mode: 2, content_type: 'application/json', message_id: eventId }, routing_key: pm.collectionVariables.get('routing_key'), payload: JSON.stringify(event), payload_encoding: 'string' }));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Malformed event was routed to the worker', function () {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(pm.response.json().routed).to.eql(true);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{{rabbit_request_body}}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{cloudamqp_http_base}}/api/exchanges/{{cloudamqp_vhost}}/{{exchange}}/publish",
+        "description": "The HTTP request succeeds because RabbitMQ routes it, then the worker rejects version 99 and publishes it to the DLQ."
+      }
+    }
+  ]
+}
