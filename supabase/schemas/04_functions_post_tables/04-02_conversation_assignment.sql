@@ -86,6 +86,10 @@ begin
   returning c.* into updated_conversation;
 
   if found then
+    updated_conversation := public.try_auto_assign_conversation(
+      updated_conversation.id,
+      'manual_unassignment'
+    );
     return updated_conversation;
   end if;
 
@@ -333,6 +337,13 @@ begin
   set assigned_agent_id = p_agent_id
   where id = p_conversation_id
   returning * into target_conversation;
+
+  if p_agent_id is null then
+    target_conversation := public.try_auto_assign_conversation(
+      target_conversation.id,
+      'manual_unassignment'
+    );
+  end if;
 
   if p_agent_id is not null
     and p_agent_id is distinct from previous_assigned_agent_id

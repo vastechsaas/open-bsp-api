@@ -82,8 +82,10 @@ create function public.list_routing_queues_page(
   organization_id uuid,
   name text,
   status text,
+  assignment_strategy text,
   member_ids uuid[],
   member_count bigint,
+  eligible_member_count bigint,
   created_at timestamp with time zone,
   updated_at timestamp with time zone,
   total_count bigint
@@ -125,8 +127,10 @@ begin
     queue.organization_id,
     queue.name,
     queue.status,
+    queue.assignment_strategy,
     coalesce(members.member_ids, array[]::uuid[]),
     coalesce(members.member_count, 0),
+    coalesce(members.eligible_member_count, 0),
     queue.created_at,
     queue.updated_at,
     count(*) over() as total_count
@@ -134,8 +138,15 @@ begin
   left join lateral (
     select
       array_agg(member.agent_id order by member.agent_id) as member_ids,
-      count(*) as member_count
+      count(*) as member_count,
+      count(*) filter (
+        where presence.available
+          and presence.last_heartbeat_at >= clock_timestamp() - interval '2 minutes'
+      ) as eligible_member_count
     from public.routing_queue_members member
+    left join public.agent_assignment_presence presence
+      on presence.organization_id = member.organization_id
+      and presence.agent_id = member.agent_id
     where member.organization_id = queue.organization_id
       and member.routing_queue_id = queue.id
   ) members on true
@@ -403,6 +414,11 @@ begin
     route_time
   );
 
+  target_conversation := public.try_auto_assign_conversation(
+    target_conversation.id,
+    'chatbot_handoff'
+  );
+
   return target_conversation;
 end;
 $$;
@@ -432,6 +448,7 @@ as $$
     'id', queue.id,
     'name', queue.name,
     'status', queue.status,
+    'assignment_strategy', queue.assignment_strategy,
     'agent_ids', coalesce(
       (
         select jsonb_agg(member.agent_id order by member.agent_id)
@@ -457,10 +474,12 @@ create function public.list_platform_routing_queues_page(
   organization_id uuid,
   name text,
   status text,
+  assignment_strategy text,
   member_ids uuid[],
   member_names text[],
   member_pictures text[],
   member_count bigint,
+  eligible_member_count bigint,
   created_at timestamp with time zone,
   updated_at timestamp with time zone,
   total_count bigint
@@ -509,10 +528,12 @@ begin
     queue.organization_id,
     queue.name,
     queue.status,
+    queue.assignment_strategy,
     coalesce(members.member_ids, array[]::uuid[]),
     coalesce(members.member_names, array[]::text[]),
     coalesce(members.member_pictures, array[]::text[]),
     coalesce(members.member_count, 0),
+    coalesce(members.eligible_member_count, 0),
     queue.created_at,
     queue.updated_at,
     count(*) over()
@@ -524,10 +545,17 @@ begin
       array_agg(coalesce(agent.picture, '') order by lower(agent.name), agent.id)
         as member_pictures,
       count(*) as member_count
+      , count(*) filter (
+        where presence.available
+          and presence.last_heartbeat_at >= clock_timestamp() - interval '2 minutes'
+      ) as eligible_member_count
     from public.routing_queue_members member
     join public.agents agent
       on agent.organization_id = member.organization_id
       and agent.id = member.agent_id
+    left join public.agent_assignment_presence presence
+      on presence.organization_id = member.organization_id
+      and presence.agent_id = member.agent_id
     where member.organization_id = queue.organization_id
       and member.routing_queue_id = queue.id
   ) members on true
