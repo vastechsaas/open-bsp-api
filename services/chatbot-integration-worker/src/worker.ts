@@ -7,6 +7,66 @@ import { defaultTopology, type QueueTopology } from "./topology.js";
 
 export type ForwardEvent = (event: IntegrationEvent) => Promise<ForwardResult>;
 
+type WebhookSummary = {
+  phone_number_ids: string[];
+  messages_count: number;
+  statuses_count: number;
+  message_types: string[];
+  message_wamids: string[];
+};
+
+export function summarizeWhatsAppWebhook(rawBody: string): WebhookSummary {
+  const summary: WebhookSummary = {
+    phone_number_ids: [],
+    messages_count: 0,
+    statuses_count: 0,
+    message_types: [],
+    message_wamids: [],
+  };
+
+  const body = JSON.parse(rawBody) as {
+    entry?: Array<{
+      changes?: Array<{
+        value?: {
+          metadata?: { phone_number_id?: unknown };
+          messages?: Array<{ id?: unknown; type?: unknown }>;
+          statuses?: unknown[];
+        };
+      }>;
+    }>;
+  };
+
+  for (const entry of body.entry ?? []) {
+    for (const change of entry.changes ?? []) {
+      const value = change.value;
+      if (!value) continue;
+
+      if (typeof value.metadata?.phone_number_id === "string") {
+        summary.phone_number_ids.push(value.metadata.phone_number_id);
+      }
+
+      const messages = Array.isArray(value.messages) ? value.messages : [];
+      const statuses = Array.isArray(value.statuses) ? value.statuses : [];
+      summary.messages_count += messages.length;
+      summary.statuses_count += statuses.length;
+
+      for (const message of messages) {
+        if (typeof message.type === "string") {
+          summary.message_types.push(message.type);
+        }
+        if (typeof message.id === "string") {
+          summary.message_wamids.push(message.id);
+        }
+      }
+    }
+  }
+
+  summary.phone_number_ids = [...new Set(summary.phone_number_ids)];
+  summary.message_types = [...new Set(summary.message_types)];
+  summary.message_wamids = [...new Set(summary.message_wamids)];
+  return summary;
+}
+
 function failureRecord(
   message: ConsumeMessage,
   reason: string,
@@ -122,6 +182,14 @@ export function createMessageHandler({
         state.deadLettered += 1;
         state.lastFailureAt = new Date().toISOString();
         return;
+      }
+
+      if (parsed.data.event_type === "whatsapp_webhook") {
+        logger.info("WhatsApp webhook event received from queue", {
+          event_id: parsed.data.event_id,
+          integration_key: parsed.data.integration_key,
+          ...summarizeWhatsAppWebhook(parsed.data.payload.raw_body),
+        });
       }
 
       const result = await forward(parsed.data);

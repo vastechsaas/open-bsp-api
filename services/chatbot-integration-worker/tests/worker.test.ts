@@ -3,7 +3,8 @@ import test from "node:test";
 import type { ConfirmChannel, ConsumeMessage } from "amqplib";
 import { createWorkerState } from "../src/state.js";
 import { createMessageHandler } from "../src/worker.js";
-import { replyEvent, silentLogger } from "./fixtures.js";
+import type { LogFields } from "../src/logger.js";
+import { replyEvent, silentLogger, webhookEvent } from "./fixtures.js";
 
 function message(body: unknown): ConsumeMessage {
   return {
@@ -144,4 +145,60 @@ test("dead-letters an event type disabled for this worker instance", async () =>
   assert.equal(forwarded, false);
   assert.equal(calls.publish, 1);
   assert.equal(calls.ack, 1);
+});
+
+test("logs a safe summary of queued WhatsApp webhook contents", async () => {
+  const { channel } = channelMock();
+  const infoLogs: Array<{ message: string; fields?: LogFields }> = [];
+  const logger = {
+    ...silentLogger,
+    info(message: string, fields?: LogFields) {
+      infoLogs.push({ message, fields });
+    },
+  };
+  const event = {
+    ...webhookEvent,
+    payload: {
+      ...webhookEvent.payload,
+      raw_body: JSON.stringify({
+        object: "whatsapp_business_account",
+        entry: [{
+          changes: [{
+            value: {
+              metadata: { phone_number_id: "1064550806750058" },
+              messages: [{ id: "wamid.incoming-1", type: "text" }],
+            },
+          }, {
+            value: {
+              metadata: { phone_number_id: "1064550806750058" },
+              statuses: [{ id: "wamid.outgoing-1", status: "delivered" }],
+            },
+          }],
+        }],
+      }),
+    },
+  };
+
+  await createMessageHandler({
+    channel,
+    logger,
+    state: createWorkerState(),
+    forward: () =>
+      Promise.resolve({ outcome: "success", status: 200, attempts: 1 }),
+  })(message(event));
+
+  assert.deepEqual(infoLogs, [{
+    message: "WhatsApp webhook event received from queue",
+    fields: {
+      event_id: webhookEvent.event_id,
+      integration_key: "psdf",
+      phone_number_ids: ["1064550806750058"],
+      messages_count: 1,
+      statuses_count: 1,
+      message_types: ["text"],
+      message_wamids: ["wamid.incoming-1"],
+    },
+  }]);
+  assert.equal(JSON.stringify(infoLogs).includes("whatsapp_business_account"), false);
+  assert.equal(JSON.stringify(infoLogs).includes("sha256="), false);
 });
