@@ -1,8 +1,8 @@
 # Chatbot integration worker
 
 Long-running CloudAMQP consumer that reliably forwards PHP chatbot events to the
-existing OpenBSP Edge Functions. It never sends messages to Meta and never
-writes directly to the OpenBSP database.
+existing OpenBSP Edge Functions. For development diagnostics, it stores the
+exact queue payload in Supabase before parsing or forwarding it.
 
 ## Contract
 
@@ -49,6 +49,8 @@ docker run --env-file .env -p 8080:8080 openbsp-chatbot-worker
 ```
 
 Copy `.env.example` to `.env` and supply real secrets outside source control.
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are used to insert the untouched
+queue message into `chatbot_integration_raw_events` before processing.
 `OPENBSP_ACCOUNT_CONFIG_JSON` maps the public `integration_key` to its expected
 Phone Number ID, Meta App ID, chatbot identity and tenant API key.
 

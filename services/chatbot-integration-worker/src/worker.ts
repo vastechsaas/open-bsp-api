@@ -2,6 +2,7 @@ import type { ConfirmChannel, ConsumeMessage } from "amqplib";
 import { type IntegrationEvent, integrationEventSchema } from "./contracts.js";
 import type { ForwardResult } from "./forwarder.js";
 import type { Logger } from "./logger.js";
+import type { StoreRawEvent } from "./raw-event-store.js";
 import type { WorkerState } from "./state.js";
 import { defaultTopology, type QueueTopology } from "./topology.js";
 
@@ -126,6 +127,7 @@ export function createMessageHandler({
     "whatsapp_webhook",
     "chatbot_reply",
   ]),
+  storeRawEvent = () => Promise.resolve(),
 }: {
   channel: ConfirmChannel;
   forward: ForwardEvent;
@@ -133,14 +135,18 @@ export function createMessageHandler({
   state: WorkerState;
   topology?: QueueTopology;
   acceptedEventTypes?: ReadonlySet<IntegrationEvent["event_type"]>;
+  storeRawEvent?: StoreRawEvent;
 }) {
   return async (message: ConsumeMessage | null) => {
     if (!message) return;
     state.inFlight = true;
     try {
+      const rawPayload = message.content.toString("utf8");
+      await storeRawEvent(rawPayload);
+
       let input: unknown;
       try {
-        input = JSON.parse(message.content.toString("utf8"));
+        input = JSON.parse(rawPayload);
       } catch {
         await deadLetter(
           channel,

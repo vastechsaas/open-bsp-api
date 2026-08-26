@@ -4,6 +4,8 @@ import { defaultTopology, type QueueTopology } from "./topology.js";
 
 export type WorkerConfig = {
   cloudAmqpUrl: string;
+  supabaseUrl: string;
+  supabaseServiceRoleKey: string;
   functionsBaseUrl: string;
   accounts: Record<string, AccountConfig>;
   port: number;
@@ -17,6 +19,8 @@ const environmentSchema = z.object({
     (value) => value.startsWith("amqp://") || value.startsWith("amqps://"),
     "CLOUDAMQP_URL must use amqp:// or amqps://",
   ),
+  SUPABASE_URL: z.string().url(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   OPENBSP_FUNCTIONS_BASE_URL: z.string().url(),
   OPENBSP_ACCOUNT_CONFIG_JSON: z.string().min(2),
   PORT: z.coerce.number().int().min(1).max(65535).default(8080),
@@ -63,6 +67,8 @@ export function loadConfig(
 
   return {
     cloudAmqpUrl: parsed.CLOUDAMQP_URL,
+    supabaseUrl: parsed.SUPABASE_URL,
+    supabaseServiceRoleKey: parsed.SUPABASE_SERVICE_ROLE_KEY,
     functionsBaseUrl: parsed.OPENBSP_FUNCTIONS_BASE_URL.replace(/\/$/, ""),
     accounts,
     port: parsed.PORT,

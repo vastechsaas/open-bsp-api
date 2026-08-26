@@ -202,3 +202,49 @@ test("logs a safe summary of queued WhatsApp webhook contents", async () => {
   assert.equal(JSON.stringify(infoLogs).includes("whatsapp_business_account"), false);
   assert.equal(JSON.stringify(infoLogs).includes("sha256="), false);
 });
+
+test("stores the untouched queue payload before parsing and forwarding", async () => {
+  const { channel, calls } = channelMock();
+  const rawPayload = `${JSON.stringify(replyEvent)}\n`;
+  const order: string[] = [];
+  let storedPayload = "";
+
+  await createMessageHandler({
+    channel,
+    logger: silentLogger,
+    state: createWorkerState(),
+    storeRawEvent: (payload) => {
+      order.push("stored");
+      storedPayload = payload;
+      return Promise.resolve();
+    },
+    forward: () => {
+      order.push("forwarded");
+      return Promise.resolve({ outcome: "success", status: 200, attempts: 1 });
+    },
+  })(message(rawPayload));
+
+  assert.equal(storedPayload, rawPayload);
+  assert.deepEqual(order, ["stored", "forwarded"]);
+  assert.equal(calls.ack, 1);
+});
+
+test("requeues without forwarding when raw Supabase storage fails", async () => {
+  const { channel, calls } = channelMock();
+  let forwarded = false;
+
+  await createMessageHandler({
+    channel,
+    logger: silentLogger,
+    state: createWorkerState(),
+    storeRawEvent: () => Promise.reject(new Error("database unavailable")),
+    forward: () => {
+      forwarded = true;
+      return Promise.resolve({ outcome: "success", status: 200, attempts: 1 });
+    },
+  })(message(replyEvent));
+
+  assert.equal(forwarded, false);
+  assert.equal(calls.ack, 0);
+  assert.equal(calls.nack, 1);
+});

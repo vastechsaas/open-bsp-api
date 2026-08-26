@@ -4,6 +4,8 @@ import { loadConfig } from "../src/config.js";
 
 const baseEnvironment = {
   CLOUDAMQP_URL: "amqps://guest:guest@example.com/vhost",
+  SUPABASE_URL: "https://example.supabase.co",
+  SUPABASE_SERVICE_ROLE_KEY: "service-role-secret",
   OPENBSP_FUNCTIONS_BASE_URL: "https://example.supabase.co/functions/v1",
   OPENBSP_ACCOUNT_CONFIG_JSON: JSON.stringify({
     psdf: {

@@ -1,4 +1,4 @@
-﻿drop trigger if exists "broadcast_conversation_queue_state_trigger" on "public"."conversations";
+drop trigger if exists "broadcast_conversation_queue_state_trigger" on "public"."conversations";
 
 drop trigger if exists "enforce_human_conversation_assignee" on "public"."conversations";
 

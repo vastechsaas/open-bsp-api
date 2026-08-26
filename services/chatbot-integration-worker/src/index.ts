@@ -4,6 +4,7 @@ import { loadConfig } from "./config.js";
 import { createForwarder } from "./forwarder.js";
 import { startHealthServer } from "./health.js";
 import { createLogger } from "./logger.js";
+import { createRawEventStore } from "./raw-event-store.js";
 import { createWorkerState } from "./state.js";
 import { assertTopology } from "./topology.js";
 import { createMessageHandler } from "./worker.js";
@@ -33,6 +34,11 @@ async function main() {
   const config = loadConfig();
   const logger = createLogger(config.logLevel);
   const state = createWorkerState();
+  const storeRawEvent = createRawEventStore({
+    supabaseUrl: config.supabaseUrl,
+    serviceRoleKey: config.supabaseServiceRoleKey,
+    queueName: config.topology.queue,
+  });
   const healthServer = await startHealthServer(state, config.port);
   const forward = createForwarder({
     functionsBaseUrl: config.functionsBaseUrl,
@@ -72,6 +78,7 @@ async function main() {
         state,
         topology: config.topology,
         acceptedEventTypes: config.acceptedEventTypes,
+        storeRawEvent,
       });
       const consumer = await channel.consume(
         config.topology.queue,
