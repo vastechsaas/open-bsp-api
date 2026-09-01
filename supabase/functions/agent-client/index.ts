@@ -324,7 +324,9 @@ Deno.serve(async (req) => {
   // CHECK IF THERE ARE AI AGENTS
 
   const aiAgents = agents.filter(
-    (agent) => agent.ai,
+    (agent) =>
+      agent.ai &&
+      (agent.extra as { kind?: string } | null)?.kind !== "external_chatbot",
   ) as AgentRowWithExtra[];
 
   if (!aiAgents.length) {
