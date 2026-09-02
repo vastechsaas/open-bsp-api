@@ -44,13 +44,6 @@ on public.conversations
 for each row
 execute function billing.update_product_usage();
 
--- Check billing limit before storage upload
-create trigger check_billing_storage_limit
-before insert
-on storage.objects
-for each row
-execute function billing.check_storage_limit();
-
 -- Update storage usage after upload or delete
 create trigger update_billing_storage_usage
 after insert or delete
