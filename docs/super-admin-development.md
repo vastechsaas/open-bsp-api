@@ -1,10 +1,10 @@
 # Super Admin development
 
-- **Status:** Phase 6 Round Robin auto-assignment in development
-- **Last updated:** 2026-08-26
+- **Status:** Phase 7 tenant media storage in development
+- **Last updated:** 2026-09-03
 - **Audience:** Internal platform builders
-- **Backend branch:** `scrum-113-auto-assignment-backend`
-- **Frontend branch:** `scrum-113-auto-assignment-ui`
+- **Backend branch:** `scrum-114-tenant-media-storage-backend`
+- **Frontend branch:** `scrum-114-tenant-media-storage-ui`
 
 ## Purpose
 
@@ -43,8 +43,26 @@ platform authorization separate from the organization roles `owner`, `admin`,
 | 4     | Selected-tenant WABA Health       | Complete    | Platform Admins can diagnose each tenant WhatsApp account and run protected, audited health, profile-refresh, and template-sync actions.       |
 | 5     | Agent management and capacity     | In progress | Platform Admins can configure tenant Agent capacity and manage pending/accepted Agents through protected, audited operations.                  |
 | 6     | Round Robin auto-assignment       | In progress | Routed Pending conversations are assigned atomically to available queue-member Agents with history, notifications, and recovery.               |
-| 7     | Read-only tenant modules          | Planned     | Contacts, Conversations, and other tenant modules reuse presentation components with explicit platform-scoped data adapters.                   |
-| 8     | Additional administrative actions | Planned     | Individually approved platform actions have explicit permissions, confirmation, audit history, and rollback/error behavior.                    |
+| 7     | Tenant media storage              | In progress | Platform Admins configure enforced tenant quotas and inspect reconciled media usage while tenants can inspect their own usage.                 |
+| 8     | Read-only tenant modules          | Planned     | Contacts, Conversations, and other tenant modules reuse presentation components with explicit platform-scoped data adapters.                   |
+| 9     | Additional administrative actions | Planned     | Individually approved platform actions have explicit permissions, confirmation, audit history, and rollback/error behavior.                    |
+
+## Phase 7 — Tenant media storage
+
+- **Jira:** SCRUM-114
+- **Migration:** `20260902185533_tenant_media_storage.sql`
+- Existing and new organizations receive a 25 GB quota. Platform Admins may
+  select 25, 50, 75, or 100 GB and lowering below current usage is allowed.
+- A transaction-safe storage trigger accounts for valid tenant attachment
+  objects in the private `media` bucket and rejects uploads that exceed quota.
+- Usage status is Safe below 75%, Approaching Limit from 75% to below 90%, and
+  Critical at or above 90%.
+- Tenant users can inspect their own quota and usage. Platform Admins receive a
+  paginated global view, selected-tenant detail, audited quota changes, and
+  audited manual reconciliation.
+- A bounded daily reconciliation compares counters with authoritative storage
+  objects to repair drift. Retention, archival, automatic cleanup, tenant quota
+  requests, and historical analytics remain deferred.
 
 ## Phase 6 — Round Robin auto-assignment
 

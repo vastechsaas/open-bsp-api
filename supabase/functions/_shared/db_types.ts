@@ -1139,6 +1139,30 @@ export type Database = {
           },
         ]
       }
+      chatbot_integration_raw_events: {
+        Row: {
+          id: string
+          payload_sha256: string
+          queue_name: string
+          raw_payload: string
+          received_at: string
+        }
+        Insert: {
+          id?: string
+          payload_sha256: string
+          queue_name: string
+          raw_payload: string
+          received_at?: string
+        }
+        Update: {
+          id?: string
+          payload_sha256?: string
+          queue_name?: string
+          raw_payload?: string
+          received_at?: string
+        }
+        Relationships: []
+      }
       chatbot_webhook_credentials: {
         Row: {
           created_at: string
@@ -1872,6 +1896,50 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "organization_automation_settings_organization_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_media_storage: {
+        Row: {
+          created_at: string
+          last_reconciled_at: string | null
+          object_count: number
+          organization_id: string
+          quota_bytes: number
+          updated_at: string
+          updated_by: string | null
+          updated_by_scope: string
+          used_bytes: number
+        }
+        Insert: {
+          created_at?: string
+          last_reconciled_at?: string | null
+          object_count?: number
+          organization_id: string
+          quota_bytes?: number
+          updated_at?: string
+          updated_by?: string | null
+          updated_by_scope?: string
+          used_bytes?: number
+        }
+        Update: {
+          created_at?: string
+          last_reconciled_at?: string | null
+          object_count?: number
+          organization_id?: string
+          quota_bytes?: number
+          updated_at?: string
+          updated_by?: string | null
+          updated_by_scope?: string
+          used_bytes?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_media_storage_organization_fkey"
             columns: ["organization_id"]
             isOneToOne: true
             referencedRelation: "organizations"
@@ -2882,6 +2950,20 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_organization_media_storage: {
+        Args: { p_organization_id: string }
+        Returns: {
+          last_reconciled_at: string
+          object_count: number
+          organization_id: string
+          quota_bytes: number
+          remaining_bytes: number
+          storage_status: string
+          updated_at: string
+          usage_percent: number
+          used_bytes: number
+        }[]
+      }
       get_platform_organization_agent_audit_state: {
         Args: { p_agent_id: string }
         Returns: Json
@@ -2912,6 +2994,21 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      get_platform_organization_media_storage: {
+        Args: { p_organization_id: string }
+        Returns: {
+          last_reconciled_at: string
+          object_count: number
+          organization_id: string
+          organization_name: string
+          quota_bytes: number
+          remaining_bytes: number
+          storage_status: string
+          updated_at: string
+          usage_percent: number
+          used_bytes: number
+        }[]
       }
       get_platform_overview: {
         Args: never
@@ -3267,6 +3364,27 @@ export type Database = {
           total_message_count: number
         }[]
       }
+      list_platform_media_storage_page: {
+        Args: {
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+          p_status?: string
+        }
+        Returns: {
+          last_reconciled_at: string
+          object_count: number
+          organization_id: string
+          organization_name: string
+          quota_bytes: number
+          remaining_bytes: number
+          storage_status: string
+          total_count: number
+          updated_at: string
+          usage_percent: number
+          used_bytes: number
+        }[]
+      }
       list_platform_organization_agents_page: {
         Args: {
           p_organization_id: string
@@ -3472,6 +3590,18 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      media_storage_object_size_bytes: {
+        Args: { p_metadata: Json }
+        Returns: number
+      }
+      media_storage_path_organization_id: {
+        Args: { p_bucket_id: string; p_name: string }
+        Returns: string
+      }
+      media_storage_status: {
+        Args: { p_quota_bytes: number; p_used_bytes: number }
+        Returns: string
+      }
       member_self_update_rules: {
         Args: {
           p_ai: boolean
@@ -3561,6 +3691,29 @@ export type Database = {
           outcome: string
           published_version: number
           published_version_id: string
+        }[]
+      }
+      reconcile_organization_media_storage_batch: {
+        Args: { p_limit?: number }
+        Returns: number
+      }
+      reconcile_organization_media_storage_internal: {
+        Args: { p_organization_id: string }
+        Returns: undefined
+      }
+      reconcile_platform_organization_media_storage: {
+        Args: { p_organization_id: string; p_request_id: string }
+        Returns: {
+          last_reconciled_at: string
+          object_count: number
+          organization_id: string
+          organization_name: string
+          quota_bytes: number
+          remaining_bytes: number
+          storage_status: string
+          updated_at: string
+          usage_percent: number
+          used_bytes: number
         }[]
       }
       record_campaign_delivery_result: {
@@ -3879,6 +4032,25 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      update_platform_organization_media_storage_quota: {
+        Args: {
+          p_organization_id: string
+          p_quota_gb: number
+          p_request_id: string
+        }
+        Returns: {
+          last_reconciled_at: string
+          object_count: number
+          organization_id: string
+          organization_name: string
+          quota_bytes: number
+          remaining_bytes: number
+          storage_status: string
+          updated_at: string
+          usage_percent: number
+          used_bytes: number
+        }[]
       }
       update_platform_routing_queue: {
         Args: {
