@@ -310,6 +310,20 @@ begin
 end;
 $$;
 
+create function public.initialize_organization_ui_settings() returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into public.organization_ui_settings (organization_id)
+  values (new.id)
+  on conflict (organization_id) do nothing;
+
+  return new;
+end;
+$$;
+
 -- AFTER trigger: cleans up orphaned contact when the last address that
 -- referenced it is unlinked via a REMOVE sync event.
 create function public.cleanup_orphaned_contact_on_sync() returns trigger
