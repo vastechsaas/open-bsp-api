@@ -1947,6 +1947,38 @@ export type Database = {
           },
         ]
       }
+      organization_ui_settings: {
+        Row: {
+          chat_bubble_theme: string
+          organization_id: string
+          updated_at: string
+          updated_by_scope: string
+          updated_by_user_id: string | null
+        }
+        Insert: {
+          chat_bubble_theme?: string
+          organization_id: string
+          updated_at?: string
+          updated_by_scope?: string
+          updated_by_user_id?: string | null
+        }
+        Update: {
+          chat_bubble_theme?: string
+          organization_id?: string
+          updated_at?: string
+          updated_by_scope?: string
+          updated_by_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_ui_settings_organization_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           created_at: string
@@ -2964,6 +2996,22 @@ export type Database = {
           used_bytes: number
         }[]
       }
+      get_organization_ui_settings: {
+        Args: { p_organization_id: string }
+        Returns: {
+          chat_bubble_theme: string
+          organization_id: string
+          updated_at: string
+          updated_by_scope: string
+          updated_by_user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organization_ui_settings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_platform_organization_agent_audit_state: {
         Args: { p_agent_id: string }
         Returns: Json
@@ -3931,6 +3979,22 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "organization_automation_settings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_organization_chat_bubble_theme: {
+        Args: { p_organization_id: string; p_theme: string }
+        Returns: {
+          chat_bubble_theme: string
+          organization_id: string
+          updated_at: string
+          updated_by_scope: string
+          updated_by_user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organization_ui_settings"
           isOneToOne: true
           isSetofReturn: false
         }
