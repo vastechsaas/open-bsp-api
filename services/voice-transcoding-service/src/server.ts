@@ -88,9 +88,10 @@ export function createVoiceServer(
       return;
     }
     if (
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        organizationId,
-      )
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+        .test(
+          organizationId,
+        )
     ) {
       json(response, 400, { error: "invalid organization" });
       return;
@@ -123,14 +124,14 @@ export function createVoiceServer(
       });
       response.end(result.audio);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "voice conversion failed";
-      const status =
-        message === "unauthorized"
-          ? 403
-          : message.includes("limit") || message.includes("exceeds")
-            ? 413
-            : 422;
+      const message = error instanceof Error
+        ? error.message
+        : "voice conversion failed";
+      const status = message === "unauthorized"
+        ? 403
+        : message.includes("limit") || message.includes("exceeds")
+        ? 413
+        : 422;
       json(response, status, { error: message });
     } finally {
       if (jobAcquired) activeJobs -= 1;

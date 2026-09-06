@@ -37,7 +37,9 @@ export function createRawEventStore({
     });
 
     if (!response.ok) {
-      throw new Error(`Supabase raw-event insert failed with ${response.status}`);
+      throw new Error(
+        `Supabase raw-event insert failed with ${response.status}`,
+      );
     }
   };
 }

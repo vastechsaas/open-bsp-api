@@ -37,7 +37,8 @@ test("fails processing when Supabase does not accept the raw event", async () =>
     supabaseUrl: "https://example.supabase.co",
     serviceRoleKey: "service-role-secret",
     queueName: "openbsp.chatbot.events.v1",
-    fetchImpl: (() => Promise.resolve(new Response(null, { status: 500 }))) as typeof fetch,
+    fetchImpl: (() =>
+      Promise.resolve(new Response(null, { status: 500 }))) as typeof fetch,
   });
 
   await assert.rejects(() => store("{}"), /insert failed with 500/);

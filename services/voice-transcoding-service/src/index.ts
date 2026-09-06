@@ -12,8 +12,7 @@ server.listen(config.port, "0.0.0.0", () =>
       message: "Voice transcoding service ready",
       port: config.port,
     }),
-  ),
-);
+  ));
 
 function shutdown(): void {
   server.close((error) => {

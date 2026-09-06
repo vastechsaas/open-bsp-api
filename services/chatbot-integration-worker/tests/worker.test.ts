@@ -199,7 +199,10 @@ test("logs a safe summary of queued WhatsApp webhook contents", async () => {
       message_wamids: ["wamid.incoming-1"],
     },
   }]);
-  assert.equal(JSON.stringify(infoLogs).includes("whatsapp_business_account"), false);
+  assert.equal(
+    JSON.stringify(infoLogs).includes("whatsapp_business_account"),
+    false,
+  );
   assert.equal(JSON.stringify(infoLogs).includes("sha256="), false);
 });
 
