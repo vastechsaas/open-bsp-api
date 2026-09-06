@@ -82,6 +82,39 @@ Deno.test("legacy messages preserve order and location data", () => {
   });
 });
 
+Deno.test("voice-note metadata survives legacy message conversion", () => {
+  const legacy = {
+    id: "message-voice",
+    conversation_id: "conversation-1",
+    organization_id: "organization-1",
+    direction: "incoming",
+    content: {
+      version: "0",
+      type: "audio",
+      content: "",
+      media: {
+        id: "media-id",
+        mime_type: "audio/ogg; codecs=opus",
+        file_size: 1024,
+        voice: true,
+      },
+    },
+  } as unknown as MessageRowV0;
+
+  const current = toV1(legacy);
+  assertEquals(
+    current?.content.type === "file" ? current.content.file.voice : undefined,
+    true,
+  );
+  const legacyMirror = current ? fromV1(current) : undefined;
+  assertEquals(
+    legacyMirror && "media" in legacyMirror.content
+      ? legacyMirror.content.media?.voice
+      : undefined,
+    true,
+  );
+});
+
 Deno.test("v1 product messages remain structured in the legacy mirror", () => {
   const interactive = {
     type: "product",

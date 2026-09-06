@@ -18,6 +18,7 @@ import {
   WHATSAPP_API_VERSION,
   WhatsAppError,
 } from "../_shared/whatsapp.ts";
+import { audioFileToEndpointAudio } from "./payload.ts";
 
 const DEFAULT_ACCESS_TOKEN = Deno.env.get("META_SYSTEM_USER_ACCESS_TOKEN") ||
   "";
@@ -198,13 +199,10 @@ function outgoingMessageToEndpointMessage({
       };
     }
     case "audio": {
-      const mediaRef = isExternalUri(content.file.uri)
-        ? { link: content.file.uri }
-        : { id: content.file.uri };
       return {
         ...baseMessage,
         type: "audio",
-        audio: mediaRef,
+        audio: audioFileToEndpointAudio(content.file),
       };
     }
     case "image": {

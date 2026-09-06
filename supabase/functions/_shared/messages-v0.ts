@@ -632,6 +632,9 @@ export function toV1(row: MessageRowV0): MessageRow | undefined {
           size: row.content.media.file_size || 0,
           name: row.content.media.filename,
           uri: row.content.media.id,
+          ...(row.content.type === "audio" && row.content.media.voice
+            ? { voice: true }
+            : {}),
         },
         text: row.content.type === "audio" ? "" : row.content.content,
         artifacts: row.content.artifacts,
@@ -802,7 +805,7 @@ export function fromV1(row: MessageRow): MessageRowV0 | undefined {
           id: row.content.file.uri,
           description,
           ...(row.content.kind === "audio"
-            ? {}
+            ? row.content.file.voice ? { voice: true } : {}
             : { annotation: transcription }),
         },
         artifacts: vArtifacts(row.content.artifacts),

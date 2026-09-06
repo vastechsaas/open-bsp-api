@@ -336,6 +336,7 @@ function webhookMessageToIncomingMessage(
           mime_type: message.audio.mime_type,
           uri: message.audio.id, // Will be replaced with internal URI after download
           size: 0, // Will be updated after download
+          ...(message.audio.voice ? { voice: true } : {}),
         },
       };
     }
