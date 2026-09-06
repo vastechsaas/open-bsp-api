@@ -30,6 +30,10 @@ const baseRef = baseOption ||
   "origin/meta_vista_backend";
 const databaseTest = testOption;
 const startedAt = Date.now();
+const voiceServiceDirectory = resolve(
+  repositoryRoot,
+  "services/voice-transcoding-service",
+);
 
 if (baseOption !== null && !baseOption) {
   throw new Error("--base requires a Git reference");
@@ -49,6 +53,18 @@ function run(command, commandArguments, options = {}) {
   if (result.status !== 0) {
     throw new Error(`${command} failed with exit code ${result.status}`);
   }
+}
+
+function runNpm(commandArguments, options = {}) {
+  if (process.env.npm_execpath) {
+    run(
+      process.execPath,
+      [process.env.npm_execpath, ...commandArguments],
+      options,
+    );
+    return;
+  }
+  run("npm", commandArguments, options);
 }
 
 function captureGit(commandArguments) {
@@ -84,6 +100,7 @@ const formatFiles = [...changedFiles]
   .map((file) => file.replaceAll("\\", "/"))
   .filter(Boolean)
   .filter((file) => file !== "supabase/functions/_shared/db_types.ts")
+  .filter((file) => !file.startsWith("services/voice-transcoding-service/"))
   .filter((file) => formattedExtensions.has(extname(file)))
   .filter((file) => existsSync(resolve(repositoryRoot, file)))
   .sort();
@@ -97,6 +114,14 @@ if (formatFiles.length > 0) {
 const functionsDirectory = resolve(repositoryRoot, "supabase/functions");
 run("deno", ["lint"], { cwd: functionsDirectory });
 run("deno", ["check", "."], { cwd: functionsDirectory });
+
+if (existsSync(resolve(voiceServiceDirectory, "package.json"))) {
+  runNpm(["test"], { cwd: voiceServiceDirectory });
+  runNpm(["run", "lint"], { cwd: voiceServiceDirectory });
+  if (!quick) {
+    runNpm(["run", "build"], { cwd: voiceServiceDirectory });
+  }
+}
 
 if (!quick) {
   const pluginDirectory = resolve(repositoryRoot, "plugin");
