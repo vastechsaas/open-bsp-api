@@ -68,33 +68,17 @@ export async function verifyTools(config: Config): Promise<void> {
 export async function transcodeVoice(
   config: Config,
   input: Buffer,
+  tools: {
+    run: typeof run;
+    capture: typeof capture;
+  } = { run, capture },
 ): Promise<{ audio: Buffer; durationSeconds: number }> {
   const directory = await mkdtemp(join(tmpdir(), "openbsp-voice-"));
   const source = join(directory, "source");
   const output = join(directory, "voice.ogg");
   try {
     await writeFile(source, input, { flag: "wx" });
-    const probe = await capture(
-      config.ffprobePath,
-      [
-        "-v",
-        "error",
-        "-select_streams",
-        "a:0",
-        "-show_entries",
-        "format=duration",
-        "-of",
-        "default=noprint_wrappers=1:nokey=1",
-        source,
-      ],
-      config.conversionTimeoutMs,
-    );
-    const durationSeconds = Number.parseFloat(probe.trim());
-    if (!Number.isFinite(durationSeconds) || durationSeconds <= 0)
-      throw new Error("invalid audio recording");
-    if (durationSeconds > config.maxDurationSeconds)
-      throw new Error("recording duration exceeds limit");
-    await run(
+    await tools.run(
       config.ffmpegPath,
       [
         "-v",
@@ -118,9 +102,32 @@ export async function transcodeVoice(
       ],
       config.conversionTimeoutMs,
     );
+    const probe = await tools.capture(
+      config.ffprobePath,
+      [
+        "-v",
+        "error",
+        "-select_streams",
+        "a:0",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        output,
+      ],
+      config.conversionTimeoutMs,
+    );
+    const durationSeconds = Number.parseFloat(probe.trim());
+    if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+      throw new Error("invalid audio recording");
+    }
+    if (durationSeconds > config.maxDurationSeconds) {
+      throw new Error("recording duration exceeds limit");
+    }
     const audio = await readFile(output);
-    if (audio.length > 16_000_000)
+    if (audio.length > 16_000_000) {
       throw new Error("converted recording exceeds WhatsApp limit");
+    }
     return { audio, durationSeconds };
   } finally {
     await rm(directory, { recursive: true, force: true });
