@@ -110,6 +110,14 @@ Deno.serve(async (req) => {
 
   const incoming = ((await req.json()) as WebhookPayload<MessageRow>).record!;
 
+  const { data: organizationActive } = await client.rpc(
+    "is_organization_active",
+    { p_organization_id: incoming.organization_id },
+  );
+  if (!organizationActive) {
+    return new Response("Organization archived", { status: 202 });
+  }
+
   // RETRIEVE CONVERSATION + ORGANIZATION + CONTACT + AGENTS (via organization, one-hop join)
 
   const { data: conv } = await client

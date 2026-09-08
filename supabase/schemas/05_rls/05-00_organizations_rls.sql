@@ -49,16 +49,6 @@ with check (
   and public.org_update_by_admin_rules(id, name)
 );
 
-create policy "owners can delete their orgs"
-on public.organizations
-for delete
-to authenticated, anon
-using (
-  id in (
-    select public.get_authorized_orgs('owner')
-  )
-);
-
 create policy "agents can read their orgs"
 on public.organizations
 for select

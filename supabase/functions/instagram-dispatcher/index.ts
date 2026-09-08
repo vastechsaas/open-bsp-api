@@ -218,6 +218,14 @@ Deno.serve(async (req) => {
 
   const message = ((await req.json()) as WebhookPayload<MessageRow>).record!;
 
+  const { data: organizationActive } = await client.rpc(
+    "is_organization_active",
+    { p_organization_id: message.organization_id },
+  );
+  if (!organizationActive) {
+    return new Response("Organization archived", { status: 202 });
+  }
+
   log.info(`Dispatching message ${message.id}`, message);
 
   if (!message.contact_address) {
@@ -231,6 +239,7 @@ Deno.serve(async (req) => {
     .select("extra->>access_token")
     .eq("organization_id", message.organization_id)
     .eq("address", message.organization_address)
+    .eq("status", "connected")
     .single()
     .throwOnError();
 

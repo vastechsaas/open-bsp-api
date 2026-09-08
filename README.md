@@ -188,16 +188,19 @@ Your data is yours. You can export your organization's data from the hosted
 instance and load it into a self-hosted deployment — both run the same schema,
 and all data is scoped by organization with no cross-org dependencies.
 
-### Data deletion
+### Organization archive and deletion
 
-Deleting an organization is immediate and irreversible: all of its database rows
-(contacts, conversations, messages, agents, addresses, billing) are removed in a
-single cascading delete. Media files in Storage have no foreign key to the
-organization, so they are not deleted in that transaction — instead an hourly
-background sweep (`storage-gc`) removes the files of any organization that no
-longer exists. Expect attachments to linger for up to an hour after deletion;
-they are inaccessible in the meantime (Storage RLS denies reads for orgs you
-don't belong to).
+Organizations are archived before they can be deleted. Archiving immediately
+suspends tenant access and processing while retaining database rows, media, and
+Meta/WABA registration. Owners can restore during the first 30 days; Platform
+Admins can restore later as well.
+
+Permanent purge is never automatic. A Platform Admin may purge an archived
+organization only after its eligibility date, using exact-name and password
+confirmation through the protected organization-lifecycle function. Database
+rows are then cascade-deleted, while Supabase authentication users are retained.
+Media files have no organization foreign key, so the hourly `storage-gc` sweep
+removes orphaned files after purge; they remain inaccessible in the meantime.
 
 ## Migrating from another platform
 

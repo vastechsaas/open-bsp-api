@@ -89,6 +89,9 @@ begin
   insert into public.organizations_addresses (organization_id, service, address)
     values (new.id, 'local', new.id::text);
 
+  insert into public.organization_lifecycle (organization_id)
+    values (new.id);
+
   if user_id is not null then
     select coalesce(raw_user_meta_data->>'full_name', email, '?') into user_name
     from auth.users
@@ -99,6 +102,23 @@ begin
   end if;
 
   return new;
+end;
+$$;
+
+-- Organizations must go through the recoverable lifecycle. Only the protected
+-- purge function can opt in to the final cascading delete for one transaction.
+create function public.prevent_direct_organization_delete() returns trigger
+language plpgsql
+set search_path to ''
+as $$
+begin
+  if coalesce(current_setting('app.organization_purge', true), '') <> 'on' then
+    raise exception using
+      errcode = '42501',
+      message = 'direct organization deletion is disabled; archive the organization instead';
+  end if;
+
+  return old;
 end;
 $$;
 

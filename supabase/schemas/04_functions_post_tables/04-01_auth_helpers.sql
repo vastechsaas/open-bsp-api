@@ -1,3 +1,22 @@
+create function public.is_organization_active(
+  p_organization_id uuid
+) returns boolean
+language sql
+stable
+security definer
+set search_path to ''
+as $$
+  select exists (
+    select 1
+    from public.organization_lifecycle lifecycle
+    where lifecycle.organization_id = p_organization_id
+      and lifecycle.status = 'active'
+  );
+$$;
+
+revoke execute on function public.is_organization_active(uuid) from public, anon;
+grant execute on function public.is_organization_active(uuid) to authenticated, service_role;
+
 create function public.get_authorized_orgs_by_roles(
   roles public.role[]
 ) returns setof uuid
@@ -11,14 +30,16 @@ declare
 begin
   -- First, try JWT authentication via auth.uid()
   if auth.uid() is not null then
-    return query select organization_id from public.agents
-    where
-      user_id = auth.uid()
+    return query select agent.organization_id from public.agents agent
+    join public.organization_lifecycle lifecycle
+      on lifecycle.organization_id = agent.organization_id
+      and lifecycle.status = 'active'
+    where agent.user_id = auth.uid()
     and (
-      extra->'invitation' is null
-      or extra->'invitation'->>'status' = 'accepted'
+      agent.extra->'invitation' is null
+      or agent.extra->'invitation'->>'status' = 'accepted'
     )
-    and extra->>'role' in (
+    and agent.extra->>'role' in (
       select allowed_role::text
       from unnest(roles) as allowed_role
     );
@@ -39,6 +60,9 @@ begin
   if api_key is not null then
     select a.organization_id into org_id
     from public.api_keys a
+    join public.organization_lifecycle lifecycle
+      on lifecycle.organization_id = a.organization_id
+      and lifecycle.status = 'active'
     where a.key = api_key
     and a.role = any(roles);
 
@@ -105,6 +129,10 @@ declare
   request_role public.role;
   api_key text;
 begin
+  if not public.is_organization_active(p_organization_id) then
+    return null;
+  end if;
+
   if auth.uid() is not null then
     select (a.extra->>'role')::public.role into request_role
     from public.agents a
@@ -147,6 +175,7 @@ as $$
   select a.id
   from public.agents a
   where a.organization_id = p_organization_id
+    and public.is_organization_active(p_organization_id)
     and a.user_id = auth.uid()
     and a.ai = false
     and (

@@ -179,8 +179,9 @@ audit recording, revocation, and reactivation.
   separate Organizations table or route is added.
 - Selecting a tenant opens `/platform/<organization-id>` and exposes Overview,
   Queues, Agents, and Reports within one organization-detail shell.
-- Organization setup state is derived from connected WhatsApp accounts; no
-  organization suspension lifecycle is introduced.
+- Organization setup state is derived from connected WhatsApp accounts. The
+  later organization lifecycle module provides archive, restore, and protected
+  purge without disconnecting Meta/WABA assets.
 - Routing queues remain manual-assignment queues. Round robin and other
   automatic assignment strategies remain deferred.
 - Platform Admin queue mutations are atomic, idempotent, and append-only audited
@@ -260,6 +261,35 @@ rather than fabricated staging data.
 - [ ] Add the Platform Agent management table, capacity state, and dialogs.
 - [ ] Complete frontend validation, merge backend before frontend, and verify
       the DKR five-seat scenario on staging.
+
+## Phase 6 — Recoverable organization lifecycle
+
+### Locked decisions
+
+- Archive is the normal destructive action and retains tenant data, media, and
+  Meta/WABA registration for at least 30 days.
+- Owners and Platform Admins can archive. Owners can restore during the first 30
+  days; Platform Admins can restore at any time with a reason.
+- Archived organizations and connected addresses are excluded from tenant,
+  API-key, webhook, campaign, chatbot, dispatch, and auto-assignment work.
+- Purge is never automatic. It is available only to a Platform Admin after the
+  eligibility date and requires exact-name, password, reason, and request-ID
+  confirmation. Authentication users are never deleted.
+- Lifecycle audit rows are append-only and deliberately survive organization
+  purge.
+
+### Checklist
+
+- [x] Add lifecycle state, audit evidence, active-organization authorization,
+      address suspension, and a direct-delete database guard.
+- [x] Add idempotent archive/restore/list/purge operations and protected purge
+      password reauthentication.
+- [x] Gate service-role ingestion, dispatch, campaigns, chatbot execution, and
+      automatic assignment while archived.
+- [x] Add Owner and Platform archive, restore, filtering, and purge interfaces.
+- [x] Generate one migration and synchronize backend/frontend database types.
+- [ ] Merge backend before frontend and smoke-test archive/restore with a
+      disposable staging tenant.
 
 ## Delivery log
 

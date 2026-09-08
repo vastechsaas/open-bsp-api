@@ -764,6 +764,7 @@ begin
   from public.campaigns c
   where c.status in ('queued', 'running')
     and c.queued_count > 0
+    and public.is_organization_active(c.organization_id)
     and exists (
       select 1
       from public.campaign_deliveries d

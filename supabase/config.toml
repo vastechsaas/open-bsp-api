@@ -80,3 +80,8 @@ entrypoint = "./functions/platform-report-export/index.ts"
 verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/platform-whatsapp-health/index.ts"
+
+[functions.organization-lifecycle]
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/organization-lifecycle/index.ts"

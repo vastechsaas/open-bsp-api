@@ -1903,6 +1903,107 @@ export type Database = {
           },
         ]
       }
+      organization_lifecycle: {
+        Row: {
+          address_statuses: Json
+          archive_reason: string | null
+          archived_at: string | null
+          archived_by_scope: string | null
+          archived_by_user_id: string | null
+          created_at: string
+          organization_id: string
+          purge_eligible_at: string | null
+          restore_reason: string | null
+          restored_at: string | null
+          restored_by_scope: string | null
+          restored_by_user_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          address_statuses?: Json
+          archive_reason?: string | null
+          archived_at?: string | null
+          archived_by_scope?: string | null
+          archived_by_user_id?: string | null
+          created_at?: string
+          organization_id: string
+          purge_eligible_at?: string | null
+          restore_reason?: string | null
+          restored_at?: string | null
+          restored_by_scope?: string | null
+          restored_by_user_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          address_statuses?: Json
+          archive_reason?: string | null
+          archived_at?: string | null
+          archived_by_scope?: string | null
+          archived_by_user_id?: string | null
+          created_at?: string
+          organization_id?: string
+          purge_eligible_at?: string | null
+          restore_reason?: string | null
+          restored_at?: string | null
+          restored_by_scope?: string | null
+          restored_by_user_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_lifecycle_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_lifecycle_events: {
+        Row: {
+          action_type: string
+          actor_scope: string
+          actor_user_id: string
+          after_state: Json | null
+          before_state: Json | null
+          created_at: string
+          id: string
+          organization_id: string
+          organization_name: string
+          reason: string
+          request_id: string
+        }
+        Insert: {
+          action_type: string
+          actor_scope: string
+          actor_user_id: string
+          after_state?: Json | null
+          before_state?: Json | null
+          created_at?: string
+          id?: string
+          organization_id: string
+          organization_name: string
+          reason: string
+          request_id: string
+        }
+        Update: {
+          action_type?: string
+          actor_scope?: string
+          actor_user_id?: string
+          after_state?: Json | null
+          before_state?: Json | null
+          created_at?: string
+          id?: string
+          organization_id?: string
+          organization_name?: string
+          reason?: string
+          request_id?: string
+        }
+        Relationships: []
+      }
       organization_media_storage: {
         Row: {
           created_at: string
@@ -2570,6 +2671,20 @@ export type Database = {
         }
         Returns: boolean
       }
+      archive_organization: {
+        Args: {
+          p_expected_name: string
+          p_organization_id: string
+          p_reason: string
+          p_request_id: string
+        }
+        Returns: {
+          archived_at: string
+          organization_id: string
+          purge_eligible_at: string
+          status: string
+        }[]
+      }
       assign_conversation_to_me: {
         Args: { p_conversation_id: string }
         Returns: {
@@ -3167,6 +3282,10 @@ export type Database = {
         Args: { p_ai: boolean; p_extra: Json }
         Returns: boolean
       }
+      is_organization_active: {
+        Args: { p_organization_id: string }
+        Returns: boolean
+      }
       is_platform_admin: { Args: never; Returns: boolean }
       is_whatsapp_contact_auto_save_enabled: {
         Args: { p_organization_id: string }
@@ -3349,6 +3468,18 @@ export type Database = {
           updated_at: string
         }[]
       }
+      list_my_archived_organizations_page: {
+        Args: { p_page?: number; p_page_size?: number; p_search?: string }
+        Returns: {
+          archive_reason: string
+          archived_at: string
+          can_restore: boolean
+          organization_id: string
+          organization_name: string
+          purge_eligible_at: string
+          total_count: number
+        }[]
+      }
       list_platform_campaign_report_rows: {
         Args: {
           p_month: string
@@ -3452,6 +3583,24 @@ export type Database = {
           queue_names: string[]
           total_count: number
           user_id: string
+        }[]
+      }
+      list_platform_organization_lifecycle_page: {
+        Args: {
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+          p_status?: string
+        }
+        Returns: {
+          archive_reason: string
+          archived_at: string
+          archived_by_scope: string
+          lifecycle_status: string
+          organization_id: string
+          organization_name: string
+          purge_eligible_at: string
+          total_count: number
         }[]
       }
       list_platform_organizations_page: {
@@ -3741,6 +3890,16 @@ export type Database = {
           published_version_id: string
         }[]
       }
+      purge_archived_organization: {
+        Args: {
+          p_actor_user_id: string
+          p_expected_name: string
+          p_organization_id: string
+          p_reason: string
+          p_request_id: string
+        }
+        Returns: Json
+      }
       reconcile_organization_media_storage_batch: {
         Args: { p_limit?: number }
         Returns: number
@@ -3832,6 +3991,18 @@ export type Database = {
       resolve_chatbot_webhook_credential: {
         Args: { p_credential_id: string; p_organization_id: string }
         Returns: Json
+      }
+      restore_organization: {
+        Args: {
+          p_organization_id: string
+          p_reason: string
+          p_request_id: string
+        }
+        Returns: {
+          organization_id: string
+          restored_at: string
+          status: string
+        }[]
       }
       role_rank: {
         Args: { role: Database["public"]["Enums"]["role"] }

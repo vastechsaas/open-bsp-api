@@ -30,3 +30,9 @@ before update
 on public.organizations
 for each row
 execute function public.moddatetime('updated_at');
+
+create trigger prevent_direct_delete
+before delete
+on public.organizations
+for each row
+execute function public.prevent_direct_organization_delete();

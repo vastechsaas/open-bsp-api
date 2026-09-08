@@ -70,10 +70,17 @@ begin
 
   return query
   select
-    (select count(*) from public.organizations),
+    (
+      select count(*)
+      from public.organization_lifecycle lifecycle
+      where lifecycle.status = 'active'
+    ),
     (
       select count(*)
       from public.agents as agent
+      join public.organization_lifecycle lifecycle
+        on lifecycle.organization_id = agent.organization_id
+        and lifecycle.status = 'active'
       where agent.ai = false
         and agent.user_id is not null
         and (
@@ -84,22 +91,34 @@ begin
     (
       select count(*)
       from public.contacts as contact
+      join public.organization_lifecycle lifecycle
+        on lifecycle.organization_id = contact.organization_id
+        and lifecycle.status = 'active'
       where contact.status = 'active'
     ),
     (
       select count(*)
       from public.conversations as conversation
+      join public.organization_lifecycle lifecycle
+        on lifecycle.organization_id = conversation.organization_id
+        and lifecycle.status = 'active'
       where conversation.status = 'active'
     ),
     (
       select count(*)
       from public.organizations_addresses as account
+      join public.organization_lifecycle lifecycle
+        on lifecycle.organization_id = account.organization_id
+        and lifecycle.status = 'active'
       where account.service = 'whatsapp'::public.service
         and account.status = 'connected'
     ),
     (
       select count(*)
       from public.organizations_addresses as account
+      join public.organization_lifecycle lifecycle
+        on lifecycle.organization_id = account.organization_id
+        and lifecycle.status = 'active'
       where account.service = 'instagram'::public.service
         and account.status = 'connected'
     );
@@ -193,6 +212,9 @@ begin
       coalesce(account_count.whatsapp_count, 0) as whatsapp_accounts,
       coalesce(account_count.instagram_count, 0) as instagram_accounts
     from public.organizations as organization
+    join public.organization_lifecycle lifecycle
+      on lifecycle.organization_id = organization.id
+      and lifecycle.status = 'active'
     left join member_counts as member_count
       on member_count.organization_id = organization.id
     left join contact_counts as contact_count

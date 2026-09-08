@@ -23,6 +23,10 @@ begin
     return conversation_row;
   end if;
 
+  if not public.is_organization_active(conversation_row.organization_id) then
+    return conversation_row;
+  end if;
+
   select q.* into queue_row
   from public.routing_queues q
   join public.organization_automation_settings settings
@@ -144,6 +148,9 @@ begin
       on q.organization_id = c.organization_id and q.id = c.routing_queue_id
     join public.organization_automation_settings settings
       on settings.organization_id = c.organization_id
+    join public.organization_lifecycle lifecycle
+      on lifecycle.organization_id = c.organization_id
+      and lifecycle.status = 'active'
     where c.status = 'active' and c.assigned_agent_id is null
       and settings.auto_assign_conversations
       and q.status = 'active' and q.assignment_strategy = 'round_robin'
