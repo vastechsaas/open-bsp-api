@@ -323,6 +323,29 @@ Deno.serve(async (req) => {
 
   log.info(`Dispatching message ${message.id}`, message);
 
+  if (message.direction === "outgoing" && message.agent_id) {
+    const { data: nodeManaged, error: bridgeError } = await client.rpc(
+      "is_node_managed_number",
+      {
+        p_organization_id: message.organization_id,
+        p_address: message.organization_address,
+      },
+    );
+    if (bridgeError) {
+      throw new Error("Unable to resolve chatbot execution engine");
+    }
+    if (nodeManaged) {
+      const { data: agent, error: agentError } = await client.from("agents")
+        .select("ai").eq("id", message.agent_id).single();
+      if (agentError) throw new Error("Unable to resolve dispatch agent");
+      if (agent.ai) {
+        return new Response("Native chatbot dispatch disabled", {
+          status: 202,
+        });
+      }
+    }
+  }
+
   if (!message.contact_address) {
     throw new Error(
       `Cannot dispatch message with id ${message.id} because contact_address is missing`,

@@ -53,7 +53,11 @@ function resolveRequest(
   }
 
   return {
-    url: `${functionsBaseUrl}/chatbot-reply-webhook`,
+    url: `${functionsBaseUrl}/${
+      event.event_type === "chatbot_handoff"
+        ? "chatbot-handoff-webhook"
+        : "chatbot-reply-webhook"
+    }`,
     init: {
       method: "POST",
       headers: {

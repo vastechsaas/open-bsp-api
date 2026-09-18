@@ -3,6 +3,37 @@ import test from "node:test";
 import { createForwarder } from "../src/forwarder.js";
 import { account, replyEvent, silentLogger, webhookEvent } from "./fixtures.js";
 
+test("handoff uses its dedicated handler and retains stable identity and target", async () => {
+  let capturedUrl = "";
+  let capturedInit: RequestInit | undefined;
+  const event = {
+    ...replyEvent,
+    event_type: "chatbot_handoff" as const,
+    payload: {
+      phone_number_id: account.phone_number_id,
+      recipient: "923000000001",
+      source_wamid: "wamid.customer-1",
+      node_conversation_id: "117",
+      target: { routing_queue_id: "17000000-0000-4000-8000-000000000001" },
+    },
+  };
+  const result = await makeForwarder((url, init) => {
+    capturedUrl = String(url);
+    capturedInit = init;
+    return Promise.resolve(new Response(null, { status: 200 }));
+  })(event);
+  assert.equal(result.outcome, "success");
+  assert.ok(capturedUrl.endsWith("/chatbot-handoff-webhook"));
+  assert.equal(
+    new Headers(capturedInit?.headers).get("X-OpenBSP-Event-ID"),
+    event.event_id,
+  );
+  assert.deepEqual(
+    (JSON.parse(String(capturedInit?.body)) as Record<string, unknown>).target,
+    event.payload.target,
+  );
+});
+
 function makeForwarder(fetchImpl: typeof fetch, sleeps: number[] = []) {
   return createForwarder({
     functionsBaseUrl: "https://example.supabase.co/functions/v1",

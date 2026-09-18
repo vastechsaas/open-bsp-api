@@ -150,6 +150,10 @@ begin
       message = 'chatbot execution requires an incoming message';
   end if;
 
+  if public.is_node_managed_number(incoming.organization_id, incoming.organization_address) then
+    raise exception 'native execution is disabled for this number' using errcode = '23514';
+  end if;
+
   select * into target_conversation
   from public.conversations as conversation
   where conversation.id = incoming.conversation_id

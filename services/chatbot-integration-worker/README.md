@@ -63,13 +63,13 @@ RABBITMQ_ROUTING_KEY=chatbot.event.v1
 RABBITMQ_DLX=openbsp.integration.dlx
 RABBITMQ_DLQ=openbsp.chatbot.events.dlq.v1
 RABBITMQ_DLQ_ROUTING_KEY=chatbot.event.dlq.v1
-WORKER_EVENT_TYPES=whatsapp_webhook,chatbot_reply
+WORKER_EVENT_TYPES=whatsapp_webhook,chatbot_reply,chatbot_handoff
 ```
 
-Keep both event types on the default queue for V1. A future deployment can run
-separate worker instances with different queue/routing-key values and one event
-type each, but only after an ordering safeguard prevents replies from overtaking
-their customer messages.
+Keep all three event types on the default queue for V1. A future deployment can
+run separate worker instances with different queue/routing-key values and one
+event type each, but only after an ordering safeguard prevents replies from
+overtaking their customer messages.
 
 Publish a reviewed fixture:
 

@@ -37,6 +37,15 @@ import {
   routingQueueIds,
 } from "./agent_references.ts";
 import { simulateChatbotFlow } from "./simulation.ts";
+import {
+  nodeBridgeConnection,
+  nodeBridgePhaseId,
+} from "../_shared/chatbot/node_bridge_client.ts";
+import {
+  bridgeDefinitionHash,
+  translatePublishedDefinition,
+} from "../_shared/chatbot/node_bridge_translation.ts";
+import { processNodeBridgeOperation } from "../_shared/chatbot/node_bridge_processor.ts";
 
 type AppEnv = {
   Variables: {
@@ -771,6 +780,119 @@ app.put(
   async (c) => {
     const payload = activateDeploymentPayloadSchema.parse(await c.req.json());
     const client = serviceClient();
+    if (payload.engine === "node") {
+      let connection;
+      try {
+        connection = nodeBridgeConnection(
+          payload.organization_id,
+          payload.organization_address,
+        );
+      } catch (error) {
+        throw new HTTPException(409, { message: (error as Error).message });
+      }
+      const { data: version, error: versionError } = await client.from(
+        "chatbot_flow_versions",
+      )
+        .select("definition").eq("organization_id", payload.organization_id).eq(
+          "flow_id",
+          flowId(c),
+        )
+        .eq("id", payload.version_id).eq("status", "published").single();
+      if (versionError || !version) {
+        throw new HTTPException(404, {
+          message: "Published flow version not found",
+        });
+      }
+      const definition = version.definition as unknown as FlowDefinitionV1;
+      const keys: Record<string, Record<string, string>> = {};
+      for (const node of definition.nodes) {
+        if (node.type !== "webhook" || !node.config.secret_id) continue;
+        const credentialId = node.config.secret_id;
+        const { data: headers, error: credentialError } = await client.rpc(
+          "resolve_chatbot_webhook_credential",
+          {
+            p_organization_id: payload.organization_id,
+            p_credential_id: credentialId,
+          },
+        );
+        if (credentialError || !headers || typeof headers !== "object") {
+          throw new HTTPException(422, {
+            message: "Protected webhook credential unavailable",
+          });
+        }
+        keys[credentialId] = {};
+        for (const header of Object.keys(headers)) {
+          keys[credentialId][header] = `OPENBSP_${
+            credentialId.replaceAll("-", "").toUpperCase()
+          }_${
+            (await nodeBridgePhaseId(credentialId, header)).slice(0, 8)
+              .toUpperCase()
+          }`;
+        }
+      }
+      let graph;
+      try {
+        graph = translatePublishedDefinition(definition, keys);
+      } catch (error) {
+        throw new HTTPException(422, { message: (error as Error).message });
+      }
+      const { data: operation, error: enqueueError } = await client.rpc(
+        "enqueue_node_chatbot_operation",
+        {
+          p_organization_id: payload.organization_id,
+          p_address: payload.organization_address,
+          p_company_id: connection.company_id,
+          p_request_id: payload.request_id ?? crypto.randomUUID(),
+          p_action: "activate",
+          p_payload: {
+            source_flow_id: flowId(c),
+            source_version_id: payload.version_id,
+            graph,
+            definition_hash: await bridgeDefinitionHash(graph),
+            credential_keys: keys,
+          } as unknown as Json,
+        },
+      );
+      if (enqueueError) {
+        throwDatabaseError(enqueueError, "Unable to queue Node activation");
+      }
+      const result = await processNodeBridgeOperation(operation.request_id);
+      return c.json({
+        node_bridge: {
+          request_id: result.request_id,
+          status: result.status,
+          phase: result.phase,
+          last_error: result.last_error,
+        },
+      }, result.status === "succeeded" ? 200 : 202);
+    }
+    const { data: bridge, error: bridgeError } = await client.from(
+      "chatbot_node_bridges",
+    ).select("engine")
+      .eq("organization_id", payload.organization_id).eq(
+        "organization_address",
+        payload.organization_address,
+      ).maybeSingle();
+    if (bridgeError) {
+      throwDatabaseError(bridgeError, "Unable to resolve execution engine");
+    }
+    if (bridge && !["native", "disabled"].includes(bridge.engine)) {
+      throw new HTTPException(409, {
+        message:
+          "Deactivate Node and reconcile its acknowledgment before activating native execution",
+      });
+    }
+    if (bridge?.engine === "disabled") {
+      const { error: resetError } = await client.from("chatbot_node_bridges")
+        .update({ engine: "native", sync_status: "disabled" })
+        .eq("organization_id", payload.organization_id).eq(
+          "organization_address",
+          payload.organization_address,
+        ).eq("engine", "disabled");
+      if (resetError) {
+        throwDatabaseError(resetError, "Unable to select native execution");
+      }
+    }
     const { data: runtimeAgentId, error: runtimeAgentError } = await client.rpc(
       "ensure_chatbot_runtime_agent",
       { p_organization_id: payload.organization_id },
@@ -811,6 +933,44 @@ app.delete(
   requireAdmin,
   async (c) => {
     const payload = deploymentPayloadSchema.parse(await c.req.json());
+    const client = serviceClient();
+    const { data: bridge } = await client.from("chatbot_node_bridges").select(
+      "engine, flow_id",
+    )
+      .eq("organization_id", payload.organization_id).eq(
+        "organization_address",
+        payload.organization_address,
+      ).maybeSingle();
+    if (bridge && bridge.engine !== "native") {
+      if (bridge.flow_id !== flowId(c)) {
+        throw new HTTPException(409, {
+          message: "Another Node flow controls this number",
+        });
+      }
+      const connection = nodeBridgeConnection(
+        payload.organization_id,
+        payload.organization_address,
+      );
+      const { data: operation, error: enqueueError } = await client.rpc(
+        "enqueue_node_chatbot_operation",
+        {
+          p_organization_id: payload.organization_id,
+          p_address: payload.organization_address,
+          p_company_id: connection.company_id,
+          p_request_id: crypto.randomUUID(),
+          p_action: "deactivate",
+          p_payload: {},
+        },
+      );
+      if (enqueueError) {
+        throwDatabaseError(enqueueError, "Unable to queue Node deactivation");
+      }
+      const result = await processNodeBridgeOperation(operation.request_id);
+      return c.json({
+        deactivated: result.status === "succeeded",
+        node_bridge: { request_id: result.request_id, status: result.status },
+      }, result.status === "succeeded" ? 200 : 202);
+    }
     const { data, error } = await serviceClient()
       .from("chatbot_flow_deployments")
       .delete()
@@ -830,6 +990,144 @@ app.delete(
     }
 
     return c.json({ deactivated: true });
+  },
+);
+
+app.get(
+  "/chatbot-management/flows/:flowId/node-bridges",
+  requireMember,
+  async (c) => {
+    const organizationId = z.uuid().parse(c.req.query("organization_id"));
+    const { data, error } = await serviceClient().from("chatbot_node_bridges")
+      .select()
+      .eq("organization_id", organizationId).eq("flow_id", flowId(c));
+    if (error) {
+      throwDatabaseError(
+        error,
+        "Unable to load Node synchronization status",
+      );
+    }
+    return c.json({ bridges: data });
+  },
+);
+
+app.post(
+  "/chatbot-management/flows/:flowId/node-bridge/retry",
+  requireAdmin,
+  async (c) => {
+    const payload = z.object({
+      organization_id: z.uuid(),
+      request_id: z.uuid(),
+    }).parse(await c.req.json());
+    const client = serviceClient();
+    const { data: operation, error } = await client.from(
+      "chatbot_node_operations",
+    ).select()
+      .eq("organization_id", payload.organization_id).eq(
+        "request_id",
+        payload.request_id,
+      ).single();
+    if (error || !operation) {
+      throw new HTTPException(404, {
+        message: "Bridge operation not found",
+      });
+    }
+    const { data: binding } = await client.from("chatbot_node_bridges").select(
+      "flow_id, request_id",
+    )
+      .eq("organization_id", payload.organization_id).eq(
+        "organization_address",
+        operation.organization_address,
+      ).single();
+    if (
+      binding?.flow_id !== flowId(c) ||
+      binding.request_id !== operation.request_id
+    ) {
+      throw new HTTPException(409, {
+        message: "Operation is no longer selected for this flow/number",
+      });
+    }
+    if (operation.status === "failed") {
+      const { error: retryError } = await client.from("chatbot_node_operations")
+        .update({ status: "reconciling", attempts: 0, next_attempt_at: null })
+        .eq("request_id", operation.request_id).eq("status", "failed");
+      if (retryError) {
+        throwDatabaseError(
+          retryError,
+          "Unable to retry Node synchronization",
+        );
+      }
+    }
+    const result = await processNodeBridgeOperation(operation.request_id);
+    return c.json({
+      request_id: result.request_id,
+      status: result.status,
+      last_error: result.last_error,
+    });
+  },
+);
+
+app.post(
+  "/chatbot-management/conversations/:conversationId/resume",
+  requireMember,
+  async (c) => {
+    const payload = z.object({
+      organization_id: z.uuid(),
+      request_id: z.uuid().optional(),
+    }).parse(await c.req.json());
+    const conversationId = z.uuid().parse(c.req.param("conversationId"));
+    const client = serviceClient();
+    // User-bound RLS checks conversation visibility, including routing-queue roles.
+    if (c.get("user")) {
+      const { data: visible, error } = await c.get("supabase").from(
+        "conversations",
+      ).select("id")
+        .eq("organization_id", payload.organization_id).eq("id", conversationId)
+        .maybeSingle();
+      if (error || !visible) {
+        throw new HTTPException(403, {
+          message: "Conversation is not accessible",
+        });
+      }
+    }
+    const { data: mapping, error: mappingError } = await client.from(
+      "chatbot_node_conversations",
+    ).select()
+      .eq("organization_id", payload.organization_id).eq(
+        "conversation_id",
+        conversationId,
+      ).eq("human_owned", true).single();
+    if (mappingError || !mapping) {
+      throw new HTTPException(409, {
+        message: "Conversation is not paused in Node",
+      });
+    }
+    const connection = nodeBridgeConnection(
+      payload.organization_id,
+      mapping.organization_address,
+    );
+    const { data: operation, error } = await client.rpc(
+      "enqueue_node_chatbot_operation",
+      {
+        p_organization_id: payload.organization_id,
+        p_address: mapping.organization_address,
+        p_company_id: connection.company_id,
+        p_request_id: payload.request_id ?? crypto.randomUUID(),
+        p_action: "resume",
+        p_payload: { node_conversation_id: mapping.node_conversation_id },
+      },
+    );
+    if (error) throwDatabaseError(error, "Unable to queue explicit resume");
+    if (operation.status === "failed") {
+      const { error: retryError } = await client.from("chatbot_node_operations")
+        .update({ status: "reconciling", attempts: 0, next_attempt_at: null })
+        .eq("request_id", operation.request_id).eq("status", "failed");
+      if (retryError) {
+        throwDatabaseError(retryError, "Unable to retry explicit resume");
+      }
+    }
+    const result = await processNodeBridgeOperation(operation.request_id);
+    return c.json({ request_id: result.request_id, status: result.status });
   },
 );
 

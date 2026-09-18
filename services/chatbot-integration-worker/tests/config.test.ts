@@ -23,6 +23,7 @@ test("uses the single ordered queue defaults", () => {
   assert.deepEqual([...config.acceptedEventTypes], [
     "whatsapp_webhook",
     "chatbot_reply",
+    "chatbot_handoff",
   ]);
 });
 

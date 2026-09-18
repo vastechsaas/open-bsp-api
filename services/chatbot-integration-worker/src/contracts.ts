@@ -101,6 +101,20 @@ const envelopeBase = {
 export const integrationEventSchema = z.discriminatedUnion("event_type", [
   z.object({
     ...envelopeBase,
+    event_type: z.literal("chatbot_handoff"),
+    payload: z.object({
+      phone_number_id: digits,
+      recipient: digits,
+      source_wamid: wamid,
+      node_conversation_id: z.string().regex(/^\d+$/),
+      target: z.union([
+        z.object({ agent_id: z.string().uuid() }).strict(),
+        z.object({ routing_queue_id: z.string().uuid() }).strict(),
+      ]),
+    }).strict(),
+  }).strict(),
+  z.object({
+    ...envelopeBase,
     event_type: z.literal("whatsapp_webhook"),
     payload: whatsappWebhookPayload,
   }).strict(),

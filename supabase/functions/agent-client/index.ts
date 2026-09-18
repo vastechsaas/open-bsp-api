@@ -149,6 +149,22 @@ Deno.serve(async (req) => {
 
   const organization_id = org.id;
 
+  const { data: nodeManaged, error: engineError } = await client.rpc(
+    "is_node_managed_number",
+    {
+      p_organization_id: organization_id,
+      p_address: conv.organization_address,
+    },
+  );
+  if (engineError) {
+    throw new Error("Unable to resolve chatbot execution engine");
+  }
+  if (nodeManaged) {
+    return new Response("Node-managed number: native execution skipped", {
+      status: 200,
+    });
+  }
+
   if (!org.extra) {
     org.extra = {};
   }
