@@ -71,6 +71,16 @@ verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/chatbot-reply-webhook/index.ts"
 
+[functions.chatbot-handoff-webhook]
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/chatbot-handoff-webhook/index.ts"
+
+[functions.node-chatbot-bridge-worker]
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/node-chatbot-bridge-worker/index.ts"
+
 [functions.platform-report-export]
 verify_jwt = false
 import_map = "./functions/deno.json"

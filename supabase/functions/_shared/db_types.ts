@@ -1163,6 +1163,204 @@ export type Database = {
         }
         Relationships: []
       }
+      chatbot_node_bridges: {
+        Row: {
+          definition_hash: string | null
+          engine: string
+          flow_id: string | null
+          flow_version_id: string | null
+          last_error: string | null
+          node_company_id: string
+          node_flow_id: string | null
+          node_version_id: string | null
+          organization_address: string
+          organization_id: string
+          request_id: string | null
+          sync_status: string
+          updated_at: string
+        }
+        Insert: {
+          definition_hash?: string | null
+          engine?: string
+          flow_id?: string | null
+          flow_version_id?: string | null
+          last_error?: string | null
+          node_company_id: string
+          node_flow_id?: string | null
+          node_version_id?: string | null
+          organization_address: string
+          organization_id: string
+          request_id?: string | null
+          sync_status?: string
+          updated_at?: string
+        }
+        Update: {
+          definition_hash?: string | null
+          engine?: string
+          flow_id?: string | null
+          flow_version_id?: string | null
+          last_error?: string | null
+          node_company_id?: string
+          node_flow_id?: string | null
+          node_version_id?: string | null
+          organization_address?: string
+          organization_id?: string
+          request_id?: string | null
+          sync_status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chatbot_node_bridges_organization_id_flow_id_fkey"
+            columns: ["organization_id", "flow_id"]
+            isOneToOne: false
+            referencedRelation: "chatbot_flows"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "chatbot_node_bridges_organization_id_flow_version_id_fkey"
+            columns: ["organization_id", "flow_version_id"]
+            isOneToOne: false
+            referencedRelation: "chatbot_flow_versions"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "chatbot_node_bridges_organization_id_organization_address_fkey"
+            columns: ["organization_id", "organization_address"]
+            isOneToOne: true
+            referencedRelation: "organizations_addresses"
+            referencedColumns: ["organization_id", "address"]
+          },
+        ]
+      }
+      chatbot_node_conversations: {
+        Row: {
+          conversation_id: string
+          human_owned: boolean
+          node_conversation_id: string
+          organization_address: string
+          organization_id: string
+        }
+        Insert: {
+          conversation_id: string
+          human_owned?: boolean
+          node_conversation_id: string
+          organization_address: string
+          organization_id: string
+        }
+        Update: {
+          conversation_id?: string
+          human_owned?: boolean
+          node_conversation_id?: string
+          organization_address?: string
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chatbot_node_conversations_organization_id_conversation_id_fkey"
+            columns: ["organization_id", "conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["organization_id", "id"]
+          },
+          {
+            foreignKeyName: "chatbot_node_conversations_organization_id_organization_ad_fkey"
+            columns: ["organization_id", "organization_address"]
+            isOneToOne: false
+            referencedRelation: "chatbot_node_bridges"
+            referencedColumns: ["organization_id", "organization_address"]
+          },
+        ]
+      }
+      chatbot_node_handoff_receipts: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          event_id: string
+          organization_id: string
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          event_id: string
+          organization_id: string
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          event_id?: string
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chatbot_node_handoff_receipts_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chatbot_node_handoff_receipts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chatbot_node_operations: {
+        Row: {
+          action: string
+          attempts: number
+          created_at: string
+          last_error: string | null
+          next_attempt_at: string | null
+          organization_address: string
+          organization_id: string
+          payload: Json
+          phase: string
+          request_id: string
+          result: Json | null
+          status: string
+        }
+        Insert: {
+          action: string
+          attempts?: number
+          created_at?: string
+          last_error?: string | null
+          next_attempt_at?: string | null
+          organization_address: string
+          organization_id: string
+          payload: Json
+          phase?: string
+          request_id: string
+          result?: Json | null
+          status?: string
+        }
+        Update: {
+          action?: string
+          attempts?: number
+          created_at?: string
+          last_error?: string | null
+          next_attempt_at?: string | null
+          organization_address?: string
+          organization_id?: string
+          payload?: Json
+          phase?: string
+          request_id?: string
+          result?: Json | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chatbot_node_operations_organization_id_organization_addre_fkey"
+            columns: ["organization_id", "organization_address"]
+            isOneToOne: false
+            referencedRelation: "chatbot_node_bridges"
+            referencedColumns: ["organization_id", "organization_address"]
+          },
+        ]
+      }
       chatbot_webhook_credentials: {
         Row: {
           created_at: string
@@ -2747,6 +2945,29 @@ export type Database = {
           run_lock_version: number
         }[]
       }
+      complete_node_chatbot_operation: {
+        Args: { p_phase: string; p_request_id: string; p_result: Json }
+        Returns: {
+          action: string
+          attempts: number
+          created_at: string
+          last_error: string | null
+          next_attempt_at: string | null
+          organization_address: string
+          organization_id: string
+          payload: Json
+          phase: string
+          request_id: string
+          result: Json | null
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "chatbot_node_operations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       contact_address_update_rules: {
         Args: {
           p_address: string
@@ -2960,6 +3181,36 @@ export type Database = {
           draft_version: number
           flow_id: string
         }[]
+      }
+      enqueue_node_chatbot_operation: {
+        Args: {
+          p_action: string
+          p_address: string
+          p_company_id: string
+          p_organization_id: string
+          p_payload: Json
+          p_request_id: string
+        }
+        Returns: {
+          action: string
+          attempts: number
+          created_at: string
+          last_error: string | null
+          next_attempt_at: string | null
+          organization_address: string
+          organization_id: string
+          payload: Json
+          phase: string
+          request_id: string
+          result: Json | null
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "chatbot_node_operations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       enqueue_user_notification: {
         Args: {
@@ -3280,6 +3531,10 @@ export type Database = {
       }
       is_counted_agent_seat: {
         Args: { p_ai: boolean; p_extra: Json }
+        Returns: boolean
+      }
+      is_node_managed_number: {
+        Args: { p_address: string; p_organization_id: string }
         Returns: boolean
       }
       is_organization_active: {
@@ -3946,6 +4201,19 @@ export type Database = {
           message_id: string
           outcome: string
         }[]
+      }
+      record_node_chatbot_handoff: {
+        Args: {
+          p_agent_id?: string
+          p_event_id: string
+          p_node_conversation_id: string
+          p_organization_address: string
+          p_organization_id: string
+          p_recipient: string
+          p_routing_queue_id?: string
+          p_source_wamid: string
+        }
+        Returns: string
       }
       record_platform_access: {
         Args: {

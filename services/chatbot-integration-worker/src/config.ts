@@ -11,7 +11,9 @@ export type WorkerConfig = {
   port: number;
   logLevel: "debug" | "info" | "warn" | "error";
   topology: QueueTopology;
-  acceptedEventTypes: ReadonlySet<"whatsapp_webhook" | "chatbot_reply">;
+  acceptedEventTypes: ReadonlySet<
+    "whatsapp_webhook" | "chatbot_reply" | "chatbot_handoff"
+  >;
 };
 
 const environmentSchema = z.object({
@@ -33,7 +35,9 @@ const environmentSchema = z.object({
   RABBITMQ_DLQ_ROUTING_KEY: z.string().min(1).default(
     defaultTopology.deadLetterRoutingKey,
   ),
-  WORKER_EVENT_TYPES: z.string().default("whatsapp_webhook,chatbot_reply"),
+  WORKER_EVENT_TYPES: z.string().default(
+    "whatsapp_webhook,chatbot_reply,chatbot_handoff",
+  ),
 });
 
 export function loadConfig(
@@ -55,7 +59,7 @@ export function loadConfig(
   }
 
   const eventTypeResult = z.array(
-    z.enum(["whatsapp_webhook", "chatbot_reply"]),
+    z.enum(["whatsapp_webhook", "chatbot_reply", "chatbot_handoff"]),
   ).min(1).safeParse(
     parsed.WORKER_EVENT_TYPES.split(",").map((value) => value.trim()).filter(
       Boolean,

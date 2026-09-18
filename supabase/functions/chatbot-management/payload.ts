@@ -71,6 +71,8 @@ export const deploymentPayloadSchema = organizationPayloadSchema.extend({
 
 export const activateDeploymentPayloadSchema = deploymentPayloadSchema.extend({
   version_id: uuidSchema,
+  engine: z.enum(["native", "node"]).default("native"),
+  request_id: uuidSchema.optional(),
 });
 
 export const createWebhookCredentialPayloadSchema = organizationPayloadSchema
