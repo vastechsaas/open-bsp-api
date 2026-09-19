@@ -85,6 +85,45 @@ Deno.test("bridge: buttons and lists preserve exact option IDs", () => {
   }
 });
 
+Deno.test("bridge: button-rendered lists become chunkable Node button menus", () => {
+  const definition = flow([
+    node("menu", "list_message", {
+      body: "Choose",
+      button_text: "Menu",
+      render_as_buttons: true,
+      sections: [{
+        id: "section",
+        title: "Choices",
+        rows: [
+          { id: "one", title: "One" },
+          { id: "two", title: "Two" },
+          { id: "three", title: "Three" },
+          { id: "four", title: "Four" },
+        ],
+      }],
+    }),
+    node("end-one", "end"),
+    node("end-two", "end"),
+    node("end-three", "end"),
+    node("end-four", "end"),
+  ], [
+    edge("start", "menu"),
+    edge("menu", "end-one", { kind: "option", option_id: "one" }),
+    edge("menu", "end-two", { kind: "option", option_id: "two" }),
+    edge("menu", "end-three", { kind: "option", option_id: "three" }),
+    edge("menu", "end-four", { kind: "option", option_id: "four" }),
+  ]);
+
+  const graph = translatePublishedDefinition(definition);
+  assert(graph.nodes[1].data.nodeType === "BUTTON");
+  const buttons = graph.nodes[1].data.config.buttons as Array<{
+    id: string;
+    title: string;
+  }>;
+  assert(buttons.length === 4);
+  assert(buttons[3].id === "four");
+});
+
 Deno.test("bridge: input carries required and length rules without regex reinterpretation", () => {
   const graph = translatePublishedDefinition(flow([
     node("input", "collect_input", {

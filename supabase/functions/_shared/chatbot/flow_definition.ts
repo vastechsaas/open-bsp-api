@@ -91,6 +91,7 @@ const listMessageNodeSchema = z.object({
     body: interactiveBodySchema,
     button_text: z.string().min(1).max(CHATBOT_LIST_BUTTON_TEXT_MAX_LENGTH)
       .refine((value) => value.trim().length > 0, "Must not be blank"),
+    render_as_buttons: z.boolean().optional(),
     sections: z.array(listSectionSchema).min(1).max(CHATBOT_LIST_MAX_ROWS),
   }).strict().superRefine((config, context) => {
     const rowCount = config.sections.reduce(
@@ -103,6 +104,20 @@ const listMessageNodeSchema = z.object({
         path: ["sections"],
         message: `Must contain no more than ${CHATBOT_LIST_MAX_ROWS} rows`,
       });
+    }
+    if (config.render_as_buttons) {
+      config.sections.forEach((section, sectionIndex) =>
+        section.rows.forEach((row, rowIndex) => {
+          if (row.title.length > CHATBOT_REPLY_BUTTON_TITLE_MAX_LENGTH) {
+            context.addIssue({
+              code: "custom",
+              path: ["sections", sectionIndex, "rows", rowIndex, "title"],
+              message:
+                `Button-rendered list titles must contain no more than ${CHATBOT_REPLY_BUTTON_TITLE_MAX_LENGTH} characters`,
+            });
+          }
+        })
+      );
     }
   }),
 }).strict();

@@ -164,13 +164,24 @@ export function translatePublishedDefinition(
         });
         break;
       case "list_message":
-        addNode(node.id, "LIST", {
-          text: node.config.body,
-          buttonText: node.config.button_text,
-          sections: node.config.sections,
-          openbspInteractive: true,
-          maxRetries: 0,
-        });
+        if (node.config.render_as_buttons) {
+          addNode(node.id, "BUTTON", {
+            text: node.config.body,
+            buttons: node.config.sections.flatMap((section) =>
+              section.rows.map((row) => ({ id: row.id, title: row.title }))
+            ),
+            openbspInteractive: true,
+            maxRetries: 0,
+          });
+        } else {
+          addNode(node.id, "LIST", {
+            text: node.config.body,
+            buttonText: node.config.button_text,
+            sections: node.config.sections,
+            openbspInteractive: true,
+            maxRetries: 0,
+          });
+        }
         break;
       case "collect_input":
         addNode(node.id, "INPUT", {
