@@ -2246,6 +2246,114 @@ export type Database = {
           },
         ]
       }
+      organization_provisioning: {
+        Row: {
+          attempt_count: number
+          completed_at: string | null
+          created_at: string
+          id: string
+          invitation_agent_ids: string[]
+          last_error: string | null
+          organization_id: string | null
+          organization_name: string
+          platform_admin_user_id: string
+          request_id: string
+          request_payload: Json
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempt_count?: number
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          invitation_agent_ids?: string[]
+          last_error?: string | null
+          organization_id?: string | null
+          organization_name: string
+          platform_admin_user_id: string
+          request_id: string
+          request_payload: Json
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempt_count?: number
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          invitation_agent_ids?: string[]
+          last_error?: string | null
+          organization_id?: string | null
+          organization_name?: string
+          platform_admin_user_id?: string
+          request_id?: string
+          request_payload?: Json
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_provisioning_admin_fkey"
+            columns: ["platform_admin_user_id"]
+            isOneToOne: false
+            referencedRelation: "platform_admins"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "organization_provisioning_organization_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_provisioning_events: {
+        Row: {
+          created_at: string
+          details: Json
+          event_type: string
+          id: string
+          organization_id: string | null
+          platform_admin_user_id: string
+          provisioning_id: string
+        }
+        Insert: {
+          created_at?: string
+          details?: Json
+          event_type: string
+          id?: string
+          organization_id?: string | null
+          platform_admin_user_id: string
+          provisioning_id: string
+        }
+        Update: {
+          created_at?: string
+          details?: Json
+          event_type?: string
+          id?: string
+          organization_id?: string | null
+          platform_admin_user_id?: string
+          provisioning_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_provisioning_events_admin_fkey"
+            columns: ["platform_admin_user_id"]
+            isOneToOne: false
+            referencedRelation: "platform_admins"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "organization_provisioning_events_provisioning_fkey"
+            columns: ["provisioning_id"]
+            isOneToOne: false
+            referencedRelation: "organization_provisioning"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_ui_settings: {
         Row: {
           chat_bubble_theme: string
@@ -3236,6 +3344,30 @@ export type Database = {
         }
         Returns: string
       }
+      finish_platform_organization_provisioning: {
+        Args: { p_error?: string; p_provisioning_id: string; p_status: string }
+        Returns: {
+          attempt_count: number
+          completed_at: string | null
+          created_at: string
+          id: string
+          invitation_agent_ids: string[]
+          last_error: string | null
+          organization_id: string | null
+          organization_name: string
+          platform_admin_user_id: string
+          request_id: string
+          request_payload: Json
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organization_provisioning"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_authorized_orgs: {
         Args: { role?: Database["public"]["Enums"]["role"] }
         Returns: string[]
@@ -3423,6 +3555,30 @@ export type Database = {
           usage_percent: number
           used_bytes: number
         }[]
+      }
+      get_platform_organization_provisioning: {
+        Args: { p_provisioning_id: string }
+        Returns: {
+          attempt_count: number
+          completed_at: string | null
+          created_at: string
+          id: string
+          invitation_agent_ids: string[]
+          last_error: string | null
+          organization_id: string | null
+          organization_name: string
+          platform_admin_user_id: string
+          request_id: string
+          request_payload: Json
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organization_provisioning"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       get_platform_overview: {
         Args: never
@@ -3858,6 +4014,29 @@ export type Database = {
           total_count: number
         }[]
       }
+      list_platform_organization_provisioning_page: {
+        Args: {
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+          p_status?: string
+        }
+        Returns: {
+          attempt_count: number
+          completed_at: string
+          created_at: string
+          id: string
+          last_error: string
+          organization_id: string
+          organization_name: string
+          owner_email: string
+          owner_name: string
+          request_id: string
+          status: string
+          total_count: number
+          updated_at: string
+        }[]
+      }
       list_platform_organizations_page: {
         Args: { p_page?: number; p_page_size?: number; p_search?: string }
         Returns: {
@@ -4126,6 +4305,39 @@ export type Database = {
           p_source?: string
         }
         Returns: number
+      }
+      provision_platform_organization: {
+        Args: {
+          p_auto_assign?: boolean
+          p_max_agent_seats?: number
+          p_members?: Json
+          p_organization_name: string
+          p_owner_email: string
+          p_owner_name: string
+          p_request_id: string
+          p_storage_quota_gb?: number
+        }
+        Returns: {
+          attempt_count: number
+          completed_at: string | null
+          created_at: string
+          id: string
+          invitation_agent_ids: string[]
+          last_error: string | null
+          organization_id: string | null
+          organization_name: string
+          platform_admin_user_id: string
+          request_id: string
+          request_payload: Json
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organization_provisioning"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       publish_chatbot_flow_draft: {
         Args: {
@@ -4717,6 +4929,7 @@ export type Database = {
           public: boolean | null
           type: Database["storage"]["Enums"]["buckettype"]
           updated_at: string | null
+          versioning_status: string
         }
         Insert: {
           allowed_mime_types?: string[] | null
@@ -4730,6 +4943,7 @@ export type Database = {
           public?: boolean | null
           type?: Database["storage"]["Enums"]["buckettype"]
           updated_at?: string | null
+          versioning_status?: string
         }
         Update: {
           allowed_mime_types?: string[] | null
@@ -4743,6 +4957,7 @@ export type Database = {
           public?: boolean | null
           type?: Database["storage"]["Enums"]["buckettype"]
           updated_at?: string | null
+          versioning_status?: string
         }
         Relationships: []
       }
@@ -4915,9 +5130,12 @@ export type Database = {
       }
       objects: {
         Row: {
+          archived_at: string | null
           bucket_id: string | null
           created_at: string | null
           id: string
+          is_delete_marker: boolean
+          is_versioned: boolean
           last_accessed_at: string | null
           metadata: Json | null
           name: string | null
@@ -4929,9 +5147,12 @@ export type Database = {
           version: string | null
         }
         Insert: {
+          archived_at?: string | null
           bucket_id?: string | null
           created_at?: string | null
           id?: string
+          is_delete_marker?: boolean
+          is_versioned?: boolean
           last_accessed_at?: string | null
           metadata?: Json | null
           name?: string | null
@@ -4943,9 +5164,12 @@ export type Database = {
           version?: string | null
         }
         Update: {
+          archived_at?: string | null
           bucket_id?: string | null
           created_at?: string | null
           id?: string
+          is_delete_marker?: boolean
+          is_versioned?: boolean
           last_accessed_at?: string | null
           metadata?: Json | null
           name?: string | null
