@@ -1,6 +1,13 @@
 alter table public.routing_queues enable row level security;
 alter table public.routing_queue_members enable row level security;
 
+revoke all on table public.routing_queues from anon, authenticated;
+revoke all on table public.routing_queue_members from anon, authenticated;
+grant select on table public.routing_queues to authenticated;
+grant select on table public.routing_queue_members to authenticated;
+grant all on table public.routing_queues to service_role;
+grant all on table public.routing_queue_members to service_role;
+
 create policy "managers can read organization routing queues"
 on public.routing_queues
 for select

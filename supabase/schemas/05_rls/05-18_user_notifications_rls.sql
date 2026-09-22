@@ -1,5 +1,6 @@
 alter table public.user_notifications enable row level security;
 
+revoke all on table public.user_notifications from anon, authenticated;
 grant select on table public.user_notifications to authenticated;
 grant all on table public.user_notifications to service_role;
 

@@ -7,7 +7,11 @@ import {
 export const NODE_BRIDGE_TRANSLATOR_VERSION = 1;
 
 export type NodeBridgeGraph = {
-  bridge: { translator_version: 1; required_capability: "openbsp-flow-v1" };
+  bridge: {
+    translator_version: 1 | 2;
+    required_capability: "openbsp-flow-v1" | "openbsp-flow-v2";
+    commands?: FlowDefinitionV1["commands"];
+  };
   nodes: Array<{
     id: string;
     type: "chatbotNode";
@@ -59,7 +63,9 @@ export function translatePublishedDefinition(
 ): NodeBridgeGraph {
   const parsed = flowDefinitionV1Schema.safeParse(definition);
   if (!parsed.success) {
-    unsupported("A validated schema_version=1 definition is required");
+    unsupported(
+      "A validated schema_version=1 or schema_version=2 definition is required",
+    );
   }
   const flow: FlowDefinitionV1 = parsed.data;
   const ids = new Set(flow.nodes.map((node) => node.id));
@@ -81,7 +87,13 @@ export function translatePublishedDefinition(
     }
   }
   const graph: NodeBridgeGraph = {
-    bridge: { translator_version: 1, required_capability: "openbsp-flow-v1" },
+    bridge: flow.schema_version === 2
+      ? {
+        translator_version: 2,
+        required_capability: "openbsp-flow-v2",
+        ...(flow.commands ? { commands: flow.commands } : {}),
+      }
+      : { translator_version: 1, required_capability: "openbsp-flow-v1" },
     nodes: [],
     edges: [],
   };
@@ -194,6 +206,19 @@ export function translatePublishedDefinition(
           },
         });
         break;
+      case "text_menu":
+        addNode(node.id, "INPUT", {
+          promptText: node.config.prompt,
+          variableName: node.config.variable,
+          maxRetries: node.config.max_retries,
+          retryMessage: node.config.invalid_response,
+          openbspTextMenu: {
+            options: node.config.options,
+            invalid_response: node.config.invalid_response,
+            max_retries: node.config.max_retries,
+          },
+        });
+        break;
       case "assign_agent":
         addNode(node.id, "ASSIGN_AGENT", { openbspTarget: config });
         break;
@@ -263,6 +288,21 @@ export function translatePublishedDefinition(
         )
       ) {
         unsupported(`Every option needs one exact route at ${node.id}`);
+      }
+    }
+    if (node.type === "text_menu") {
+      const options = node.config.options.map((item) => item.id);
+      if (
+        outgoing.length !== options.length ||
+        options.some((id) =>
+          outgoing.filter((edge) =>
+            edge.kind === "option" && edge.option_id === id
+          ).length !== 1
+        )
+      ) {
+        unsupported(
+          `Every text menu option needs one exact route at ${node.id}`,
+        );
       }
     }
     for (const edge of outgoing) {

@@ -1,11 +1,11 @@
 alter table public.organizations enable row level security;
 
-create policy "users can create orgs"
+create policy "platform admins can create orgs"
 on public.organizations
 for insert
-to authenticated -- orgs cannot be created by api keys
+to authenticated
 with check (
-  true
+  public.is_platform_admin()
 );
 
 create policy "members can read their orgs"

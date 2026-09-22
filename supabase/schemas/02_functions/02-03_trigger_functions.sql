@@ -92,7 +92,11 @@ begin
   insert into public.organization_lifecycle (organization_id)
     values (new.id);
 
-  if user_id is not null then
+  -- Platform onboarding creates the intended Owner explicitly. Without this
+  -- guard, the Super Admin running the workflow would become the first Owner.
+  if user_id is not null
+    and coalesce(current_setting('app.organization_provisioning', true), '') <> 'on'
+  then
     select coalesce(raw_user_meta_data->>'full_name', email, '?') into user_name
     from auth.users
     where id = user_id;

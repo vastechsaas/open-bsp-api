@@ -85,6 +85,55 @@ const customerFlow: FlowDefinitionV1 = {
   ],
 };
 
+Deno.test("text menu routes typed values and honors global close", async () => {
+  const flow: FlowDefinitionV1 = {
+    schema_version: 2,
+    start_node_id: "start",
+    commands: {
+      main_menu: { keyword: "M", target_node_id: "menu" },
+      close: { keyword: "C", message: "Goodbye" },
+    },
+    nodes: [
+      { id: "start", type: "start", config: {} },
+      {
+        id: "menu",
+        type: "text_menu",
+        config: {
+          prompt: "Type 1",
+          variable: "choice",
+          options: [{ id: "one", value: "1", label: "One" }],
+          invalid_response: "Invalid",
+          max_retries: 3,
+        },
+      },
+      { id: "end", type: "end", config: {} },
+    ],
+    edges: [
+      { id: "a", source: "start", target: "menu", kind: "default" },
+      {
+        id: "b",
+        source: "menu",
+        target: "end",
+        kind: "option",
+        option_id: "one",
+      },
+    ],
+  };
+  const selected = await interpretFlowDefinitionV1(flow, {
+    current_node_id: "menu",
+    variables: {},
+    free_text_input: " 1 ",
+  });
+  assertEquals(selected.status, "completed");
+  assertEquals(selected.variables.choice, "1");
+  const closed = await interpretFlowDefinitionV1(flow, {
+    current_node_id: "menu",
+    variables: {},
+    free_text_input: "c",
+  });
+  assertEquals(closed.outgoing_texts, ["Goodbye"]);
+});
+
 Deno.test("interpreter runs from start to the next wait", async () => {
   const result = await interpretFlowDefinitionV1(customerFlow, {
     current_node_id: "start",
