@@ -16,6 +16,8 @@ export const CHATBOT_WEBHOOK_TIMEOUT_MIN_MS = 500;
 export const CHATBOT_WEBHOOK_TIMEOUT_MAX_MS = 10000;
 export const CHATBOT_WEBHOOK_MAX_RETRIES = 2;
 export const CHATBOT_WEBHOOK_MAX_MAPPINGS = 10;
+export const CHATBOT_TEXT_MENU_MAX_OPTIONS = 10;
+export const CHATBOT_TEXT_MENU_MAX_RETRIES = 3;
 
 const stableIdSchema = z.string().min(1).max(128).regex(
   /^[A-Za-z0-9][A-Za-z0-9_-]*$/,
@@ -151,6 +153,45 @@ const collectInputNodeSchema = z.object({
   config: collectInputConfigSchema,
 }).strict();
 
+const textMenuOptionSchema = z.object({
+  id: stableIdSchema,
+  value: z.string().min(1).max(32).refine(
+    (value) => value.trim().length > 0,
+    "Must not be blank",
+  ),
+  label: z.string().min(1).max(128).refine(
+    (value) => value.trim().length > 0,
+    "Must not be blank",
+  ),
+}).strict();
+
+const textMenuNodeSchema = z.object({
+  id: stableIdSchema,
+  type: z.literal("text_menu"),
+  config: z.object({
+    prompt: nonblankTextSchema,
+    variable: variableKeySchema,
+    options: z.array(textMenuOptionSchema).min(1).max(
+      CHATBOT_TEXT_MENU_MAX_OPTIONS,
+    ),
+    invalid_response: nonblankTextSchema,
+    max_retries: z.literal(CHATBOT_TEXT_MENU_MAX_RETRIES).default(
+      CHATBOT_TEXT_MENU_MAX_RETRIES,
+    ),
+  }).strict().superRefine((config, context) => {
+    const normalized = config.options.map((option) =>
+      option.value.trim().toLowerCase()
+    );
+    if (new Set(normalized).size !== normalized.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["options"],
+        message: "Text menu option values must be unique",
+      });
+    }
+  }),
+}).strict();
+
 const conditionNodeSchema = z.object({
   id: stableIdSchema,
   type: z.literal("condition"),
@@ -235,6 +276,7 @@ export const flowNodeV1Schema = z.discriminatedUnion("type", [
   interactiveButtonsNodeSchema,
   listMessageNodeSchema,
   collectInputNodeSchema,
+  textMenuNodeSchema,
   conditionNodeSchema,
   assignAgentNodeSchema,
   webhookNodeSchema,
@@ -289,10 +331,20 @@ export const flowEdgeV1Schema = z.discriminatedUnion("kind", [
 ]);
 
 export const flowDefinitionV1Schema = z.object({
-  schema_version: z.literal(1),
+  schema_version: z.union([z.literal(1), z.literal(2)]),
   start_node_id: stableIdSchema,
   nodes: z.array(flowNodeV1Schema).min(1),
   edges: z.array(flowEdgeV1Schema),
+  commands: z.object({
+    main_menu: z.object({
+      keyword: z.string().min(1).max(8),
+      target_node_id: stableIdSchema,
+    }).strict(),
+    close: z.object({
+      keyword: z.string().min(1).max(8),
+      message: nonblankTextSchema,
+    }).strict(),
+  }).strict().optional(),
 }).strict();
 
 export type JsonValue =
@@ -431,6 +483,7 @@ const waitForInputResultSchema = z.object({
       option_ids: z.array(stableIdSchema).min(1),
     }).strict(),
   ]),
+  variable_updates: variableUpdatesSchema.optional(),
 }).strict().superRefine((result, context) => {
   const freeText = result.expectation.kind === "free_text";
   if (result.expectation.kind === "free_text") {
@@ -465,6 +518,8 @@ const waitForInputResultSchema = z.object({
 
 const completeResultSchema = z.object({
   type: z.literal("complete"),
+  message: outgoingTextMessageSchema.optional(),
+  variable_updates: variableUpdatesSchema.optional(),
 }).strict();
 
 const handoffResultSchema = z.object({
@@ -504,6 +559,7 @@ export type InteractiveButtonsNodeV1 = z.infer<
 >;
 export type ListMessageNodeV1 = z.infer<typeof listMessageNodeSchema>;
 export type CollectInputNodeV1 = z.infer<typeof collectInputNodeSchema>;
+export type TextMenuNodeV1 = z.infer<typeof textMenuNodeSchema>;
 export type ConditionNodeV1 = z.infer<typeof conditionNodeSchema>;
 export type AssignAgentNodeV1 = z.infer<typeof assignAgentNodeSchema>;
 export type WebhookNodeV1 = z.infer<typeof webhookNodeSchema>;

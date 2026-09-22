@@ -157,6 +157,32 @@ export async function interpretFlowDefinitionV1(
   let transitionCount = 0;
   let inputConsumed = false;
 
+  if (definition.commands && input.free_text_input !== undefined) {
+    const command = input.free_text_input.trim().toLowerCase();
+    if (command === definition.commands.close.keyword.trim().toLowerCase()) {
+      const text = definition.commands.close.message;
+      return {
+        status: "completed",
+        current_node_id: currentNodeId,
+        waiting_for: null,
+        variables,
+        outgoing_texts: [text],
+        outgoing_messages: [{ type: "text", text }],
+        error: null,
+        transition_count: 0,
+      };
+    }
+    if (
+      command === definition.commands.main_menu.keyword.trim().toLowerCase()
+    ) {
+      currentNodeId = definition.commands.main_menu.target_node_id;
+      for (const key of Object.keys(variables)) {
+        if (key.startsWith("chatbot_runtime_")) delete variables[key];
+      }
+      inputConsumed = true;
+    }
+  }
+
   while (transitionCount < CHATBOT_MAX_AUTOMATIC_TRANSITIONS) {
     const node = nodesById.get(currentNodeId);
 
@@ -175,7 +201,8 @@ export async function interpretFlowDefinitionV1(
       );
     }
 
-    const offersInput = node.type === "collect_input" &&
+    const offersInput =
+      (node.type === "collect_input" || node.type === "text_menu") &&
       !inputConsumed && input.free_text_input !== undefined;
     const offersOptionInput =
       (node.type === "interactive_buttons" || node.type === "list_message") &&
@@ -209,6 +236,13 @@ export async function interpretFlowDefinitionV1(
     }
 
     if (result.type === "complete") {
+      if (result.variable_updates) {
+        Object.assign(variables, result.variable_updates);
+      }
+      if (result.message) {
+        outgoingTexts.push(result.message.text);
+        outgoingMessages.push(result.message);
+      }
       return {
         status: "completed",
         current_node_id: currentNodeId,
@@ -237,6 +271,9 @@ export async function interpretFlowDefinitionV1(
     }
 
     if (result.type === "wait_for_input") {
+      if (result.variable_updates) {
+        Object.assign(variables, result.variable_updates);
+      }
       if (result.prompt) {
         outgoingTexts.push(result.prompt);
         outgoingMessages.push({ type: "text", text: result.prompt });

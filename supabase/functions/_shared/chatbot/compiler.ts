@@ -1,5 +1,6 @@
 import {
   type FlowDefinitionV1,
+  flowDefinitionV1Schema,
   type FlowEdgeV1,
   flowEdgeV1Schema,
   type FlowNodeV1,
@@ -242,7 +243,7 @@ function validateAvailableVariables(
       readonly [field: string, template: string]
     > = node.type === "send_message"
       ? [["text", node.config.text]]
-      : node.type === "collect_input"
+      : node.type === "collect_input" || node.type === "text_menu"
       ? [["prompt", node.config.prompt]]
       : node.type === "interactive_buttons" || node.type === "list_message"
       ? [["body", node.config.body]]
@@ -305,7 +306,7 @@ function validateAvailableVariables(
       });
     }
 
-    if (node.type === "collect_input") {
+    if (node.type === "collect_input" || node.type === "text_menu") {
       available.add(node.config.variable);
     }
     if (node.type === "webhook") {
@@ -508,7 +509,7 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
     }
     if (
       edge.kind === "option" &&
-      !["interactive_buttons", "list_message"].includes(
+      !["interactive_buttons", "list_message", "text_menu"].includes(
         nodeById.get(edge.source)?.type ?? "",
       )
     ) {
@@ -516,7 +517,7 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
         code: "option_edge_source",
         path: ["edges", edgeSourceIndexes.get(edge)!, "data", "kind"],
         message:
-          "Option edges may originate only from interactive button or list nodes",
+          "Option edges may originate only from interactive, list, or text-menu nodes",
         edge_id: edge.id,
       });
     }
@@ -610,6 +611,27 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
           path: ["nodes", nodeIndex],
           message:
             `${node.type} node must have exactly one option edge for every configured option`,
+          node_id: node.id,
+        });
+      }
+    }
+
+    if (node.type === "text_menu") {
+      const configuredOptionIds = node.config.options.map((option) =>
+        option.id
+      );
+      const routedOptionIds = options.map((edge) => edge.option_id);
+      if (
+        outgoing.length !== configuredOptionIds.length ||
+        options.length !== outgoing.length ||
+        new Set(routedOptionIds).size !== routedOptionIds.length ||
+        configuredOptionIds.some((id) => !routedOptionIds.includes(id))
+      ) {
+        issues.push({
+          code: "invalid_option_routing",
+          path: ["nodes", nodeIndex],
+          message:
+            "text_menu node must have exactly one option edge for every configured option",
           node_id: node.id,
         });
       }
@@ -714,13 +736,109 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
 
   if (issues.length > 0) return { ok: false, issues: sortIssues(issues) };
 
+  const rawCommands = isRecord(editorGraph.settings) &&
+      isRecord(editorGraph.settings.commands)
+    ? editorGraph.settings.commands
+    : undefined;
+  const commands = rawCommands === undefined ? undefined : {
+    main_menu: isRecord(rawCommands.main_menu)
+      ? {
+        keyword: rawCommands.main_menu.keyword,
+        target_node_id: rawCommands.main_menu.target_node_id,
+      }
+      : undefined,
+    close: isRecord(rawCommands.close)
+      ? {
+        keyword: rawCommands.close.keyword,
+        message: rawCommands.close.message,
+      }
+      : undefined,
+  };
+
+  const definitionCandidate = {
+    schema_version: nodes.some((node) => node.type === "text_menu") || commands
+      ? 2
+      : 1,
+    start_node_id: startNodes[0].id,
+    nodes,
+    edges,
+    ...(commands ? { commands } : {}),
+  };
+  const parsedDefinition = flowDefinitionV1Schema.safeParse(
+    definitionCandidate,
+  );
+  if (!parsedDefinition.success) {
+    return {
+      ok: false,
+      issues: parsedDefinition.error.issues.map((issue) => ({
+        code: "invalid_flow_settings",
+        path: issue.path.map((part) =>
+          typeof part === "number" ? part : String(part)
+        ),
+        message: issue.message,
+      })),
+    };
+  }
+
+  if (parsedDefinition.data.commands) {
+    const { main_menu, close } = parsedDefinition.data.commands;
+    if (
+      main_menu.keyword.trim().toLowerCase() ===
+        close.keyword.trim().toLowerCase()
+    ) {
+      return {
+        ok: false,
+        issues: [{
+          code: "duplicate_global_command",
+          path: ["settings", "commands"],
+          message: "Main-menu and close commands must be different",
+        }],
+      };
+    }
+    if (!nodes.some((node) => node.id === main_menu.target_node_id)) {
+      return {
+        ok: false,
+        issues: [{
+          code: "invalid_main_menu_target",
+          path: ["settings", "commands", "main_menu", "target_node_id"],
+          message: "Main-menu command target does not exist",
+        }],
+      };
+    }
+    for (const node of nodes) {
+      if (node.type !== "text_menu") continue;
+      const reserved = new Set(
+        [main_menu.keyword, close.keyword].map((value) =>
+          value.trim().toLowerCase()
+        ),
+      );
+      if (
+        node.config.options.some((option) =>
+          reserved.has(option.value.trim().toLowerCase())
+        )
+      ) {
+        return {
+          ok: false,
+          issues: [{
+            code: "reserved_command_option",
+            path: [
+              "nodes",
+              nodeSourceIndexes.get(node)!,
+              "data",
+              "config",
+              "options",
+            ],
+            message:
+              "Text menu option values cannot use global command keywords",
+            node_id: node.id,
+          }],
+        };
+      }
+    }
+  }
+
   return {
     ok: true,
-    definition: {
-      schema_version: 1,
-      start_node_id: startNodes[0].id,
-      nodes,
-      edges,
-    },
+    definition: parsedDefinition.data,
   };
 }
