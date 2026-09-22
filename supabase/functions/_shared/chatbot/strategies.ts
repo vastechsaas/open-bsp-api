@@ -11,6 +11,7 @@ import type {
   NodeStrategy,
   SendMessageNodeV1,
   StartNodeV1,
+  TextMenuNodeV1,
   WebhookNodeV1,
 } from "./flow_definition.ts";
 import {
@@ -196,6 +197,71 @@ export const collectInputNodeStrategy: NodeStrategy<CollectInputNodeV1> = {
   },
 };
 
+const textMenuRetryKey = (nodeId: string) =>
+  `chatbot_runtime_text_menu_${
+    nodeId.replace(/[^a-z0-9_]/gi, "_").toLowerCase()
+  }`;
+
+export const textMenuNodeStrategy: NodeStrategy<TextMenuNodeV1> = {
+  execute(node, context): Promise<NodeResultV1> {
+    const prompt = renderChatbotTemplate(
+      node.config.prompt,
+      context.variables,
+      CHATBOT_TEXT_MAX_LENGTH,
+    );
+    if (!prompt.ok) return Promise.resolve(templateFailure(prompt));
+
+    if (context.free_text_input === undefined) {
+      return Promise.resolve({
+        type: "wait_for_input",
+        prompt: prompt.text,
+        expectation: {
+          kind: "free_text",
+          variable: node.config.variable,
+          required: true,
+        },
+      });
+    }
+
+    const value = context.free_text_input.trim();
+    const option = node.config.options.find((item) =>
+      item.value.trim().toLowerCase() === value.toLowerCase()
+    );
+    const retryKey = textMenuRetryKey(node.id);
+    if (option) {
+      return Promise.resolve({
+        type: "advance",
+        route: { kind: "option", option_id: option.id },
+        variable_updates: {
+          [node.config.variable]: value,
+          [retryKey]: 0,
+        },
+      });
+    }
+
+    const retries = typeof context.variables[retryKey] === "number"
+      ? Number(context.variables[retryKey]) + 1
+      : 1;
+    if (retries >= node.config.max_retries) {
+      return Promise.resolve({
+        type: "complete",
+        message: { type: "text", text: node.config.invalid_response },
+        variable_updates: { [retryKey]: retries },
+      });
+    }
+    return Promise.resolve({
+      type: "wait_for_input",
+      prompt: `${node.config.invalid_response}\n\n${prompt.text}`,
+      expectation: {
+        kind: "free_text",
+        variable: node.config.variable,
+        required: true,
+      },
+      variable_updates: { [retryKey]: retries },
+    });
+  },
+};
+
 export const conditionNodeStrategy: NodeStrategy<ConditionNodeV1> = {
   execute(node, context): Promise<NodeResultV1> {
     const value = context.variables[node.config.variable];
@@ -274,6 +340,8 @@ export function executeNodeStrategy(
       return listMessageNodeStrategy.execute(node, context);
     case "collect_input":
       return collectInputNodeStrategy.execute(node, context);
+    case "text_menu":
+      return textMenuNodeStrategy.execute(node, context);
     case "condition":
       return conditionNodeStrategy.execute(node, context);
     case "assign_agent":

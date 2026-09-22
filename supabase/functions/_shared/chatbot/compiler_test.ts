@@ -83,6 +83,40 @@ function compileIssues(graph: unknown): ReadonlyArray<CompileIssue> {
   return result.issues;
 }
 
+Deno.test("compiler creates a version 2 text menu with global commands", () => {
+  const graph = {
+    settings: {
+      commands: {
+        main_menu: { keyword: "M", target_node_id: "menu" },
+        close: { keyword: "C", message: "Closed" },
+      },
+    },
+    nodes: [
+      editorNode("start", "start"),
+      editorNode("menu", "text_menu", {
+        prompt: "Type 1 for support",
+        variable: "menu_choice",
+        options: [{ id: "support", value: "1", label: "Support" }],
+        invalid_response: "Invalid choice",
+        max_retries: 3,
+      }),
+      editorNode("end", "end"),
+    ],
+    edges: [
+      editorEdge("start-menu", "start", "menu"),
+      editorEdge("menu-end", "menu", "end", {
+        kind: "option",
+        option_id: "support",
+      }),
+    ],
+  };
+  const result = compileFlowDefinition(graph);
+  assertEquals(result.ok, true);
+  if (!result.ok) return;
+  assertEquals(result.definition.schema_version, 2);
+  assertEquals(result.definition.commands?.main_menu.target_node_id, "menu");
+});
+
 Deno.test("compiles a five-node editor graph into the exact runtime definition", () => {
   const result = compileFlowDefinition(representativeGraph());
   if (!result.ok) throw new Error(JSON.stringify(result.issues));
