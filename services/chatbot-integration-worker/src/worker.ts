@@ -139,7 +139,7 @@ export function createMessageHandler({
 }) {
   return async (message: ConsumeMessage | null) => {
     if (!message) return;
-    state.inFlight = true;
+    state.inFlight += 1;
     try {
       const rawPayload = message.content.toString("utf8");
       await storeRawEvent(rawPayload);
@@ -229,7 +229,7 @@ export function createMessageHandler({
       });
       channel.nack(message, false, true);
     } finally {
-      state.inFlight = false;
+      state.inFlight -= 1;
     }
   };
 }

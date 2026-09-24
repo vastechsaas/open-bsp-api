@@ -64,6 +64,7 @@ RABBITMQ_DLX=openbsp.integration.dlx
 RABBITMQ_DLQ=openbsp.chatbot.events.dlq.v1
 RABBITMQ_DLQ_ROUTING_KEY=chatbot.event.dlq.v1
 WORKER_EVENT_TYPES=whatsapp_webhook,chatbot_reply,chatbot_handoff
+WORKER_CONCURRENCY=8
 ```
 
 Keep all three event types on the default queue for V1. A future deployment can

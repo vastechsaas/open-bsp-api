@@ -9,6 +9,7 @@ export type WorkerConfig = {
   functionsBaseUrl: string;
   accounts: Record<string, AccountConfig>;
   port: number;
+  concurrency: number;
   logLevel: "debug" | "info" | "warn" | "error";
   topology: QueueTopology;
   acceptedEventTypes: ReadonlySet<
@@ -26,6 +27,7 @@ const environmentSchema = z.object({
   OPENBSP_FUNCTIONS_BASE_URL: z.string().url(),
   OPENBSP_ACCOUNT_CONFIG_JSON: z.string().min(2),
   PORT: z.coerce.number().int().min(1).max(65535).default(8080),
+  WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(8),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
   RABBITMQ_EXCHANGE: z.string().min(1).default(defaultTopology.exchange),
   RABBITMQ_QUEUE: z.string().min(1).default(defaultTopology.queue),
@@ -76,6 +78,7 @@ export function loadConfig(
     functionsBaseUrl: parsed.OPENBSP_FUNCTIONS_BASE_URL.replace(/\/$/, ""),
     accounts,
     port: parsed.PORT,
+    concurrency: parsed.WORKER_CONCURRENCY,
     logLevel: parsed.LOG_LEVEL,
     topology: {
       exchange: parsed.RABBITMQ_EXCHANGE,

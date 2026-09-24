@@ -17,9 +17,10 @@ const baseEnvironment = {
   }),
 };
 
-test("uses the single ordered queue defaults", () => {
+test("uses bounded concurrent queue defaults", () => {
   const config = loadConfig(baseEnvironment);
   assert.equal(config.topology.queue, "openbsp.chatbot.events.v1");
+  assert.equal(config.concurrency, 8);
   assert.deepEqual([...config.acceptedEventTypes], [
     "whatsapp_webhook",
     "chatbot_reply",
@@ -33,9 +34,11 @@ test("allows an instance-specific queue and event type", () => {
     RABBITMQ_QUEUE: "openbsp.chatbot.incoming.v1",
     RABBITMQ_ROUTING_KEY: "chatbot.incoming.v1",
     WORKER_EVENT_TYPES: "whatsapp_webhook",
+    WORKER_CONCURRENCY: "4",
   });
   assert.equal(config.topology.queue, "openbsp.chatbot.incoming.v1");
   assert.equal(config.topology.routingKey, "chatbot.incoming.v1");
+  assert.equal(config.concurrency, 4);
   assert.deepEqual([...config.acceptedEventTypes], ["whatsapp_webhook"]);
 });
 
@@ -46,5 +49,8 @@ test("rejects unsupported or empty event-type configuration", () => {
   );
   assert.throws(
     () => loadConfig({ ...baseEnvironment, WORKER_EVENT_TYPES: "" }),
+  );
+  assert.throws(
+    () => loadConfig({ ...baseEnvironment, WORKER_CONCURRENCY: "0" }),
   );
 });

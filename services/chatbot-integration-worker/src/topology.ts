@@ -24,6 +24,7 @@ export const topology = defaultTopology;
 export async function assertTopology(
   channel: ConfirmChannel,
   topology: QueueTopology = defaultTopology,
+  prefetch = 8,
 ) {
   await channel.assertExchange(topology.exchange, "direct", { durable: true });
   await channel.assertExchange(topology.deadLetterExchange, "direct", {
@@ -48,5 +49,5 @@ export async function assertTopology(
     topology.exchange,
     topology.routingKey,
   );
-  await channel.prefetch(1);
+  await channel.prefetch(prefetch);
 }

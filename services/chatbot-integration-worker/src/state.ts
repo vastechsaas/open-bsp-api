@@ -2,7 +2,7 @@ export type WorkerState = {
   connected: boolean;
   consuming: boolean;
   shuttingDown: boolean;
-  inFlight: boolean;
+  inFlight: number;
   processed: number;
   deadLettered: number;
   lastSuccessAt?: string;
@@ -14,7 +14,7 @@ export function createWorkerState(): WorkerState {
     connected: false,
     consuming: false,
     shuttingDown: false,
-    inFlight: false,
+    inFlight: 0,
     processed: 0,
     deadLettered: 0,
   };

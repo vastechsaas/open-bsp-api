@@ -23,9 +23,9 @@ async function closeSession(
   if (connection) await connection.close().catch(() => undefined);
 }
 
-async function waitForInFlight(state: { inFlight: boolean }) {
+async function waitForInFlight(state: { inFlight: number }) {
   const deadline = Date.now() + 15_000;
-  while (state.inFlight && Date.now() < deadline) {
+  while (state.inFlight > 0 && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
 }
@@ -70,7 +70,7 @@ async function main() {
     try {
       connection = await connect(config.cloudAmqpUrl);
       channel = await connection.createConfirmChannel();
-      await assertTopology(channel, config.topology);
+      await assertTopology(channel, config.topology, config.concurrency);
       const handleMessage = createMessageHandler({
         channel,
         forward,
@@ -92,7 +92,7 @@ async function main() {
       state.consuming = true;
       logger.info("CloudAMQP consumer ready", {
         queue: config.topology.queue,
-        prefetch: 1,
+        prefetch: config.concurrency,
       });
       await Promise.race([
         once(connection, "close"),

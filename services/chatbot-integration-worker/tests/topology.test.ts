@@ -3,7 +3,7 @@ import test from "node:test";
 import type { ConfirmChannel } from "amqplib";
 import { assertTopology, topology } from "../src/topology.js";
 
-test("declares durable queues, dead lettering, single consumer and prefetch one", async () => {
+test("declares durable queues, dead lettering, single consumer and bounded prefetch", async () => {
   const calls: Array<[string, ...unknown[]]> = [];
   const channel = {
     assertExchange: (...args: unknown[]) => {
@@ -28,7 +28,7 @@ test("declares durable queues, dead lettering, single consumer and prefetch one"
     },
   } as unknown as ConfirmChannel;
 
-  await assertTopology(channel);
+  await assertTopology(channel, topology, 8);
   const mainQueue = calls.find(
     ([method, queue]) => method === "assertQueue" && queue === topology.queue,
   );
@@ -41,6 +41,6 @@ test("declares durable queues, dead lettering, single consumer and prefetch one"
     },
   });
   assert.ok(
-    calls.some(([method, count]) => method === "prefetch" && count === 1),
+    calls.some(([method, count]) => method === "prefetch" && count === 8),
   );
 });
