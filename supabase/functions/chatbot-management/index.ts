@@ -330,6 +330,8 @@ async function unavailableWebhookCredentialIssues(
         path: ["nodes", index, "data", "config", "secret_id"],
         message: "The selected webhook credential is unavailable",
         node_id: node.id,
+        field: "secret_id",
+        category: "reference" as const,
       }]
       : []
   );
