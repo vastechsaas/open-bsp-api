@@ -272,7 +272,7 @@ Deno.test("reports invalid node routing and conditional edge origins", () => {
 
   const codes = issueCodes(graph);
   assertEquals(codes.includes("conditional_edge_source"), true);
-  assertEquals(codes.includes("invalid_default_routing"), true);
+  assertEquals(codes.includes("default_route_required"), true);
   assertEquals(codes.includes("terminal_has_outgoing_edge"), true);
   assertEquals(codes.includes("start_has_incoming_edge"), true);
 
@@ -285,7 +285,7 @@ Deno.test("reports invalid node routing and conditional edge origins", () => {
     value: "Lahore",
   };
   assertEquals(
-    issueCodes(conditionGraph).includes("invalid_condition_routing"),
+    issueCodes(conditionGraph).includes("condition_fallback_required"),
     true,
   );
 });
@@ -379,7 +379,7 @@ Deno.test("interactive nodes require one known edge per unique option", () => {
 
   const codes = issueCodes(graph);
   assertEquals(codes.includes("duplicate_option_id"), true);
-  assertEquals(codes.includes("invalid_option_routing"), true);
+  assertEquals(codes.includes("option_route_missing"), true);
 });
 
 Deno.test("reports unreachable nodes", () => {
@@ -443,13 +443,195 @@ Deno.test("returns structured schema issues for invalid authored values", () => 
   (conditionEdge.data as Record<string, unknown>).operator = "greater_than";
 
   const issues = compileIssues(graph);
-  const nodeIssue = issues.find((issue) => issue.code === "invalid_node")!;
+  const nodeIssue = issues.find((issue) =>
+    issue.code === "message_text_required"
+  )!;
   const edgeIssue = issues.find((issue) => issue.code === "invalid_edge")!;
 
   assertEquals(nodeIssue.node_id, "message-1");
   assertEquals(edgeIssue.edge_id, "edge-3");
   assertEquals(Array.isArray(nodeIssue.path), true);
   assertEquals(typeof nodeIssue.message, "string");
+});
+
+Deno.test("missing handoff queue returns one actionable root issue", () => {
+  const graph = {
+    nodes: [
+      editorNode("start", "start"),
+      editorNode("menu", "list_message", {
+        body: "Choose",
+        button_text: "Open",
+        sections: [{
+          id: "support",
+          title: "Support",
+          rows: [{ id: "vip", title: "VIP" }],
+        }],
+      }),
+      editorNode("handoff", "assign_agent", {}),
+    ],
+    edges: [
+      editorEdge("start-menu", "start", "menu"),
+      editorEdge("menu-handoff", "menu", "handoff", {
+        kind: "option",
+        option_id: "vip",
+      }),
+    ],
+  };
+
+  const issues = compileIssues(graph);
+  assertEquals(issues.length, 1);
+  assertEquals(issues[0].code, "handoff_queue_required");
+  assertEquals(issues[0].path, ["nodes", 2, "config"]);
+  assertEquals(issues[0].message, "Destination queue is required");
+  assertEquals(issues[0].node_id, "handoff");
+  assertEquals(issues[0].field, "routing_queue_id");
+  assertEquals(issues[0].category, "configuration");
+});
+
+Deno.test("invalid configured nodes retain graph identity", () => {
+  const graph = representativeGraph();
+  const message = (graph.nodes as Record<string, unknown>[]).find((node) =>
+    node.id === "message-1"
+  )!;
+  (message.data as Record<string, unknown>).config = { text: "" };
+
+  const codes = issueCodes(graph);
+  assertEquals(codes.includes("message_text_required"), true);
+  assertEquals(codes.includes("dangling_edge_source"), false);
+  assertEquals(codes.includes("dangling_edge_target"), false);
+  assertEquals(codes.includes("option_route_missing"), false);
+  assertEquals(codes.includes("unreachable_node"), false);
+  assertEquals(codes.includes("cycle_detected"), false);
+  assertEquals(codes.includes("template_variable_unavailable"), false);
+});
+
+Deno.test("genuinely missing targets still return dangling diagnostics", () => {
+  const graph = representativeGraph();
+  const edge = (graph.edges as Record<string, unknown>[]).find((candidate) =>
+    candidate.id === "edge-5"
+  )!;
+  edge.target = "deleted-node";
+
+  const issues = compileIssues(graph);
+  assertEquals(
+    issues.some((issue) =>
+      issue.code === "dangling_edge_target" &&
+      issue.field === "target" &&
+      issue.category === "connection"
+    ),
+    true,
+  );
+});
+
+Deno.test("independent node configuration mistakes are all returned", () => {
+  const graph = representativeGraph();
+  const input = (graph.nodes as Record<string, unknown>[]).find((node) =>
+    node.id === "input-1"
+  )!;
+  (input.data as Record<string, unknown>).config = {
+    prompt: "",
+    variable: "not valid",
+    required: true,
+  };
+  const message = (graph.nodes as Record<string, unknown>[]).find((node) =>
+    node.id === "message-1"
+  )!;
+  (message.data as Record<string, unknown>).config = { text: "" };
+
+  const codes = issueCodes(graph);
+  assertEquals(codes.includes("input_prompt_required"), true);
+  assertEquals(codes.includes("input_variable_invalid"), true);
+  assertEquals(codes.includes("message_text_required"), true);
+});
+
+Deno.test("node configuration errors use actionable codes and fields", () => {
+  const cases: ReadonlyArray<{
+    nodeType: string;
+    config: Record<string, unknown>;
+    code: string;
+    field: string;
+  }> = [
+    {
+      nodeType: "send_message",
+      config: { text: "" },
+      code: "message_text_required",
+      field: "text",
+    },
+    {
+      nodeType: "collect_input",
+      config: { prompt: "", variable: "answer", required: true },
+      code: "input_prompt_required",
+      field: "prompt",
+    },
+    {
+      nodeType: "collect_input",
+      config: { prompt: "Answer", variable: "not valid", required: true },
+      code: "input_variable_invalid",
+      field: "variable",
+    },
+    {
+      nodeType: "interactive_buttons",
+      config: { body: "Choose", buttons: [] },
+      code: "options_required",
+      field: "buttons",
+    },
+    {
+      nodeType: "list_message",
+      config: { body: "Choose", button_text: "Open", sections: [] },
+      code: "options_required",
+      field: "sections",
+    },
+    {
+      nodeType: "text_menu",
+      config: {
+        prompt: "Choose",
+        variable: "choice",
+        options: [],
+        invalid_response: "Try again",
+        max_retries: 3,
+      },
+      code: "options_required",
+      field: "options",
+    },
+    {
+      nodeType: "condition",
+      config: { variable: "not valid" },
+      code: "condition_variable_required",
+      field: "variable",
+    },
+    {
+      nodeType: "webhook",
+      config: {
+        method: "GET",
+        url: "http://unsafe.example.com",
+        headers: [],
+        timeout_ms: 1000,
+        retry_count: 0,
+        response_mappings: [],
+      },
+      code: "webhook_url_invalid",
+      field: "url",
+    },
+  ];
+
+  for (const testCase of cases) {
+    const graph = {
+      nodes: [
+        editorNode("start", "start"),
+        editorNode("invalid", testCase.nodeType, testCase.config),
+        editorNode("end", "end"),
+      ],
+      edges: [
+        editorEdge("to-invalid", "start", "invalid"),
+        editorEdge("to-end", "invalid", "end"),
+      ],
+    };
+    const issue = compileIssues(graph).find((candidate) =>
+      candidate.code === testCase.code
+    );
+    assertEquals(issue?.field, testCase.field);
+    assertEquals(issue?.category, "configuration");
+  }
 });
 
 Deno.test("issue ordering is deterministic", () => {

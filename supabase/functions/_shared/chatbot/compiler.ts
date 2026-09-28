@@ -14,6 +14,24 @@ export interface CompileIssue {
   readonly message: string;
   readonly node_id?: string;
   readonly edge_id?: string;
+  readonly field?: string;
+  readonly category?: "configuration" | "connection" | "flow" | "reference";
+}
+
+interface StructuralNode {
+  readonly id: string;
+  readonly type?: string;
+  readonly sourceIndex: number;
+}
+
+interface StructuralEdge {
+  readonly id: string;
+  readonly source: string;
+  readonly target: string;
+  readonly kind: string;
+  readonly option_id?: string;
+  readonly outcome?: string;
+  readonly sourceIndex: number;
 }
 
 export type CompileFlowResult =
@@ -58,7 +76,22 @@ function issuePathCompare(
 }
 
 function sortIssues(issues: CompileIssue[]): CompileIssue[] {
-  return issues.sort((left, right) =>
+  const rootIssues = [
+    ...new Map(
+      issues.map((issue) => [
+        [
+          issue.code,
+          issue.node_id ?? "",
+          issue.edge_id ?? "",
+          issue.field ?? "",
+          issue.node_id || issue.edge_id ? "" : JSON.stringify(issue.path),
+        ]
+          .join("\u0000"),
+        issue,
+      ]),
+    ).values(),
+  ];
+  return rootIssues.sort((left, right) =>
     issuePathCompare(left.path, right.path) ||
     left.code.localeCompare(right.code) ||
     left.message.localeCompare(right.message)
@@ -119,6 +152,162 @@ function editorEdgeToCandidate(edge: EditorEdge): unknown {
   };
 }
 
+function stableIdentity(value: unknown): string | undefined {
+  return typeof value === "string" &&
+      /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value)
+    ? value
+    : undefined;
+}
+
+function structuralNode(rawNode: EditorNode, sourceIndex: number):
+  | StructuralNode
+  | undefined {
+  const candidate = editorNodeToCandidate(rawNode);
+  if (!isRecord(candidate)) return undefined;
+  const id = stableIdentity(candidate.id);
+  if (id === undefined) return undefined;
+  return {
+    id,
+    ...(typeof candidate.type === "string" ? { type: candidate.type } : {}),
+    sourceIndex,
+  };
+}
+
+function structuralEdge(rawEdge: EditorEdge, sourceIndex: number):
+  | StructuralEdge
+  | undefined {
+  const candidate = editorEdgeToCandidate(rawEdge);
+  if (!isRecord(candidate)) return undefined;
+  const id = stableIdentity(candidate.id);
+  const source = stableIdentity(candidate.source);
+  const target = stableIdentity(candidate.target);
+  if (id === undefined || source === undefined || target === undefined) {
+    return undefined;
+  }
+  return {
+    id,
+    source,
+    target,
+    kind: typeof candidate.kind === "string" ? candidate.kind : "default",
+    ...(typeof candidate.option_id === "string"
+      ? { option_id: candidate.option_id }
+      : {}),
+    ...(typeof candidate.outcome === "string"
+      ? { outcome: candidate.outcome }
+      : {}),
+    sourceIndex,
+  };
+}
+
+function nodeConfigurationIssue(
+  nodeType: unknown,
+  path: ReadonlyArray<PropertyKey>,
+  fallbackMessage: string,
+): Pick<CompileIssue, "code" | "message" | "field" | "category"> {
+  const field = path[0] === "config" && typeof path[1] === "string"
+    ? path[1]
+    : typeof path[0] === "string"
+    ? path[0]
+    : undefined;
+  const category = "configuration" as const;
+
+  if (field === "id") {
+    return {
+      code: "node_id_invalid",
+      message: "Node ID is invalid",
+      field,
+      category,
+    };
+  }
+  if (field === "type") {
+    return {
+      code: "node_type_invalid",
+      message: "Node type is invalid",
+      field,
+      category,
+    };
+  }
+  if (nodeType === "assign_agent") {
+    const handoffField = field === "agent_id" ? "agent_id" : "routing_queue_id";
+    return {
+      code: handoffField === "agent_id"
+        ? "handoff_agent_invalid"
+        : "handoff_queue_required",
+      message: handoffField === "agent_id"
+        ? "Destination agent is invalid"
+        : "Destination queue is required",
+      field: handoffField,
+      category,
+    };
+  }
+  if (nodeType === "send_message" && field === "text") {
+    return {
+      code: "message_text_required",
+      message: "Message text is required",
+      field,
+      category,
+    };
+  }
+  if (nodeType === "collect_input" && field === "prompt") {
+    return {
+      code: "input_prompt_required",
+      message: "Input prompt is required",
+      field,
+      category,
+    };
+  }
+  if (nodeType === "collect_input" && field === "variable") {
+    return {
+      code: "input_variable_invalid",
+      message: "Input variable is invalid",
+      field,
+      category,
+    };
+  }
+  if (
+    (nodeType === "interactive_buttons" && field === "buttons") ||
+    (nodeType === "list_message" && field === "sections") ||
+    (nodeType === "text_menu" && field === "options")
+  ) {
+    return {
+      code: "options_required",
+      message: "Add at least one option",
+      field,
+      category,
+    };
+  }
+  if (nodeType === "condition" && field === "variable") {
+    return {
+      code: "condition_variable_required",
+      message: "Condition variable is required",
+      field,
+      category,
+    };
+  }
+  if (nodeType === "webhook" && field === "url") {
+    return {
+      code: "webhook_url_invalid",
+      message: "Webhook URL is invalid",
+      field,
+      category,
+    };
+  }
+  if (nodeType === "webhook" && field === "secret_id") {
+    return {
+      code: "webhook_credential_required",
+      message: "Webhook credential is required",
+      field,
+      category,
+    };
+  }
+  return {
+    code: "node_configuration_invalid",
+    message: fallbackMessage,
+    ...(field === undefined ? {} : { field }),
+    category,
+  };
+}
+
 function addDuplicateIssues(
   values: ReadonlyArray<{ readonly id: string }>,
   sourceIndexes: ReadonlyArray<number>,
@@ -148,7 +337,7 @@ function addDuplicateIssues(
 }
 
 function findCycle(
-  nodes: ReadonlyArray<FlowNodeV1>,
+  nodes: ReadonlyArray<{ readonly id: string }>,
   adjacency: ReadonlyMap<string, ReadonlyArray<string>>,
 ): string | undefined {
   const visited = new Set<string>();
@@ -274,6 +463,8 @@ function validateAvailableVariables(
           path,
           message: parsedTemplate.message,
           node_id: node.id,
+          field,
+          category: "configuration",
         });
         continue;
       }
@@ -285,6 +476,8 @@ function validateAvailableVariables(
             message:
               `Variable '${variable}' is not collected on every path to this node`,
             node_id: node.id,
+            field,
+            category: "configuration",
           });
         }
       }
@@ -303,6 +496,8 @@ function validateAvailableVariables(
         message:
           `Variable '${node.config.variable}' is not collected on every path to this condition`,
         node_id: node.id,
+        field: "variable",
+        category: "configuration",
       });
     }
 
@@ -363,6 +558,10 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
   const rawEdges = editorGraph.edges as unknown[];
   const nodes: FlowNodeV1[] = [];
   const edges: FlowEdgeV1[] = [];
+  const structuralNodes: StructuralNode[] = [];
+  const structuralEdges: StructuralEdge[] = [];
+  const invalidNodeIds = new Set<string>();
+  const invalidEdgeIds = new Set<string>();
   const nodeSourceIndexes = new Map<FlowNodeV1, number>();
   const edgeSourceIndexes = new Map<FlowEdgeV1, number>();
 
@@ -372,9 +571,13 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
         code: "invalid_node",
         path: ["nodes", index],
         message: "Node must be an object",
+        category: "configuration",
       });
       return;
     }
+
+    const identity = structuralNode(rawNode as EditorNode, index);
+    if (identity !== undefined) structuralNodes.push(identity);
 
     const result = flowNodeV1Schema.safeParse(
       editorNodeToCandidate(rawNode as EditorNode),
@@ -385,9 +588,16 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
       return;
     }
 
+    if (identity !== undefined) invalidNodeIds.add(identity.id);
+
     for (const validationIssue of result.error.issues) {
+      const diagnostic = nodeConfigurationIssue(
+        identity?.type,
+        validationIssue.path,
+        validationIssue.message,
+      );
       issues.push({
-        code: "invalid_node",
+        ...diagnostic,
         path: [
           "nodes",
           index,
@@ -395,7 +605,6 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
             typeof part === "symbol" ? String(part) : part
           ),
         ],
-        message: validationIssue.message,
         ...(typeof rawNode.id === "string" ? { node_id: rawNode.id } : {}),
       });
     }
@@ -407,9 +616,13 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
         code: "invalid_edge",
         path: ["edges", index],
         message: "Edge must be an object",
+        category: "connection",
       });
       return;
     }
+
+    const identity = structuralEdge(rawEdge as EditorEdge, index);
+    if (identity !== undefined) structuralEdges.push(identity);
 
     const result = flowEdgeV1Schema.safeParse(
       editorEdgeToCandidate(rawEdge as EditorEdge),
@@ -419,6 +632,8 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
       edgeSourceIndexes.set(result.data, index);
       return;
     }
+
+    if (identity !== undefined) invalidEdgeIds.add(identity.id);
 
     for (const validationIssue of result.error.issues) {
       issues.push({
@@ -431,27 +646,31 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
           ),
         ],
         message: validationIssue.message,
+        field: typeof validationIssue.path.at(-1) === "string"
+          ? String(validationIssue.path.at(-1))
+          : undefined,
+        category: "connection",
         ...(typeof rawEdge.id === "string" ? { edge_id: rawEdge.id } : {}),
       });
     }
   });
 
   const hasDuplicateNodes = addDuplicateIssues(
-    nodes,
-    nodes.map((node) => nodeSourceIndexes.get(node)!),
+    structuralNodes,
+    structuralNodes.map((node) => node.sourceIndex),
     "nodes",
     "duplicate_node_id",
     issues,
   );
   const hasDuplicateEdges = addDuplicateIssues(
-    edges,
-    edges.map((edge) => edgeSourceIndexes.get(edge)!),
+    structuralEdges,
+    structuralEdges.map((edge) => edge.sourceIndex),
     "edges",
     "duplicate_edge_id",
     issues,
   );
-  const startNodes = nodes.filter((node) => node.type === "start");
-  const terminalNodes = nodes.filter((node) =>
+  const startNodes = structuralNodes.filter((node) => node.type === "start");
+  const terminalNodes = structuralNodes.filter((node) =>
     node.type === "end" || node.type === "assign_agent"
   );
 
@@ -460,6 +679,7 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
       code: "invalid_start_count",
       path: ["nodes"],
       message: `Expected exactly one start node, found ${startNodes.length}`,
+      category: "flow",
     });
   }
   if (terminalNodes.length === 0) {
@@ -467,44 +687,54 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
       code: "missing_terminal_node",
       path: ["nodes"],
       message: "Expected at least one end or assign-agent node",
+      category: "flow",
     });
   }
 
-  const nodeIds = new Set(nodes.map((node) => node.id));
-  edges.forEach((edge) => {
+  const nodeIds = new Set(structuralNodes.map((node) => node.id));
+  structuralEdges.forEach((edge) => {
     if (!nodeIds.has(edge.source)) {
       issues.push({
         code: "dangling_edge_source",
-        path: ["edges", edgeSourceIndexes.get(edge)!, "source"],
+        path: ["edges", edge.sourceIndex, "source"],
         message: `Edge source '${edge.source}' does not exist`,
         edge_id: edge.id,
+        field: "source",
+        category: "connection",
       });
     }
     if (!nodeIds.has(edge.target)) {
       issues.push({
         code: "dangling_edge_target",
-        path: ["edges", edgeSourceIndexes.get(edge)!, "target"],
+        path: ["edges", edge.sourceIndex, "target"],
         message: `Edge target '${edge.target}' does not exist`,
         edge_id: edge.id,
+        field: "target",
+        category: "connection",
       });
     }
   });
 
+  const validStructuralEdges = structuralEdges.filter((edge) =>
+    nodeIds.has(edge.source) && nodeIds.has(edge.target)
+  );
   const validEdges = edges.filter((edge) =>
     nodeIds.has(edge.source) && nodeIds.has(edge.target)
   );
-  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const nodeById = new Map(structuralNodes.map((node) => [node.id, node]));
 
-  validEdges.forEach((edge) => {
+  validStructuralEdges.forEach((edge) => {
     if (
       edge.kind === "condition" &&
       nodeById.get(edge.source)?.type !== "condition"
     ) {
       issues.push({
         code: "conditional_edge_source",
-        path: ["edges", edgeSourceIndexes.get(edge)!, "data", "kind"],
+        path: ["edges", edge.sourceIndex, "data", "kind"],
         message: "Conditional edges may originate only from condition nodes",
         edge_id: edge.id,
+        field: "kind",
+        category: "connection",
       });
     }
     if (
@@ -515,10 +745,12 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
     ) {
       issues.push({
         code: "option_edge_source",
-        path: ["edges", edgeSourceIndexes.get(edge)!, "data", "kind"],
+        path: ["edges", edge.sourceIndex, "data", "kind"],
         message:
           "Option edges may originate only from interactive, list, or text-menu nodes",
         edge_id: edge.id,
+        field: "kind",
+        category: "connection",
       });
     }
     if (
@@ -527,17 +759,23 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
     ) {
       issues.push({
         code: "webhook_edge_source",
-        path: ["edges", edgeSourceIndexes.get(edge)!, "data", "kind"],
+        path: ["edges", edge.sourceIndex, "data", "kind"],
         message: "Webhook edges may originate only from webhook nodes",
         edge_id: edge.id,
+        field: "kind",
+        category: "connection",
       });
     }
   });
 
   nodes.forEach((node) => {
     const nodeIndex = nodeSourceIndexes.get(node)!;
-    const incoming = validEdges.filter((edge) => edge.target === node.id);
-    const outgoing = validEdges.filter((edge) => edge.source === node.id);
+    const incoming = validStructuralEdges.filter((edge) =>
+      edge.target === node.id
+    );
+    const outgoing = validStructuralEdges.filter((edge) =>
+      edge.source === node.id
+    );
     const defaults = outgoing.filter((edge) => edge.kind === "default");
     const conditions = outgoing.filter((edge) => edge.kind === "condition");
     const options = outgoing.filter((edge) => edge.kind === "option");
@@ -550,14 +788,17 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
           path: ["nodes", nodeIndex],
           message: "Start node must not have incoming edges",
           node_id: node.id,
+          category: "connection",
         });
       }
       if (outgoing.length !== 1 || defaults.length !== 1) {
         issues.push({
-          code: "invalid_start_routing",
+          code: "start_route_required",
           path: ["nodes", nodeIndex],
           message: "Start node must have exactly one default outgoing edge",
           node_id: node.id,
+          field: "outgoing_route",
+          category: "connection",
         });
       }
     }
@@ -565,11 +806,13 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
     if (node.type === "send_message" || node.type === "collect_input") {
       if (outgoing.length !== 1 || defaults.length !== 1) {
         issues.push({
-          code: "invalid_default_routing",
+          code: "default_route_required",
           path: ["nodes", nodeIndex],
           message:
             `${node.type} node must have exactly one default outgoing edge`,
           node_id: node.id,
+          field: "outgoing_route",
+          category: "connection",
         });
       }
     }
@@ -583,7 +826,9 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
           section.rows.map((row) => row.id)
         );
       const uniqueConfiguredOptionIds = new Set(configuredOptionIds);
-      const routedOptionIds = options.map((edge) => edge.option_id);
+      const routedOptionIds = options.flatMap((edge) =>
+        edge.option_id === undefined ? [] : [edge.option_id]
+      );
       const uniqueRoutedOptionIds = new Set(routedOptionIds);
 
       if (uniqueConfiguredOptionIds.size !== configuredOptionIds.length) {
@@ -592,6 +837,8 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
           path: ["nodes", nodeIndex, "data", "config"],
           message: "Interactive option IDs must be unique within a node",
           node_id: node.id,
+          field: node.type === "interactive_buttons" ? "buttons" : "sections",
+          category: "configuration",
         });
       }
 
@@ -607,11 +854,13 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
         )
       ) {
         issues.push({
-          code: "invalid_option_routing",
+          code: "option_route_missing",
           path: ["nodes", nodeIndex],
           message:
             `${node.type} node must have exactly one option edge for every configured option`,
           node_id: node.id,
+          field: node.type === "interactive_buttons" ? "buttons" : "sections",
+          category: "connection",
         });
       }
     }
@@ -620,7 +869,9 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
       const configuredOptionIds = node.config.options.map((option) =>
         option.id
       );
-      const routedOptionIds = options.map((edge) => edge.option_id);
+      const routedOptionIds = options.flatMap((edge) =>
+        edge.option_id === undefined ? [] : [edge.option_id]
+      );
       if (
         outgoing.length !== configuredOptionIds.length ||
         options.length !== outgoing.length ||
@@ -628,23 +879,36 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
         configuredOptionIds.some((id) => !routedOptionIds.includes(id))
       ) {
         issues.push({
-          code: "invalid_option_routing",
+          code: "option_route_missing",
           path: ["nodes", nodeIndex],
           message:
             "text_menu node must have exactly one option edge for every configured option",
           node_id: node.id,
+          field: "options",
+          category: "connection",
         });
       }
     }
 
     if (node.type === "condition") {
-      if (defaults.length !== 1 || conditions.length === 0) {
+      if (conditions.length === 0) {
         issues.push({
-          code: "invalid_condition_routing",
+          code: "condition_branch_required",
           path: ["nodes", nodeIndex],
-          message:
-            "Condition node must have exactly one default edge and at least one conditional edge",
+          message: "Add at least one condition branch",
           node_id: node.id,
+          field: "branches",
+          category: "connection",
+        });
+      }
+      if (defaults.length !== 1) {
+        issues.push({
+          code: "condition_fallback_required",
+          path: ["nodes", nodeIndex],
+          message: "Condition node must have exactly one default route",
+          node_id: node.id,
+          field: "default_route",
+          category: "connection",
         });
       }
     }
@@ -664,6 +928,8 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
           message:
             "Webhook node must have exactly one success edge and one error edge",
           node_id: node.id,
+          field: "outcomes",
+          category: "connection",
         });
       }
     }
@@ -677,13 +943,17 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
         path: ["nodes", nodeIndex],
         message: "Terminal nodes must not have outgoing edges",
         node_id: node.id,
+        field: "outgoing_route",
+        category: "connection",
       });
     }
   });
 
   const adjacency = new Map<string, string[]>();
-  for (const node of nodes) adjacency.set(node.id, []);
-  for (const edge of validEdges) adjacency.get(edge.source)?.push(edge.target);
+  for (const node of structuralNodes) adjacency.set(node.id, []);
+  for (const edge of validStructuralEdges) {
+    adjacency.get(edge.source)?.push(edge.target);
+  }
 
   const reachable = new Set<string>();
   if (startNodes.length === 1) {
@@ -695,39 +965,47 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
       queue.push(...(adjacency.get(nodeId) ?? []));
     }
 
-    nodes.forEach((node) => {
+    structuralNodes.forEach((node) => {
       if (!reachable.has(node.id)) {
         issues.push({
           code: "unreachable_node",
-          path: ["nodes", nodeSourceIndexes.get(node)!],
+          path: ["nodes", node.sourceIndex],
           message: `Node '${node.id}' is not reachable from start`,
           node_id: node.id,
+          category: "flow",
         });
       }
     });
   }
 
   const cycleNode = !hasDuplicateNodes && !hasDuplicateEdges
-    ? findCycle(nodes, adjacency)
+    ? findCycle(structuralNodes, adjacency)
     : undefined;
   if (cycleNode !== undefined) {
-    const cycleNodeValue = nodes.find((node) => node.id === cycleNode)!;
+    const cycleNodeValue = structuralNodes.find((node) =>
+      node.id === cycleNode
+    )!;
     issues.push({
       code: "cycle_detected",
-      path: ["nodes", nodeSourceIndexes.get(cycleNodeValue)!],
+      path: ["nodes", cycleNodeValue.sourceIndex],
       message: `Cycle detected at node '${cycleNode}'`,
       node_id: cycleNode,
+      category: "flow",
     });
   }
 
   if (
     startNodes.length === 1 && cycleNode === undefined &&
-    !hasDuplicateNodes && !hasDuplicateEdges
+    !hasDuplicateNodes && !hasDuplicateEdges &&
+    invalidNodeIds.size === 0 && invalidEdgeIds.size === 0
   ) {
+    const typedNodeIds = new Set(nodes.map((node) => node.id));
     validateAvailableVariables(
       nodes,
       nodeSourceIndexes,
-      validEdges,
+      validEdges.filter((edge) =>
+        typedNodeIds.has(edge.source) && typedNodeIds.has(edge.target)
+      ),
       startNodes[0].id,
       reachable,
       issues,
