@@ -33,6 +33,8 @@ export function findUnavailableAgentIssues(
       message:
         "Assign Agent must reference an active human agent in this organization",
       node_id: node.id,
+      field: "agent_id",
+      category: "reference" as const,
     }];
   });
 }
@@ -68,6 +70,8 @@ export function findUnavailableRoutingQueueIssues(
       message:
         "Human Handoff must reference an active routing queue in this organization",
       node_id: node.id,
+      field: "routing_queue_id",
+      category: "reference" as const,
     }];
   });
 }
