@@ -256,6 +256,13 @@ export async function interpretFlowDefinitionV1(
     }
 
     if (result.type === "handoff") {
+      if (result.acknowledgment_text) {
+        outgoingTexts.push(result.acknowledgment_text);
+        outgoingMessages.push({
+          type: "text",
+          text: result.acknowledgment_text,
+        });
+      }
       return {
         status: "handed_off",
         current_node_id: currentNodeId,

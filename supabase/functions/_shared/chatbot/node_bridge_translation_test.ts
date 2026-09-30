@@ -226,9 +226,19 @@ Deno.test("bridge: handoff keeps OpenBSP UUID target, never a Node agent ID", ()
     const graph = translatePublishedDefinition(flow([
       node("handoff", "assign_agent", {
         [target]: "11111111-1111-4111-8111-111111111111",
+        acknowledgment_text: "Connecting you to support.",
       }),
     ], [edge("start", "handoff")]));
     assert(graph.nodes[1].data.nodeType === "ASSIGN_AGENT");
+    assert(
+      graph.nodes[1].data.config.acknowledgmentText ===
+        "Connecting you to support.",
+    );
+    assert(
+      !canonicalBridgeJson(graph.nodes[1].data.config.openbspTarget).includes(
+        "acknowledgment",
+      ),
+    );
     assert(
       canonicalBridgeJson(graph.nodes[1].data.config.openbspTarget).includes(
         target,

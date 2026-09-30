@@ -228,6 +228,14 @@ function nodeConfigurationIssue(
     };
   }
   if (nodeType === "assign_agent") {
+    if (field === "acknowledgment_text") {
+      return {
+        code: "handoff_acknowledgment_invalid",
+        message: "Customer acknowledgment must contain 1–4096 characters",
+        field,
+        category,
+      };
+    }
     const handoffField = field === "agent_id" ? "agent_id" : "routing_queue_id";
     return {
       code: handoffField === "agent_id"
@@ -436,6 +444,8 @@ function validateAvailableVariables(
       ? [["prompt", node.config.prompt]]
       : node.type === "interactive_buttons" || node.type === "list_message"
       ? [["body", node.config.body]]
+      : node.type === "assign_agent" && node.config.acknowledgment_text
+      ? [["acknowledgment_text", node.config.acknowledgment_text]]
       : node.type === "webhook"
       ? [
         ["url", node.config.url],
