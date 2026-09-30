@@ -284,9 +284,22 @@ export const conditionNodeStrategy: NodeStrategy<ConditionNodeV1> = {
 };
 
 export const assignAgentNodeStrategy: NodeStrategy<AssignAgentNodeV1> = {
-  execute(node): Promise<NodeResultV1> {
+  execute(node, context): Promise<NodeResultV1> {
+    const acknowledgment = node.config.acknowledgment_text
+      ? renderChatbotTemplate(
+        node.config.acknowledgment_text,
+        context.variables,
+        CHATBOT_TEXT_MAX_LENGTH,
+      )
+      : undefined;
+    if (acknowledgment && !acknowledgment.ok) {
+      return Promise.resolve(templateFailure(acknowledgment));
+    }
     return Promise.resolve({
       type: "handoff",
+      ...(acknowledgment?.ok
+        ? { acknowledgment_text: acknowledgment.text }
+        : {}),
       ...("agent_id" in node.config
         ? { agent_id: node.config.agent_id }
         : { routing_queue_id: node.config.routing_queue_id }),
