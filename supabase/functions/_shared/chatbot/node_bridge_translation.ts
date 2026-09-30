@@ -128,7 +128,6 @@ export function translatePublishedDefinition(
   for (const node of flow.nodes) {
     const outgoing = flow.edges.filter((edge) => edge.source === node.id);
     const defaults = outgoing.filter((edge) => edge.kind === "default");
-    const config = node.config;
     switch (node.type) {
       case "condition": {
         const predicates = outgoing.filter((edge) => edge.kind === "condition");
@@ -220,7 +219,17 @@ export function translatePublishedDefinition(
         });
         break;
       case "assign_agent":
-        addNode(node.id, "ASSIGN_AGENT", { openbspTarget: config });
+        addNode(node.id, "ASSIGN_AGENT", {
+          openbspTarget: "agent_id" in node.config
+            ? { agent_id: node.config.agent_id }
+            : { routing_queue_id: node.config.routing_queue_id },
+          ...(node.config.acknowledgment_text
+            ? {
+              acknowledgmentText: node.config.acknowledgment_text,
+              openbspText: true,
+            }
+            : {}),
+        });
         break;
       case "webhook": {
         const secrets = node.config.secret_id

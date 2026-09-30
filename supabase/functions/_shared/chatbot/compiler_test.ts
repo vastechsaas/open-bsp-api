@@ -317,6 +317,40 @@ Deno.test("assign_agent is a configured terminal node", () => {
   );
 });
 
+Deno.test("handoff acknowledgment is optional, bounded and reports its own field", () => {
+  for (
+    const acknowledgment_text of [
+      undefined,
+      "Connecting you.",
+      " ",
+      "x".repeat(4097),
+    ]
+  ) {
+    const result = compileFlowDefinition({
+      nodes: [
+        editorNode("start", "start"),
+        editorNode("handoff", "assign_agent", {
+          routing_queue_id: "33333333-3333-4333-8333-333333333333",
+          ...(acknowledgment_text === undefined ? {} : { acknowledgment_text }),
+        }),
+      ],
+      edges: [editorEdge("to-handoff", "start", "handoff")],
+    });
+    if (
+      acknowledgment_text === undefined ||
+      acknowledgment_text === "Connecting you."
+    ) {
+      assertEquals(result.ok, true);
+    } else {
+      if (result.ok) throw new Error("Invalid acknowledgment accepted");
+      assertEquals(result.issues.map((issue) => issue.code), [
+        "handoff_acknowledgment_invalid",
+      ]);
+      assertEquals(result.issues[0].field, "acknowledgment_text");
+    }
+  }
+});
+
 Deno.test("interactive options compile to exact option edges", () => {
   const graph = {
     nodes: [

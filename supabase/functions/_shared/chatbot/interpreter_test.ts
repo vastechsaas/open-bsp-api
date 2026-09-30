@@ -455,6 +455,27 @@ Deno.test("assign_agent returns a routing queue handoff request", async () => {
   assertEquals(result.handoff_agent_id, undefined);
 });
 
+Deno.test("handoff acknowledgment emits one rendered text before terminal handoff", async () => {
+  const result = await interpretFlowDefinitionV1({
+    schema_version: 1,
+    start_node_id: "handoff",
+    nodes: [{
+      id: "handoff",
+      type: "assign_agent",
+      config: {
+        routing_queue_id: "33333333-3333-4333-8333-333333333333",
+        acknowledgment_text: "Connecting {{name}} to support.",
+      },
+    }],
+    edges: [],
+  }, { current_node_id: "handoff", variables: { name: "Hurera" } });
+  assertEquals(result.status, "handed_off");
+  assertEquals(result.outgoing_messages, [{
+    type: "text",
+    text: "Connecting Hurera to support.",
+  }]);
+});
+
 Deno.test("missing variables and missing edges become failure results", async () => {
   const missingVariable = await interpretFlowDefinitionV1(customerFlow, {
     current_node_id: "route-city",

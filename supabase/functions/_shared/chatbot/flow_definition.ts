@@ -204,8 +204,14 @@ const assignAgentNodeSchema = z.object({
   id: stableIdSchema,
   type: z.literal("assign_agent"),
   config: z.union([
-    z.object({ agent_id: agentIdSchema }).strict(),
-    z.object({ routing_queue_id: agentIdSchema }).strict(),
+    z.object({
+      agent_id: agentIdSchema,
+      acknowledgment_text: nonblankTextSchema.optional(),
+    }).strict(),
+    z.object({
+      routing_queue_id: agentIdSchema,
+      acknowledgment_text: nonblankTextSchema.optional(),
+    }).strict(),
   ]),
 }).strict();
 
@@ -524,6 +530,7 @@ const completeResultSchema = z.object({
 
 const handoffResultSchema = z.object({
   type: z.literal("handoff"),
+  acknowledgment_text: nonblankTextSchema.optional(),
   agent_id: agentIdSchema.optional(),
   routing_queue_id: agentIdSchema.optional(),
 }).strict().superRefine((result, context) => {
