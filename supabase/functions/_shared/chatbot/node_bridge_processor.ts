@@ -4,6 +4,7 @@ import {
   nodeBridgePhaseId,
   nodeBridgeRequest,
 } from "./node_bridge_client.ts";
+import { conversationOperationError } from "./conversation_lifecycle.ts";
 
 export async function processNodeBridgeOperation(requestId: string) {
   const client = createUnsecureClient();
@@ -11,6 +12,7 @@ export async function processNodeBridgeOperation(requestId: string) {
     "chatbot_node_operations",
   ).select().eq("request_id", requestId).single();
   if (error || !operation) throw new Error("Unable to load bridge operation");
+  const conversationScoped = operation.conversation_id !== null;
   if (["succeeded", "failed"].includes(operation.status)) return operation;
   if (
     operation.next_attempt_at &&
@@ -38,13 +40,15 @@ export async function processNodeBridgeOperation(requestId: string) {
         /* Confirmed absent: same request can be submitted. */
       } else throw new Error("Node reconciliation unavailable");
     } catch {
-      await client.from("chatbot_node_bridges").update({
-        last_error: "Node status lookup unavailable; synchronization pending",
-      })
-        .eq("organization_id", operation.organization_id).eq(
-          "organization_address",
-          operation.organization_address,
-        );
+      if (!conversationScoped) {
+        await client.from("chatbot_node_bridges").update({
+          last_error: "Node status lookup unavailable; synchronization pending",
+        })
+          .eq("organization_id", operation.organization_id).eq(
+            "organization_address",
+            operation.organization_address,
+          );
+      }
       await client.from("chatbot_node_operations").update({
         status: "reconciling",
         last_error: "Node status lookup unavailable",
@@ -60,15 +64,29 @@ export async function processNodeBridgeOperation(requestId: string) {
         last_error: "Retry limit reached",
         next_attempt_at: null,
       }).eq("request_id", requestId);
-      await client.from("chatbot_node_bridges").update({
-        sync_status: "failed",
+      if (conversationScoped) {
+        // Exhaustion is safe to release only after status lookup confirmed the
+        // request absent. Unavailable/ambiguous status stays reconciling above.
+        await client.from("chatbot_node_conversations").update({
+          pending_request_id: null,
+        })
+          .eq("conversation_id", operation.conversation_id!).eq(
+            "pending_request_id",
+            requestId,
+          );
+      } else {await client.from("chatbot_node_bridges").update({
+          sync_status: "failed",
+          last_error: "Retry limit reached",
+        })
+          .eq("organization_id", operation.organization_id).eq(
+            "organization_address",
+            operation.organization_address,
+          );}
+      return {
+        ...operation,
+        status: "failed",
         last_error: "Retry limit reached",
-      })
-        .eq("organization_id", operation.organization_id).eq(
-          "organization_address",
-          operation.organization_address,
-        );
-      return operation;
+      };
     }
     // CAS is the durable claim. A crashed in-flight request is reconciled by
     // the same phase request ID, never automatically rolled back or resubmitted.
@@ -142,8 +160,19 @@ export async function processNodeBridgeOperation(requestId: string) {
                 ?.version_id,
             }
             : {}),
-          ...(operation.phase === "resume"
-            ? { conversation_id: payload.node_conversation_id }
+          ...(operation.phase === "resume" ||
+              operation.phase === "resolve-and-close"
+            ? {
+              conversation_id: payload.node_conversation_id,
+              ...(conversationScoped
+                ? {
+                  expected_revision: payload.expected_revision,
+                  observed_last_inbound_wamid:
+                    payload.observed_last_inbound_wamid,
+                  client_request_id: requestId,
+                }
+                : {}),
+            }
             : {}),
         };
       const remote = await nodeBridgeRequest(
@@ -154,34 +183,47 @@ export async function processNodeBridgeOperation(requestId: string) {
       );
       if (!remote.ok) {
         if ([400, 401, 403, 404, 409, 422].includes(remote.status)) {
+          const rejection = await remote.json().catch(() => ({}));
+          const failure = conversationScoped
+            ? conversationOperationError(rejection.message)
+            : `Node rejected ${operation.phase} (HTTP ${remote.status})`;
           await client.from("chatbot_node_operations").update({
             status: "failed",
-            last_error:
-              `Node rejected ${operation.phase} (HTTP ${remote.status})`,
+            last_error: failure,
             next_attempt_at: null,
           }).eq("request_id", requestId);
-          await client.from("chatbot_node_bridges").update({
-            sync_status: "failed",
-            last_error: `Node rejected operation (HTTP ${remote.status})`,
-          })
-            .eq("organization_id", operation.organization_id).eq(
-              "organization_address",
-              operation.organization_address,
-            );
-          return operation;
+          if (conversationScoped) {
+            await client.from("chatbot_node_conversations").update({
+              pending_request_id: null,
+            })
+              .eq("conversation_id", operation.conversation_id!).eq(
+                "pending_request_id",
+                requestId,
+              );
+          } else {await client.from("chatbot_node_bridges").update({
+              sync_status: "failed",
+              last_error: `Node rejected operation (HTTP ${remote.status})`,
+            })
+              .eq("organization_id", operation.organization_id).eq(
+                "organization_address",
+                operation.organization_address,
+              );}
+          return { ...operation, status: "failed", last_error: failure };
         }
         throw new Error("Ambiguous Node response");
       }
       acknowledged = (await remote.json()).data;
       if (!acknowledged) throw new Error("Node acknowledgment missing");
     } catch {
-      await client.from("chatbot_node_bridges").update({
-        last_error: "Node acknowledgment unavailable; reconciling request ID",
-      })
-        .eq("organization_id", operation.organization_id).eq(
-          "organization_address",
-          operation.organization_address,
-        );
+      if (!conversationScoped) {
+        await client.from("chatbot_node_bridges").update({
+          last_error: "Node acknowledgment unavailable; reconciling request ID",
+        })
+          .eq("organization_id", operation.organization_id).eq(
+            "organization_address",
+            operation.organization_address,
+          );
+      }
       await client.from("chatbot_node_operations").update({
         status: "reconciling",
         last_error: "Node acknowledgment unavailable; reconciling request ID",
@@ -193,6 +235,25 @@ export async function processNodeBridgeOperation(requestId: string) {
   }
   // RPC commits mapping and phase completion atomically. If it fails, leave
   // the durable in-flight request available for acknowledgment reconciliation.
+  if (conversationScoped) {
+    // The persisted operation result is immutable, but the customer may have
+    // reopened/escalated since it committed. Apply current revision, not stale ACK.
+    const current = await nodeBridgeRequest(
+      connection,
+      `bridge/conversations/${payload.node_conversation_id}`,
+    );
+    if (!current.ok) {
+      throw new Error("Unable to reconcile current conversation ownership");
+    }
+    const snapshot = (await current.json()).data;
+    if (
+      !snapshot || !/^\d+$/.test(snapshot.revision) ||
+      BigInt(snapshot.revision) < BigInt(String(acknowledged?.revision ?? "0"))
+    ) {
+      throw new Error("Invalid conversation reconciliation snapshot");
+    }
+    acknowledged = snapshot;
+  }
   const { data, error: completionError } = await client.rpc(
     "complete_node_chatbot_operation",
     {

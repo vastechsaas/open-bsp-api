@@ -40,12 +40,14 @@ import { simulateChatbotFlow } from "./simulation.ts";
 import {
   nodeBridgeConnection,
   nodeBridgePhaseId,
+  nodeBridgeRequest,
 } from "../_shared/chatbot/node_bridge_client.ts";
 import {
   bridgeDefinitionHash,
   translatePublishedDefinition,
 } from "../_shared/chatbot/node_bridge_translation.ts";
 import { processNodeBridgeOperation } from "../_shared/chatbot/node_bridge_processor.ts";
+import { conversationLifecycleEnabled } from "../_shared/chatbot/conversation_lifecycle.ts";
 
 type AppEnv = {
   Variables: {
@@ -1069,10 +1071,144 @@ app.post(
   },
 );
 
+app.get(
+  "/chatbot-management/conversations/:conversationId/lifecycle",
+  (c, next) =>
+    authorizeOrganization(c, next, ["owner", "admin", "supervisor", "agent"]),
+  async (c) => {
+    const organizationId = z.uuid().parse(c.req.query("organization_id"));
+    const conversationId = z.uuid().parse(c.req.param("conversationId"));
+    if (!conversationLifecycleEnabled(organizationId)) {
+      return c.json({
+        enabled: false,
+      });
+    }
+    const { data: visible } = await c.get("supabase").from("conversations")
+      .select("id,assigned_agent_id,status")
+      .eq("organization_id", organizationId).eq("id", conversationId)
+      .maybeSingle();
+    if (!visible || !c.get("user")) {
+      throw new HTTPException(403, {
+        message: "Conversation is not accessible",
+      });
+    }
+    const { data: mapping } = await serviceClient().from(
+      "chatbot_node_conversations",
+    ).select()
+      .eq("organization_id", organizationId).eq(
+        "conversation_id",
+        conversationId,
+      ).maybeSingle();
+    if (!mapping) return c.json({ enabled: false });
+    const remote = await nodeBridgeRequest(
+      nodeBridgeConnection(organizationId, mapping.organization_address),
+      `bridge/conversations/${mapping.node_conversation_id}`,
+    );
+    if (!remote.ok) {
+      throw new HTTPException(503, {
+        message: "Conversation synchronization is unavailable",
+      });
+    }
+    const snapshot = await remote.json();
+    const { data: actor } = await c.get("supabase").from("agents").select(
+      "extra",
+    )
+      .eq("id", c.get("actorAgentId")!).single();
+    const role = (actor?.extra as Record<string, unknown> | null)?.role;
+    const manager = ["owner", "admin", "supervisor"].includes(String(role));
+    const { data: lastOperation } = await serviceClient().from(
+      "chatbot_node_operations",
+    ).select("request_id,status,last_error,action,payload")
+      .eq("organization_id", organizationId).eq(
+        "conversation_id",
+        conversationId,
+      ).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const operation = lastOperation
+      ? {
+        request_id: lastOperation.request_id,
+        status: lastOperation.status,
+        last_error: lastOperation.last_error,
+        action: lastOperation.action,
+        expected_revision:
+          (lastOperation.payload as Record<string, unknown>).expected_revision,
+        observed_last_inbound_wamid:
+          (lastOperation.payload as Record<string, unknown>)
+            .observed_last_inbound_wamid,
+      }
+      : null;
+    return c.json({
+      enabled: snapshot.enabled === true,
+      ...snapshot.data,
+      pending_request_id: mapping.pending_request_id,
+      can_resolve: manager ||
+        visible.assigned_agent_id === c.get("actorAgentId"),
+      can_resume: manager,
+      operation,
+    });
+  },
+);
+
+app.post(
+  "/chatbot-management/conversations/:conversationId/resolve-and-close",
+  (c, next) =>
+    authorizeOrganization(c, next, ["owner", "admin", "supervisor", "agent"]),
+  (c) => executeConversationAction(c, "resolve-and-close"),
+);
+
+async function executeConversationAction(
+  c: Context<AppEnv>,
+  action: "resolve-and-close" | "resume",
+) {
+  const payload = z.object({
+    organization_id: z.uuid(),
+    request_id: z.uuid(),
+    observed_last_inbound_wamid: z.string().startsWith("wamid.").max(512),
+    expected_revision: z.string().regex(/^\d+$/),
+  }).strict().parse(await c.req.json());
+  const conversationId = z.uuid().parse(c.req.param("conversationId"));
+  if (
+    !c.get("user") || !conversationLifecycleEnabled(payload.organization_id)
+  ) {
+    throw new HTTPException(403, {
+      message: "Conversation lifecycle action is unavailable",
+    });
+  }
+  const { data: operation, error } = await c.get("supabase").rpc(
+    "begin_node_conversation_operation",
+    {
+      p_organization_id: payload.organization_id,
+      p_conversation_id: conversationId,
+      p_request_id: payload.request_id,
+      p_action: action,
+      p_observed_last_inbound_wamid: payload.observed_last_inbound_wamid,
+      p_expected_revision: payload.expected_revision,
+    },
+  );
+  if (error) {
+    throw new HTTPException(error.code === "42501" ? 403 : 409, {
+      message: error.message,
+    });
+  }
+  // begin_node_conversation_operation atomically reclaims a failed request,
+  // including current ownership, pending-send and observed-message checks.
+  const result = await processNodeBridgeOperation(operation.request_id);
+  return c.json({
+    request_id: result.request_id,
+    status: result.status,
+    last_error: result.last_error,
+  });
+}
+
 app.post(
   "/chatbot-management/conversations/:conversationId/resume",
-  requireMember,
+  (c, next) => authorizeOrganization(c, next, ["owner", "admin", "supervisor"]),
   async (c) => {
+    const requestedOrganization = z.uuid().parse(
+      (await c.req.raw.clone().json()).organization_id,
+    );
+    if (conversationLifecycleEnabled(requestedOrganization)) {
+      return executeConversationAction(c, "resume");
+    }
     const payload = z.object({
       organization_id: z.uuid(),
       request_id: z.uuid().optional(),

@@ -24,6 +24,7 @@ test("uses the single ordered queue defaults", () => {
     "whatsapp_webhook",
     "chatbot_reply",
     "chatbot_handoff",
+    "chatbot_conversation_lifecycle",
   ]);
 });
 

@@ -173,9 +173,17 @@ begin
   end if;
 
   -- Look up conversation_id from conversation table
+  -- Node's durable conversation mapping survives closure; never split history.
+  perform pg_advisory_xact_lock(hashtextextended(new.organization_id::text || ':' || new.organization_address || ':' || coalesce(new.contact_address,''), 123));
+  select c.id into new.conversation_id from public.conversations c
+    join public.chatbot_node_conversations mapping on mapping.conversation_id = c.id and mapping.organization_id = c.organization_id
+    where c.organization_id = new.organization_id and c.organization_address = new.organization_address
+      and c.contact_address is not distinct from new.contact_address and c.group_address is not distinct from new.group_address
+      and mapping.lifecycle_enabled order by c.created_at desc, c.id desc limit 1;
+  if new.conversation_id is not null then return new; end if;
   select id into new.conversation_id
   from public.conversations
-  where organization_address = new.organization_address
+  where organization_id = new.organization_id and organization_address = new.organization_address
     and contact_address is not distinct from new.contact_address
     and group_address is not distinct from new.group_address
     and status = 'active'

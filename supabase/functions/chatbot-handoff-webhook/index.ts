@@ -1,12 +1,14 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { z } from "zod";
 import { createApiClient, createUnsecureClient } from "../_shared/supabase.ts";
+import { conversationLifecycleEnabled } from "../_shared/chatbot/conversation_lifecycle.ts";
 
 const schema = z.object({
   phone_number_id: z.string().regex(/^\d+$/),
   recipient: z.string().regex(/^\d+$/),
   source_wamid: z.string().startsWith("wamid."),
   node_conversation_id: z.string().regex(/^\d+$/),
+  revision: z.string().regex(/^\d+$/).optional(),
   target: z.union([
     z.object({ agent_id: z.uuid() }).strict(),
     z.object({ routing_queue_id: z.uuid() }).strict(),
@@ -64,6 +66,9 @@ Deno.serve(async (request) => {
         : undefined,
       p_routing_queue_id: "routing_queue_id" in payload.target
         ? payload.target.routing_queue_id
+        : undefined,
+      p_revision: conversationLifecycleEnabled(key.organization_id)
+        ? payload.revision
         : undefined,
     });
     if (error) {

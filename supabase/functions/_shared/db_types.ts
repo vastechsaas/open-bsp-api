@@ -1235,25 +1235,46 @@ export type Database = {
       }
       chatbot_node_conversations: {
         Row: {
+          closed_at: string | null
           conversation_id: string
           human_owned: boolean
+          last_inbound_wamid: string | null
+          lifecycle_enabled: boolean
           node_conversation_id: string
           organization_address: string
           organization_id: string
+          ownership_revision: string
+          pending_request_id: string | null
+          resolved_by: string | null
+          state: string
         }
         Insert: {
+          closed_at?: string | null
           conversation_id: string
           human_owned?: boolean
+          last_inbound_wamid?: string | null
+          lifecycle_enabled?: boolean
           node_conversation_id: string
           organization_address: string
           organization_id: string
+          ownership_revision?: string
+          pending_request_id?: string | null
+          resolved_by?: string | null
+          state?: string
         }
         Update: {
+          closed_at?: string | null
           conversation_id?: string
           human_owned?: boolean
+          last_inbound_wamid?: string | null
+          lifecycle_enabled?: boolean
           node_conversation_id?: string
           organization_address?: string
           organization_id?: string
+          ownership_revision?: string
+          pending_request_id?: string | null
+          resolved_by?: string | null
+          state?: string
         }
         Relationships: [
           {
@@ -1312,6 +1333,7 @@ export type Database = {
         Row: {
           action: string
           attempts: number
+          conversation_id: string | null
           created_at: string
           last_error: string | null
           next_attempt_at: string | null
@@ -1326,6 +1348,7 @@ export type Database = {
         Insert: {
           action: string
           attempts?: number
+          conversation_id?: string | null
           created_at?: string
           last_error?: string | null
           next_attempt_at?: string | null
@@ -1340,6 +1363,7 @@ export type Database = {
         Update: {
           action?: string
           attempts?: number
+          conversation_id?: string | null
           created_at?: string
           last_error?: string | null
           next_attempt_at?: string | null
@@ -1352,6 +1376,13 @@ export type Database = {
           status?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "chatbot_node_operations_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "chatbot_node_operations_organization_id_organization_addre_fkey"
             columns: ["organization_id", "organization_address"]
@@ -2977,6 +3008,20 @@ export type Database = {
         }
         Returns: boolean
       }
+      apply_node_conversation_lifecycle: {
+        Args: {
+          p_address: string
+          p_last_inbound_wamid: string
+          p_node_conversation_id: string
+          p_organization_id: string
+          p_recipient: string
+          p_request_id?: string
+          p_revision: string
+          p_source_wamid?: string
+          p_state: string
+        }
+        Returns: string
+      }
       archive_organization: {
         Args: {
           p_expected_name: string
@@ -3012,6 +3057,37 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "conversations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      begin_node_conversation_operation: {
+        Args: {
+          p_action: string
+          p_conversation_id: string
+          p_expected_revision: string
+          p_observed_last_inbound_wamid: string
+          p_organization_id: string
+          p_request_id: string
+        }
+        Returns: {
+          action: string
+          attempts: number
+          conversation_id: string | null
+          created_at: string
+          last_error: string | null
+          next_attempt_at: string | null
+          organization_address: string
+          organization_id: string
+          payload: Json
+          phase: string
+          request_id: string
+          result: Json | null
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "chatbot_node_operations"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -3058,6 +3134,7 @@ export type Database = {
         Returns: {
           action: string
           attempts: number
+          conversation_id: string | null
           created_at: string
           last_error: string | null
           next_attempt_at: string | null
@@ -3302,6 +3379,7 @@ export type Database = {
         Returns: {
           action: string
           attempts: number
+          conversation_id: string | null
           created_at: string
           last_error: string | null
           next_attempt_at: string | null
@@ -4422,6 +4500,7 @@ export type Database = {
           p_organization_address: string
           p_organization_id: string
           p_recipient: string
+          p_revision?: string
           p_routing_queue_id?: string
           p_source_wamid: string
         }
