@@ -12,7 +12,10 @@ export type WorkerConfig = {
   logLevel: "debug" | "info" | "warn" | "error";
   topology: QueueTopology;
   acceptedEventTypes: ReadonlySet<
-    "whatsapp_webhook" | "chatbot_reply" | "chatbot_handoff"
+    | "whatsapp_webhook"
+    | "chatbot_reply"
+    | "chatbot_handoff"
+    | "chatbot_conversation_lifecycle"
   >;
 };
 
@@ -36,7 +39,7 @@ const environmentSchema = z.object({
     defaultTopology.deadLetterRoutingKey,
   ),
   WORKER_EVENT_TYPES: z.string().default(
-    "whatsapp_webhook,chatbot_reply,chatbot_handoff",
+    "whatsapp_webhook,chatbot_reply,chatbot_handoff,chatbot_conversation_lifecycle",
   ),
 });
 
@@ -59,7 +62,12 @@ export function loadConfig(
   }
 
   const eventTypeResult = z.array(
-    z.enum(["whatsapp_webhook", "chatbot_reply", "chatbot_handoff"]),
+    z.enum([
+      "whatsapp_webhook",
+      "chatbot_reply",
+      "chatbot_handoff",
+      "chatbot_conversation_lifecycle",
+    ]),
   ).min(1).safeParse(
     parsed.WORKER_EVENT_TYPES.split(",").map((value) => value.trim()).filter(
       Boolean,

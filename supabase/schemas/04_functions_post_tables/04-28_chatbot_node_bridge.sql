@@ -1,7 +1,7 @@
 create function public.record_node_chatbot_handoff(
   p_organization_id uuid, p_organization_address text, p_recipient text,
   p_source_wamid text, p_node_conversation_id text, p_event_id uuid,
-  p_agent_id uuid default null, p_routing_queue_id uuid default null
+  p_agent_id uuid default null, p_routing_queue_id uuid default null, p_revision text default null
 ) returns uuid
 language plpgsql security definer set search_path = '' as $$
 declare
@@ -30,6 +30,13 @@ begin
       and c.contact_address = p_recipient and m.organization_id = p_organization_id
       and m.external_id = p_source_wamid and m.direction = 'incoming' for update of c;
   if not found then raise exception 'source customer message has not arrived' using errcode = '40001'; end if;
+  if exists(select 1 from public.chatbot_node_conversations where organization_id = p_organization_id and conversation_id = target.id
+    and lifecycle_enabled and (p_revision is null or p_revision::numeric < ownership_revision::numeric
+      or (p_revision::numeric = ownership_revision::numeric and not human_owned))) then
+    insert into public.chatbot_node_handoff_receipts(event_id,organization_id,conversation_id) values(p_event_id,p_organization_id,target.id);
+    return target.id;
+  end if;
+  update public.conversations set status = 'active' where id = target.id and status = 'closed';
   if (p_agent_id is null) = (p_routing_queue_id is null) then
     raise exception 'exactly one handoff target is required' using errcode = '23514';
   end if;
@@ -45,17 +52,18 @@ begin
     -- isn't incorrectly rejected as a member of a previous routing queue.
     update public.conversations set routing_queue_id = null, assigned_agent_id = p_agent_id where id = target.id;
   end if;
-  insert into public.chatbot_node_conversations(organization_id, organization_address, node_conversation_id, conversation_id)
-    values (p_organization_id, p_organization_address, p_node_conversation_id, target.id)
+  insert into public.chatbot_node_conversations(organization_id, organization_address, node_conversation_id, conversation_id, ownership_revision, lifecycle_enabled)
+    values (p_organization_id, p_organization_address, p_node_conversation_id, target.id, coalesce(p_revision,'0'), p_revision is not null)
     on conflict (organization_id, organization_address, node_conversation_id)
-    do update set human_owned = true;
+    do update set human_owned = true, state = 'human_owned', ownership_revision = coalesce(p_revision,chatbot_node_conversations.ownership_revision),
+      lifecycle_enabled = chatbot_node_conversations.lifecycle_enabled or p_revision is not null;
   insert into public.chatbot_node_handoff_receipts(event_id, organization_id, conversation_id)
     values(p_event_id, p_organization_id, target.id);
   return target.id;
 end;
 $$;
-revoke all on function public.record_node_chatbot_handoff(uuid,text,text,text,text,uuid,uuid,uuid) from public, anon, authenticated;
-grant execute on function public.record_node_chatbot_handoff(uuid,text,text,text,text,uuid,uuid,uuid) to service_role;
+revoke all on function public.record_node_chatbot_handoff(uuid,text,text,text,text,uuid,uuid,uuid,text) from public, anon, authenticated;
+grant execute on function public.record_node_chatbot_handoff(uuid,text,text,text,text,uuid,uuid,uuid,text) to service_role;
 
 create function public.enqueue_node_chatbot_operation(
   p_organization_id uuid, p_address text, p_company_id text, p_request_id uuid,
@@ -126,6 +134,21 @@ begin
   if not found then raise exception 'operation not found' using errcode = 'P0002'; end if;
   if operation.phase <> p_phase or operation.status = 'succeeded' then return operation; end if;
   if operation.status not in ('in_flight', 'reconciling') then raise exception 'operation is not outstanding' using errcode = '23514'; end if;
+  if operation.conversation_id is not null then
+    perform public.apply_node_conversation_lifecycle(operation.organization_id, operation.organization_address,
+      operation.payload->>'node_conversation_id', (select contact_address from public.conversations where id = operation.conversation_id),
+      p_result->>'revision',p_result->>'state',p_result->>'last_inbound_wamid',p_result->>'last_inbound_wamid',operation.request_id);
+    update public.chatbot_node_operations set status = 'succeeded', result = p_result, next_attempt_at = null, last_error = null
+      where request_id = p_request_id returning * into operation;
+    if operation.action = 'resolve-and-close' then
+      -- Resolution attribution survives even if reconciliation already sees a
+      -- newer reopened/human-owned revision. Do not change its ownership/status.
+      update public.chatbot_node_conversations set resolved_by = (operation.payload->>'actor_agent_id')::uuid,
+        closed_at = coalesce(closed_at, operation.created_at) where conversation_id = operation.conversation_id;
+    end if;
+    update public.chatbot_node_conversations set pending_request_id = null where conversation_id = operation.conversation_id and pending_request_id = p_request_id;
+    return operation;
+  end if;
   if p_phase = 'prepare' then
     if p_result->>'flow_id' is null or p_result->>'version_id' is null then raise exception 'invalid remote version' using errcode = '23514'; end if;
     update public.chatbot_node_operations set phase = 'activate', status = 'pending', attempts = 0,

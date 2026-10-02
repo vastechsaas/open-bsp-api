@@ -54,7 +54,9 @@ function resolveRequest(
 
   return {
     url: `${functionsBaseUrl}/${
-      event.event_type === "chatbot_handoff"
+      event.event_type === "chatbot_conversation_lifecycle"
+        ? "chatbot-conversation-lifecycle-webhook"
+        : event.event_type === "chatbot_handoff"
         ? "chatbot-handoff-webhook"
         : "chatbot-reply-webhook"
     }`,

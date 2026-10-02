@@ -3,6 +3,37 @@ import test from "node:test";
 import { createForwarder } from "../src/forwarder.js";
 import { account, replyEvent, silentLogger, webhookEvent } from "./fixtures.js";
 
+test("versioned lifecycle events use the dedicated authenticated handler without changing tenant credentials", async () => {
+  let capturedUrl = "";
+  let body: Record<string, unknown> = {};
+  const event = {
+    ...replyEvent,
+    event_type: "chatbot_conversation_lifecycle" as const,
+    payload: {
+      phone_number_id: account.phone_number_id,
+      recipient: "923000000001",
+      node_conversation_id: "117",
+      revision: "8",
+      state: "closed" as const,
+      last_inbound_wamid: "wamid.customer-1",
+      request_id: replyEvent.event_id,
+    },
+  };
+  const result = await makeForwarder((url, init) => {
+    capturedUrl = String(url);
+    body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    assert.equal(
+      new Headers(init?.headers).get("Authorization"),
+      "Bearer openbsp-secret",
+    );
+    return Promise.resolve(new Response(null, { status: 200 }));
+  })(event);
+  assert.equal(result.outcome, "success");
+  assert.ok(capturedUrl.endsWith("/chatbot-conversation-lifecycle-webhook"));
+  assert.equal(body.revision, "8");
+  assert.equal(body.request_id, event.event_id);
+});
+
 test("handoff uses its dedicated handler and retains stable identity and target", async () => {
   let capturedUrl = "";
   let capturedInit: RequestInit | undefined;
