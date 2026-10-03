@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  isResponseListFormat,
+  isResponsePath,
+  type ResponseListFormat,
+} from "./response_format.ts";
 
 export const CHATBOT_TEXT_MAX_LENGTH = 4096;
 export const CHATBOT_INPUT_MAX_LENGTH = 4096;
@@ -231,10 +236,14 @@ const webhookHeaderSchema = z.object({
 
 const webhookResponseMappingSchema = z.object({
   variable: variableKeySchema,
-  path: z.string().min(1).max(256).regex(
-    /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/,
-    "Must be a dot-separated JSON object path",
+  path: z.string().min(1).max(256).refine(
+    isResponsePath,
+    "Use a JSON field path, numeric array index, or $ for the response root",
   ),
+  format: z.custom<ResponseListFormat>(
+    isResponseListFormat,
+    "Invalid list formatter: use bounded templates with item/response fields and index",
+  ).optional(),
 }).strict();
 
 const webhookNodeSchema = z.object({
