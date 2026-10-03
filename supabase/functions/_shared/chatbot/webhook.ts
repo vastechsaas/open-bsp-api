@@ -6,6 +6,7 @@ import {
   type WebhookNodeV1,
 } from "./flow_definition.ts";
 import { renderChatbotTemplate } from "./template.ts";
+import { formatResponseList, responseValueAtPath } from "./response_format.ts";
 
 export const CHATBOT_WEBHOOK_MAX_RESPONSE_BYTES = 64 * 1024;
 export const CHATBOT_WEBHOOK_MAX_REDIRECTS = 3;
@@ -150,19 +151,6 @@ async function readBoundedResponse(response: Response): Promise<string> {
   return new TextDecoder().decode(bytes);
 }
 
-function valueAtPath(value: unknown, path: string): unknown {
-  return path.split(".").reduce<unknown>((current, part) => {
-    if (
-      typeof current !== "object" ||
-      current === null ||
-      Array.isArray(current)
-    ) {
-      return undefined;
-    }
-    return (current as Record<string, unknown>)[part];
-  }, value);
-}
-
 function scalar(value: unknown): value is JsonValue {
   return value === null ||
     typeof value === "string" ||
@@ -176,7 +164,13 @@ export function mapWebhookResponse(
 ): WebhookExecutionResultV1 {
   const variableUpdates: Record<string, JsonValue> = {};
   for (const mapping of node.config.response_mappings) {
-    const value = valueAtPath(responseBody, mapping.path);
+    const value = responseValueAtPath(responseBody, mapping.path);
+    if (mapping.format) {
+      const formatted = formatResponseList(value, responseBody, mapping.format);
+      if (!formatted.ok) return errorResult(formatted.code);
+      variableUpdates[mapping.variable] = formatted.text;
+      continue;
+    }
     if (!scalar(value)) {
       return errorResult("webhook_response_mapping_invalid");
     }
