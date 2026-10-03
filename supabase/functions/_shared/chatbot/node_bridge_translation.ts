@@ -259,6 +259,7 @@ export function translatePublishedDefinition(
           responseMapping: node.config.response_mappings.map((item) => ({
             variableName: item.variable,
             jsonPath: item.path,
+            ...(item.format ? { format: item.format } : {}),
           })),
           openbspWebhook: true,
         });

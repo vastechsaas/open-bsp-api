@@ -308,6 +308,18 @@ function nodeConfigurationIssue(
       category,
     };
   }
+  if (nodeType === "webhook" && field === "response_mappings") {
+    return {
+      code: path.includes("format")
+        ? "webhook_response_format_invalid"
+        : "webhook_response_mapping_invalid",
+      message: path.includes("format")
+        ? "Check the list template, separators, empty text and item limit"
+        : "Check the response path and output variable",
+      field,
+      category,
+    };
+  }
   return {
     code: "node_configuration_invalid",
     message: fallbackMessage,
