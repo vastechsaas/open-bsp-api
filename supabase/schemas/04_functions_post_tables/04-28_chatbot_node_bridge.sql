@@ -137,7 +137,7 @@ begin
   if operation.conversation_id is not null then
     perform public.apply_node_conversation_lifecycle(operation.organization_id, operation.organization_address,
       operation.payload->>'node_conversation_id', (select contact_address from public.conversations where id = operation.conversation_id),
-      p_result->>'revision',p_result->>'state',p_result->>'last_inbound_wamid',p_result->>'last_inbound_wamid',operation.request_id);
+      p_result->>'revision',p_result->>'state',p_result->>'last_inbound_wamid',p_result->>'last_inbound_wamid',operation.request_id,p_result->'support_request');
     update public.chatbot_node_operations set status = 'succeeded', result = p_result, next_attempt_at = null, last_error = null
       where request_id = p_request_id returning * into operation;
     if operation.action = 'resolve-and-close' then

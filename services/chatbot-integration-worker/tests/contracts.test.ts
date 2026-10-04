@@ -3,6 +3,60 @@ import test from "node:test";
 import { integrationEventSchema } from "../src/contracts.js";
 import { account, replyEvent, webhookEvent } from "./fixtures.js";
 
+test("preserves optional support-request mode without changing legacy handoff", () => {
+  const target = { routing_queue_id: "00000000-0000-4000-8000-000000000124" };
+  const request = {
+    id: "00000000-0000-4000-8000-000000000125",
+    status: "waiting",
+    target,
+    source_wamid: "wamid.incoming-1",
+    requested_at: "2026-10-04T12:00:00Z",
+    reason: "Refund request",
+  };
+  const event = {
+    ...replyEvent,
+    event_type: "chatbot_handoff",
+    payload: {
+      phone_number_id: account.phone_number_id,
+      recipient: "923000000001",
+      source_wamid: request.source_wamid,
+      node_conversation_id: "124",
+      target,
+      revision: "1",
+    },
+  };
+  assert.equal(integrationEventSchema.safeParse(event).success, true);
+  const parsed = integrationEventSchema.parse({
+    ...event,
+    payload: {
+      ...event.payload,
+      mode: "support_requested",
+      support_request: request,
+    },
+  });
+  assert.equal(parsed.event_type, "chatbot_handoff");
+  if (parsed.event_type === "chatbot_handoff") {
+    assert.deepEqual(parsed.payload.support_request, request);
+  }
+  assert.equal(
+    integrationEventSchema.safeParse({
+      ...event,
+      payload: { ...event.payload, mode: "unknown" },
+    }).success,
+    false,
+  );
+  assert.equal(
+    integrationEventSchema.safeParse({
+      ...event,
+      payload: {
+        ...event.payload,
+        support_request: { ...request, credential: "must not leak" },
+      },
+    }).success,
+    false,
+  );
+});
+
 test("accepts the two version-one event contracts", () => {
   assert.equal(
     integrationEventSchema.parse(webhookEvent).event_type,
