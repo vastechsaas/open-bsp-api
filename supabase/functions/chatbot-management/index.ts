@@ -48,7 +48,14 @@ import {
 } from "../_shared/chatbot/node_bridge_translation.ts";
 import { processNodeBridgeOperation } from "../_shared/chatbot/node_bridge_processor.ts";
 import { conversationLifecycleEnabled } from "../_shared/chatbot/conversation_lifecycle.ts";
-import { explicitTakeoverEnabled } from "../_shared/chatbot/support_request.ts";
+import {
+  explicitTakeoverEnabled,
+  supportRequestSchema,
+} from "../_shared/chatbot/support_request.ts";
+import {
+  conversationReservationError,
+  takeoverSynchronizationPending,
+} from "../_shared/chatbot/takeover_readiness.ts";
 
 type AppEnv = {
   Variables: {
@@ -1111,6 +1118,11 @@ app.get(
       });
     }
     const snapshot = await remote.json();
+    const takeoverSyncPending = takeoverSynchronizationPending({
+      ...mapping,
+      support_request:
+        supportRequestSchema.safeParse(mapping.support_request).data ?? null,
+    }, snapshot.data ?? {});
     const { data: actor } = await c.get("supabase").from("agents").select(
       "extra",
     )
@@ -1143,6 +1155,9 @@ app.get(
         observed_last_inbound_wamid:
           (lastOperation.payload as Record<string, unknown>)
             .observed_last_inbound_wamid,
+        actor_is_current:
+          (lastOperation.payload as Record<string, unknown>).actor_agent_id ===
+            c.get("actorAgentId"),
       }
       : null;
     return c.json({
@@ -1151,8 +1166,10 @@ app.get(
       pending_request_id: mapping.pending_request_id,
       takeover_enabled: explicitTakeoverEnabled(organizationId) &&
         snapshot.takeover_enabled === true,
+      takeover_sync_pending: takeoverSyncPending,
       can_takeover: explicitTakeoverEnabled(organizationId) &&
         snapshot.takeover_enabled === true &&
+        !takeoverSyncPending &&
         snapshot.data?.support_request?.status === "waiting" &&
         (manager ||
           (visible.assigned_agent_id
@@ -1213,6 +1230,7 @@ async function executeConversationAction(
   if (error) {
     throw new HTTPException(error.code === "42501" ? 403 : 409, {
       message: error.message,
+      cause: { code: conversationReservationError(error.message) },
     });
   }
   // begin_node_conversation_operation atomically reclaims a failed request,
