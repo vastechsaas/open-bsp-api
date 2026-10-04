@@ -17,7 +17,33 @@ export type PreprocessingConfig = {
   extra_prompt?: string;
 };
 
+export type BusinessHoursDay =
+  | "monday"
+  | "tuesday"
+  | "wednesday"
+  | "thursday"
+  | "friday"
+  | "saturday"
+  | "sunday";
+
+export type BusinessHoursTimeRange = {
+  start_time: string; // HH:mm; start excludes 24:00
+  end_time: string; // HH:mm; 24:00 means midnight at the end of the day
+};
+
+// Configuration only: not yet enforced by assignment or chatbot execution.
+export type BusinessHoursSettings = {
+  mode: "all_days" | "per_day";
+  timezone: string; // IANA timezone captured when first configured
+  all_days: BusinessHoursTimeRange;
+  per_day: Record<
+    BusinessHoursDay,
+    BusinessHoursTimeRange & { enabled: boolean }
+  >;
+};
+
 export type OrganizationExtra = {
+  business_hours?: BusinessHoursSettings;
   response_delay_seconds?: number;
   welcome_message?: string;
   authorized_contacts_only?: boolean;
