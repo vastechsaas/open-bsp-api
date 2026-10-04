@@ -7,6 +7,7 @@ import {
   flowNodeV1Schema,
 } from "./flow_definition.ts";
 import { parseChatbotTemplate } from "./template.ts";
+import { CHATBOT_SYSTEM_VARIABLES } from "./system_variables.ts";
 
 export interface CompileIssue {
   readonly code: string;
@@ -210,6 +211,14 @@ function nodeConfigurationIssue(
     ? path[0]
     : undefined;
   const category = "configuration" as const;
+  if (fallbackMessage === "System variables are read-only") {
+    return {
+      code: "system_variable_read_only",
+      message: fallbackMessage,
+      field,
+      category,
+    };
+  }
 
   if (field === "id") {
     return {
@@ -445,8 +454,9 @@ function validateAvailableVariables(
       return variables;
     });
     const available = nodeId === startNodeId
-      ? new Set<string>()
+      ? new Set<string>(CHATBOT_SYSTEM_VARIABLES)
       : intersectSets(predecessorSets);
+    for (const variable of CHATBOT_SYSTEM_VARIABLES) available.add(variable);
 
     const templateFields: ReadonlyArray<
       readonly [field: string, template: string]

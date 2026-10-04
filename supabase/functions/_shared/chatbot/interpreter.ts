@@ -9,12 +9,18 @@ import type {
 } from "./flow_definition.ts";
 import { flowDefinitionV1Schema } from "./flow_definition.ts";
 import { executeNodeStrategy } from "./strategies.ts";
+import {
+  normalizeCustomerPhone,
+  writableChatbotVariables,
+} from "./system_variables.ts";
 
 export const CHATBOT_MAX_AUTOMATIC_TRANSITIONS = 50;
 
 export interface InterpretFlowInputV1 {
   readonly current_node_id: string;
   readonly variables: Readonly<Record<string, JsonValue>>;
+  /** Trusted transport identity (or the simulator's explicit test context). */
+  readonly customer_phone?: string;
   readonly free_text_input?: string;
   readonly option_input?: {
     readonly kind: "button" | "list_selection";
@@ -132,7 +138,13 @@ export async function interpretFlowDefinitionV1(
   input: InterpretFlowInputV1,
 ): Promise<InterpretationResultV1> {
   const parsedDefinition = flowDefinitionV1Schema.safeParse(storedDefinition);
-  const variables: Record<string, JsonValue> = { ...input.variables };
+  const variables: Record<string, JsonValue> = writableChatbotVariables(
+    input.variables,
+  );
+  const phone = normalizeCustomerPhone(input.customer_phone);
+  const systemVariables: Record<string, JsonValue> = phone
+    ? { customer_phone: phone }
+    : {};
   const outgoingTexts: string[] = [];
   const outgoingMessages: ChatbotOutgoingMessageV1[] = [];
 
@@ -208,7 +220,7 @@ export async function interpretFlowDefinitionV1(
       (node.type === "interactive_buttons" || node.type === "list_message") &&
       !inputConsumed && input.option_input !== undefined;
     const result = await executeNodeStrategy(node, {
-      variables,
+      variables: { ...variables, ...systemVariables },
       free_text_input: offersInput ? input.free_text_input : undefined,
       option_input: offersOptionInput ? input.option_input : undefined,
       webhook_executor: input.webhook_executor,
@@ -237,7 +249,10 @@ export async function interpretFlowDefinitionV1(
 
     if (result.type === "complete") {
       if (result.variable_updates) {
-        Object.assign(variables, result.variable_updates);
+        Object.assign(
+          variables,
+          writableChatbotVariables(result.variable_updates),
+        );
       }
       if (result.message) {
         outgoingTexts.push(result.message.text);
@@ -279,7 +294,10 @@ export async function interpretFlowDefinitionV1(
 
     if (result.type === "wait_for_input") {
       if (result.variable_updates) {
-        Object.assign(variables, result.variable_updates);
+        Object.assign(
+          variables,
+          writableChatbotVariables(result.variable_updates),
+        );
       }
       if (result.prompt) {
         outgoingTexts.push(result.prompt);
@@ -308,7 +326,10 @@ export async function interpretFlowDefinitionV1(
     }
 
     if (result.type === "advance" && result.variable_updates) {
-      Object.assign(variables, result.variable_updates);
+      Object.assign(
+        variables,
+        writableChatbotVariables(result.variable_updates),
+      );
     }
 
     const targetNodeId = resolveTarget(definition, currentNodeId, result.route);
