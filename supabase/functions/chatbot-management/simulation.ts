@@ -35,6 +35,8 @@ export async function simulateChatbotFlow(
   const result = await interpretFlowDefinitionV1(compiled.definition, {
     current_node_id: input.current_node_id ?? compiled.definition.start_node_id,
     variables: input.variables as Record<string, JsonValue>,
+    // Fixed test identity: simulation never asks for or persists a real phone.
+    customer_phone: "+923001234567",
     ...(input.free_text_input === undefined
       ? {}
       : { free_text_input: input.free_text_input }),
