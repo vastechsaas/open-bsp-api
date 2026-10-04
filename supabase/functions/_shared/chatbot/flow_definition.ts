@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isChatbotSystemVariable } from "./system_variables.ts";
 import {
   isResponseListFormat,
   isResponsePath,
@@ -35,6 +36,10 @@ const variableKeySchema = z.string().min(1).max(64).regex(
 );
 
 const agentIdSchema = z.string().uuid();
+const writableVariableKeySchema = variableKeySchema.refine(
+  (name) => !isChatbotSystemVariable(name),
+  "System variables are read-only",
+);
 
 const nonblankTextSchema = z.string().min(1).max(CHATBOT_TEXT_MAX_LENGTH)
   .refine((value) => value.trim().length > 0, "Must not be blank");
@@ -135,7 +140,7 @@ const inputLengthSchema = z.number().int().min(0).max(
 
 const collectInputConfigSchema = z.object({
   prompt: nonblankTextSchema,
-  variable: variableKeySchema,
+  variable: writableVariableKeySchema,
   required: z.boolean(),
   min_length: inputLengthSchema.optional(),
   max_length: inputLengthSchema.optional(),
@@ -175,7 +180,7 @@ const textMenuNodeSchema = z.object({
   type: z.literal("text_menu"),
   config: z.object({
     prompt: nonblankTextSchema,
-    variable: variableKeySchema,
+    variable: writableVariableKeySchema,
     options: z.array(textMenuOptionSchema).min(1).max(
       CHATBOT_TEXT_MENU_MAX_OPTIONS,
     ),
@@ -235,7 +240,7 @@ const webhookHeaderSchema = z.object({
 );
 
 const webhookResponseMappingSchema = z.object({
-  variable: variableKeySchema,
+  variable: writableVariableKeySchema,
   path: z.string().min(1).max(256).refine(
     isResponsePath,
     "Use a JSON field path, numeric array index, or $ for the response root",
