@@ -25,7 +25,7 @@ create table public.chatbot_node_operations (
   request_id uuid primary key,
   organization_id uuid not null,
   organization_address text not null,
-  action text not null check (action in ('activate', 'deactivate', 'suspend', 'restore', 'resume', 'resolve-and-close')),
+  action text not null check (action in ('activate', 'deactivate', 'suspend', 'restore', 'resume', 'resolve-and-close', 'takeover')),
   conversation_id uuid references public.conversations(id) on delete cascade,
   phase text not null default 'prepare',
   status text not null default 'pending' check (status in ('pending', 'in_flight', 'reconciling', 'retry_wait', 'succeeded', 'failed')),
@@ -53,6 +53,7 @@ create table public.chatbot_node_conversations (
   last_inbound_wamid text,
   resolved_by uuid,
   closed_at timestamptz,
+  support_request jsonb check (support_request is null or jsonb_typeof(support_request) = 'object'),
   primary key (organization_id, organization_address, node_conversation_id),
   foreign key (organization_id, organization_address)
     references public.chatbot_node_bridges(organization_id, organization_address) on delete cascade,

@@ -2,6 +2,10 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { z } from "zod";
 import { createApiClient, createUnsecureClient } from "../_shared/supabase.ts";
 import { conversationLifecycleEnabled } from "../_shared/chatbot/conversation_lifecycle.ts";
+import {
+  explicitTakeoverEnabled,
+  supportRequestSchema,
+} from "../_shared/chatbot/support_request.ts";
 
 const schema = z.object({
   phone_number_id: z.string().regex(/^\d+$/),
@@ -9,6 +13,8 @@ const schema = z.object({
   source_wamid: z.string().startsWith("wamid."),
   node_conversation_id: z.string().regex(/^\d+$/),
   revision: z.string().regex(/^\d+$/).optional(),
+  mode: z.enum(["support_requested", "immediate_handoff"]).optional(),
+  support_request: supportRequestSchema.optional(),
   target: z.union([
     z.object({ agent_id: z.uuid() }).strict(),
     z.object({ routing_queue_id: z.uuid() }).strict(),
@@ -54,23 +60,54 @@ Deno.serve(async (request) => {
         message: "Number is not connected to this tenant",
       }, { status: 409 });
     }
-    const { data, error } = await client.rpc("record_node_chatbot_handoff", {
-      p_organization_id: key.organization_id,
-      p_organization_address: address.address,
-      p_recipient: payload.recipient,
-      p_source_wamid: payload.source_wamid,
-      p_node_conversation_id: payload.node_conversation_id,
-      p_event_id: eventId,
-      p_agent_id: "agent_id" in payload.target
-        ? payload.target.agent_id
-        : undefined,
-      p_routing_queue_id: "routing_queue_id" in payload.target
-        ? payload.target.routing_queue_id
-        : undefined,
-      p_revision: conversationLifecycleEnabled(key.organization_id)
-        ? payload.revision
-        : undefined,
-    });
+    if (
+      payload.mode === "support_requested" &&
+      (!explicitTakeoverEnabled(key.organization_id) ||
+        !payload.support_request || !payload.revision)
+    ) {
+      return Response.json(
+        { message: "Explicit takeover feature unavailable" },
+        { status: 503 },
+      );
+    }
+    if (
+      payload.mode === "support_requested" &&
+      (payload.support_request!.status !== "waiting" ||
+        payload.support_request!.source_wamid !== payload.source_wamid ||
+        JSON.stringify(payload.support_request!.target) !==
+          JSON.stringify(payload.target))
+    ) {
+      return Response.json({ message: "Support request context mismatch" }, {
+        status: 422,
+      });
+    }
+    const { data, error } = payload.mode === "support_requested"
+      ? await client.rpc("record_node_support_request", {
+        p_organization_id: key.organization_id,
+        p_address: address.address,
+        p_recipient: payload.recipient,
+        p_node_conversation_id: payload.node_conversation_id,
+        p_event_id: eventId,
+        p_revision: payload.revision!,
+        p_support_request: payload.support_request!,
+      })
+      : await client.rpc("record_node_chatbot_handoff", {
+        p_organization_id: key.organization_id,
+        p_organization_address: address.address,
+        p_recipient: payload.recipient,
+        p_source_wamid: payload.source_wamid,
+        p_node_conversation_id: payload.node_conversation_id,
+        p_event_id: eventId,
+        p_agent_id: "agent_id" in payload.target
+          ? payload.target.agent_id
+          : undefined,
+        p_routing_queue_id: "routing_queue_id" in payload.target
+          ? payload.target.routing_queue_id
+          : undefined,
+        p_revision: conversationLifecycleEnabled(key.organization_id)
+          ? payload.revision
+          : undefined,
+      });
     if (error) {
       return Response.json({
         message: error.code === "40001"

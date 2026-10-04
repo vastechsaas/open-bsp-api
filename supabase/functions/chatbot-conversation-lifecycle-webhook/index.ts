@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { z } from "zod";
 import { createApiClient, createUnsecureClient } from "../_shared/supabase.ts";
 import { conversationLifecycleEnabled } from "../_shared/chatbot/conversation_lifecycle.ts";
+import { supportRequestSchema } from "../_shared/chatbot/support_request.ts";
 
 const schema = z.object({
   phone_number_id: z.string().regex(/^\d+$/),
@@ -12,6 +13,7 @@ const schema = z.object({
   last_inbound_wamid: z.string().startsWith("wamid."),
   source_wamid: z.string().startsWith("wamid.").optional(),
   request_id: z.uuid().optional(),
+  support_request: supportRequestSchema.optional(),
   chatbot: z.object({ key: z.string(), name: z.string() }).strict(),
 }).strict();
 
@@ -58,6 +60,7 @@ Deno.serve(async (request) => {
         p_last_inbound_wamid: payload.last_inbound_wamid,
         p_source_wamid: payload.source_wamid,
         p_request_id: payload.request_id,
+        p_support_request: payload.support_request,
       },
     );
     if (error) {

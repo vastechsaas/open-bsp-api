@@ -161,6 +161,7 @@ export async function processNodeBridgeOperation(requestId: string) {
             }
             : {}),
           ...(operation.phase === "resume" ||
+              operation.phase === "takeover" ||
               operation.phase === "resolve-and-close"
             ? {
               conversation_id: payload.node_conversation_id,
@@ -170,6 +171,9 @@ export async function processNodeBridgeOperation(requestId: string) {
                   observed_last_inbound_wamid:
                     payload.observed_last_inbound_wamid,
                   client_request_id: requestId,
+                  ...(operation.phase === "takeover"
+                    ? { actor_agent_id: payload.actor_agent_id }
+                    : {}),
                 }
                 : {}),
             }

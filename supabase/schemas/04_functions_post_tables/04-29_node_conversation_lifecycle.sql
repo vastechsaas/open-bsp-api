@@ -2,7 +2,7 @@
 create function public.apply_node_conversation_lifecycle(
   p_organization_id uuid, p_address text, p_node_conversation_id text,
   p_recipient text, p_revision text, p_state text, p_last_inbound_wamid text,
-  p_source_wamid text default null, p_request_id uuid default null
+  p_source_wamid text default null, p_request_id uuid default null, p_support_request jsonb default null
 ) returns uuid language plpgsql security definer set search_path = '' as $$
 declare
   mapping public.chatbot_node_conversations;
@@ -50,6 +50,7 @@ begin
   update public.chatbot_node_conversations set lifecycle_enabled = true,
     ownership_revision = p_revision, state = p_state, human_owned = (p_state = 'human_owned'),
     pending_request_id = null,
+    support_request = coalesce(p_support_request, support_request),
     last_inbound_wamid = coalesce(last_inbound_wamid, p_last_inbound_wamid),
     resolved_by = case when p_state = 'closed' then nullif(operation.payload->>'actor_agent_id','')::uuid else resolved_by end,
     closed_at = case when p_state = 'closed' then now() else closed_at end
@@ -59,7 +60,7 @@ begin
     -- Retain assignee so the agent can still read their closed history under RLS.
     update public.conversations set status = 'closed', extra = jsonb_build_object('node_support_resolution',
       jsonb_build_object('request_id', p_request_id, 'resolved_by', operation.payload->>'actor_agent_id', 'closed_at', now())) where id = target.id;
-  elsif p_state in ('bot_ready','bot_active') then
+  elsif p_state in ('bot_ready','bot_active') and coalesce(p_support_request, mapping.support_request)->>'status' is distinct from 'waiting' then
     update public.conversations set status = 'active', assigned_agent_id = null, routing_queue_id = null, routed_at = null,
       extra = jsonb_build_object('paused', null) where id = target.id;
   else
@@ -68,8 +69,8 @@ begin
   return target.id;
 end;
 $$;
-revoke all on function public.apply_node_conversation_lifecycle(uuid,text,text,text,text,text,text,text,uuid) from public, anon, authenticated;
-grant execute on function public.apply_node_conversation_lifecycle(uuid,text,text,text,text,text,text,text,uuid) to service_role;
+revoke all on function public.apply_node_conversation_lifecycle(uuid,text,text,text,text,text,text,text,uuid,jsonb) from public, anon, authenticated;
+grant execute on function public.apply_node_conversation_lifecycle(uuid,text,text,text,text,text,text,text,uuid,jsonb) to service_role;
 
 create function public.begin_node_conversation_operation(
   p_organization_id uuid, p_conversation_id uuid, p_request_id uuid, p_action text,
@@ -84,13 +85,15 @@ declare
   operation public.chatbot_node_operations;
   body jsonb;
 begin
-  if auth.uid() is null or p_action not in ('resolve-and-close','resume') then
+  if auth.uid() is null or p_action not in ('resolve-and-close','resume','takeover') then
     raise exception 'authenticated conversation action required' using errcode = '42501'; end if;
   select * into target from public.conversations where organization_id = p_organization_id and id = p_conversation_id for update;
   actor := public.get_current_human_agent_id(p_organization_id);
   role := public.get_request_organization_role(p_organization_id);
   if target.id is null or actor is null or role not in ('owner','admin','supervisor','agent')
-    or (role = 'agent' and (p_action = 'resume' or target.assigned_agent_id is distinct from actor)) then
+    or (role = 'agent' and (p_action = 'resume' or (target.assigned_agent_id is distinct from actor
+      and not (p_action = 'takeover' and target.assigned_agent_id is null and target.routing_queue_id is not null
+        and exists(select 1 from public.routing_queue_members where organization_id = p_organization_id and routing_queue_id = target.routing_queue_id and agent_id = actor))))) then
     raise exception 'conversation action is not permitted' using errcode = '42501'; end if;
   body := jsonb_build_object('observed_last_inbound_wamid',p_observed_last_inbound_wamid,
     'expected_revision',p_expected_revision,'actor_agent_id',actor);
@@ -102,16 +105,18 @@ begin
     if operation.status <> 'failed' then return operation; end if;
   end if;
   select * into mapping from public.chatbot_node_conversations where organization_id = p_organization_id and conversation_id = p_conversation_id for update;
-  if not found or not mapping.human_owned or target.status <> 'active' or not public.is_organization_active(p_organization_id) then
+  if not found or (case when p_action = 'takeover' then mapping.human_owned or mapping.support_request->>'status' is distinct from 'waiting' else not mapping.human_owned end)
+    or target.status <> 'active' or not public.is_organization_active(p_organization_id) then
     raise exception 'conversation is not in active human support' using errcode = '23514'; end if;
-  if p_expected_revision !~ '^[0-9]+$' or p_expected_revision::numeric < mapping.ownership_revision::numeric then
+  if p_expected_revision !~ '^[0-9]+$' or p_expected_revision::numeric < mapping.ownership_revision::numeric
+    or (p_action = 'takeover' and p_expected_revision::numeric <> mapping.ownership_revision::numeric) then
     raise exception 'conversation ownership changed' using errcode = '40001'; end if;
   latest_wamid := mapping.last_inbound_wamid;
   if latest_wamid is null then
     select external_id into latest_wamid from public.messages where organization_id = p_organization_id and conversation_id = p_conversation_id
       and direction = 'incoming' and external_id is not null order by created_at desc, id desc limit 1;
   end if;
-  if latest_wamid is distinct from p_observed_last_inbound_wamid then
+  if p_action <> 'takeover' and latest_wamid is distinct from p_observed_last_inbound_wamid then
     raise exception 'A new customer message arrived—review it before closing.' using errcode = '40001'; end if;
   if exists(select 1 from public.messages m join public.agents a on a.id = m.agent_id where m.conversation_id = target.id
     and m.direction = 'outgoing' and not a.ai and m.status ? 'pending' and not m.status ?| array['sent','delivered','read','failed']) then
@@ -129,6 +134,15 @@ begin
     insert into public.chatbot_node_operations(request_id,organization_id,organization_address,conversation_id,action,phase,payload)
       values(p_request_id,p_organization_id,mapping.organization_address,target.id,p_action,p_action,
         body || jsonb_build_object('node_conversation_id',mapping.node_conversation_id)) returning * into operation;
+  end if;
+  if p_action = 'takeover' and target.assigned_agent_id is distinct from actor then
+    -- Manager override can claim a queued chat without pretending to be a queue
+    -- member. The original queue remains in support_request.target for history.
+    update public.conversations set assigned_agent_id = actor,
+      routing_queue_id = case when role in ('owner','admin','supervisor') and not exists(
+        select 1 from public.routing_queue_members where organization_id=p_organization_id
+          and routing_queue_id=target.routing_queue_id and agent_id=actor) then null else routing_queue_id end
+      where id = target.id;
   end if;
   update public.chatbot_node_conversations set pending_request_id = p_request_id, lifecycle_enabled = true,
     last_inbound_wamid = latest_wamid where organization_id = p_organization_id and conversation_id = target.id;
@@ -159,7 +173,7 @@ begin
   update public.chatbot_node_conversations set last_inbound_wamid = new.external_id where organization_id = new.organization_id
     and conversation_id = new.conversation_id;
   if exists(select 1 from public.chatbot_node_conversations where conversation_id = new.conversation_id and lifecycle_enabled
-    and not human_owned and pending_request_id is null) then
+    and not human_owned and pending_request_id is null and support_request->>'status' is distinct from 'waiting') then
     update public.conversations set status = 'active', assigned_agent_id = null, routing_queue_id = null, routed_at = null
       where id = new.conversation_id and status = 'closed';
   end if;

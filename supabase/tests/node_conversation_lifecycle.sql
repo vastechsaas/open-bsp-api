@@ -69,6 +69,6 @@ select is((select status from public.conversations where id='12330000-0000-4000-
 select lives_ok($$select public.record_node_chatbot_handoff('12300000-0000-4000-8000-000000000001','900000123','92300123001','wamid.resolution.1','1','12340000-0000-4000-8000-000000000003','12320000-0000-4000-8000-000000000001',null,'1')$$,'Stale handoff is acknowledged without assignment');
 select is((select assigned_agent_id from public.conversations where id='12330000-0000-4000-8000-000000000001'),null::uuid,'Stale handoff cannot regain ownership');
 select throws_ok($$select public.apply_node_conversation_lifecycle('12300000-0000-4000-8000-000000000001','900000123','1','92300123001','4','human_owned','wamid.not-arrived','wamid.not-arrived')$$,'40001',null,'Lifecycle waits for exact customer message arrival');
-select ok(not has_function_privilege('authenticated','public.apply_node_conversation_lifecycle(uuid,text,text,text,text,text,text,text,uuid)','execute'),'Client cannot forge Node ownership state');
+select ok(not has_function_privilege('authenticated','public.apply_node_conversation_lifecycle(uuid,text,text,text,text,text,text,text,uuid,jsonb)','execute'),'Client cannot forge Node ownership state');
 select * from finish();
 rollback;

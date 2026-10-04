@@ -1247,6 +1247,7 @@ export type Database = {
           pending_request_id: string | null
           resolved_by: string | null
           state: string
+          support_request: Json | null
         }
         Insert: {
           closed_at?: string | null
@@ -1261,6 +1262,7 @@ export type Database = {
           pending_request_id?: string | null
           resolved_by?: string | null
           state?: string
+          support_request?: Json | null
         }
         Update: {
           closed_at?: string | null
@@ -1275,6 +1277,7 @@ export type Database = {
           pending_request_id?: string | null
           resolved_by?: string | null
           state?: string
+          support_request?: Json | null
         }
         Relationships: [
           {
@@ -3019,6 +3022,7 @@ export type Database = {
           p_revision: string
           p_source_wamid?: string
           p_state: string
+          p_support_request?: Json
         }
         Returns: string
       }
@@ -4503,6 +4507,18 @@ export type Database = {
           p_revision?: string
           p_routing_queue_id?: string
           p_source_wamid: string
+        }
+        Returns: string
+      }
+      record_node_support_request: {
+        Args: {
+          p_address: string
+          p_event_id: string
+          p_node_conversation_id: string
+          p_organization_id: string
+          p_recipient: string
+          p_revision: string
+          p_support_request: Json
         }
         Returns: string
       }

@@ -16,6 +16,7 @@ async function scenario(
   ) => Response,
   attempts = 1,
   status = "reconciling",
+  action = "resolve-and-close",
 ) {
   const originalFetch = globalThis.fetch;
   const settings = {
@@ -40,8 +41,8 @@ async function scenario(
     organization_id: organization,
     organization_address: "90000123",
     conversation_id: "12330000-0000-4000-8000-000000000001",
-    action: "resolve-and-close",
-    phase: "resolve-and-close",
+    action,
+    phase: action,
     attempts,
     status,
     next_attempt_at: null,
@@ -49,6 +50,7 @@ async function scenario(
       node_conversation_id: "1",
       expected_revision: "1",
       observed_last_inbound_wamid: "wamid.old",
+      actor_agent_id: "12320000-0000-4000-8000-000000000001",
     },
   };
   globalThis.fetch = (input, init) => {
@@ -82,6 +84,38 @@ async function scenario(
     }
   }
 }
+
+Deno.test("takeover forwards server-derived actor and reconciles the same request before enabling replies", async () => {
+  const { result, writes } = await scenario(
+    (_path, method, body) => {
+      if (method === "PUT") {
+        assertEquals(body.action, "takeover");
+        assertEquals(
+          body.actor_agent_id,
+          "12320000-0000-4000-8000-000000000001",
+        );
+        assertEquals(body.client_request_id, requestId);
+      }
+      return Response.json({
+        data: {
+          revision: "2",
+          state: "human_owned",
+          last_inbound_wamid: "wamid.old",
+        },
+      });
+    },
+    0,
+    "pending",
+    "takeover",
+  );
+  assertEquals(result.status, "succeeded");
+  assert(
+    writes.some((write) =>
+      write.path.endsWith("/rpc/complete_node_chatbot_operation")
+    ),
+  );
+  assert(!writes.some((write) => write.path.endsWith("chatbot_node_bridges")));
+});
 
 Deno.test("conversation retry exhaustion releases only its pending state after confirmed absence", async () => {
   const { result, writes } = await scenario(
