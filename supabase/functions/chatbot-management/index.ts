@@ -48,6 +48,7 @@ import {
 } from "../_shared/chatbot/node_bridge_translation.ts";
 import { processNodeBridgeOperation } from "../_shared/chatbot/node_bridge_processor.ts";
 import { conversationLifecycleEnabled } from "../_shared/chatbot/conversation_lifecycle.ts";
+import { explicitTakeoverEnabled } from "../_shared/chatbot/support_request.ts";
 
 type AppEnv = {
   Variables: {
@@ -1084,7 +1085,7 @@ app.get(
       });
     }
     const { data: visible } = await c.get("supabase").from("conversations")
-      .select("id,assigned_agent_id,status")
+      .select("id,assigned_agent_id,status,routing_queue_id")
       .eq("organization_id", organizationId).eq("id", conversationId)
       .maybeSingle();
     if (!visible || !c.get("user")) {
@@ -1116,6 +1117,14 @@ app.get(
       .eq("id", c.get("actorAgentId")!).single();
     const role = (actor?.extra as Record<string, unknown> | null)?.role;
     const manager = ["owner", "admin", "supervisor"].includes(String(role));
+    const { data: queueMember } = visible.routing_queue_id
+      ? await serviceClient().from("routing_queue_members")
+        .select("agent_id").eq("organization_id", organizationId).eq(
+          "routing_queue_id",
+          visible.routing_queue_id,
+        )
+        .eq("agent_id", c.get("actorAgentId")!).maybeSingle()
+      : { data: null };
     const { data: lastOperation } = await serviceClient().from(
       "chatbot_node_operations",
     ).select("request_id,status,last_error,action,payload")
@@ -1140,12 +1149,28 @@ app.get(
       enabled: snapshot.enabled === true,
       ...snapshot.data,
       pending_request_id: mapping.pending_request_id,
+      takeover_enabled: explicitTakeoverEnabled(organizationId) &&
+        snapshot.takeover_enabled === true,
+      can_takeover: explicitTakeoverEnabled(organizationId) &&
+        snapshot.takeover_enabled === true &&
+        snapshot.data?.support_request?.status === "waiting" &&
+        (manager ||
+          (visible.assigned_agent_id
+            ? visible.assigned_agent_id === c.get("actorAgentId")
+            : Boolean(queueMember))),
       can_resolve: manager ||
         visible.assigned_agent_id === c.get("actorAgentId"),
       can_resume: manager,
       operation,
     });
   },
+);
+
+app.post(
+  "/chatbot-management/conversations/:conversationId/takeover",
+  (c, next) =>
+    authorizeOrganization(c, next, ["owner", "admin", "supervisor", "agent"]),
+  (c) => executeConversationAction(c, "takeover"),
 );
 
 app.post(
@@ -1157,7 +1182,7 @@ app.post(
 
 async function executeConversationAction(
   c: Context<AppEnv>,
-  action: "resolve-and-close" | "resume",
+  action: "resolve-and-close" | "resume" | "takeover",
 ) {
   const payload = z.object({
     organization_id: z.uuid(),
@@ -1167,7 +1192,8 @@ async function executeConversationAction(
   }).strict().parse(await c.req.json());
   const conversationId = z.uuid().parse(c.req.param("conversationId"));
   if (
-    !c.get("user") || !conversationLifecycleEnabled(payload.organization_id)
+    !c.get("user") || !conversationLifecycleEnabled(payload.organization_id) ||
+    (action === "takeover" && !explicitTakeoverEnabled(payload.organization_id))
   ) {
     throw new HTTPException(403, {
       message: "Conversation lifecycle action is unavailable",

@@ -98,6 +98,19 @@ const envelopeBase = {
   occurred_at: z.string().datetime({ offset: true }),
 };
 
+export const supportRequestSchema = z.object({
+  id: z.string().uuid(),
+  status: z.enum(["waiting", "handling", "resolved", "released"]),
+  target: z.union([
+    z.object({ agent_id: z.string().uuid() }).strict(),
+    z.object({ routing_queue_id: z.string().uuid() }).strict(),
+  ]),
+  source_wamid: wamid,
+  requested_at: z.string().datetime({ offset: true }),
+  reason: z.string().max(4096),
+  handled_by_agent_id: z.string().uuid().optional(),
+}).strict();
+
 export const integrationEventSchema = z.discriminatedUnion("event_type", [
   z.object({
     ...envelopeBase,
@@ -111,6 +124,7 @@ export const integrationEventSchema = z.discriminatedUnion("event_type", [
       last_inbound_wamid: wamid,
       source_wamid: wamid.optional(),
       request_id: z.string().uuid().optional(),
+      support_request: supportRequestSchema.optional(),
     }).strict(),
   }).strict(),
   z.object({
@@ -122,6 +136,8 @@ export const integrationEventSchema = z.discriminatedUnion("event_type", [
       source_wamid: wamid,
       node_conversation_id: z.string().regex(/^\d+$/),
       revision: z.string().regex(/^\d+$/).optional(),
+      mode: z.enum(["support_requested", "immediate_handoff"]).optional(),
+      support_request: supportRequestSchema.optional(),
       target: z.union([
         z.object({ agent_id: z.string().uuid() }).strict(),
         z.object({ routing_queue_id: z.string().uuid() }).strict(),
