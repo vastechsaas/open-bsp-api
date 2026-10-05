@@ -118,6 +118,7 @@ export async function processChatbotMessage(
     {
       current_node_id: prepared.run_current_node_id,
       variables: (prepared.run_variables ?? {}) as Record<string, JsonValue>,
+      conversation_id: incoming.conversation_id,
       customer_phone: incoming.service === "whatsapp"
         ? incoming.contact_address ?? undefined
         : undefined,
