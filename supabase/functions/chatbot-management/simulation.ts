@@ -37,6 +37,7 @@ export async function simulateChatbotFlow(
     variables: input.variables as Record<string, JsonValue>,
     // Fixed test identity: simulation never asks for or persists a real phone.
     customer_phone: "+923001234567",
+    conversation_id: "00000000-0000-4000-8000-000000000001",
     ...(input.free_text_input === undefined
       ? {}
       : { free_text_input: input.free_text_input }),
