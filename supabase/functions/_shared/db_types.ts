@@ -3744,6 +3744,13 @@ export type Database = {
         Args: { p_routing_queue_id: string }
         Returns: Json
       }
+      get_support_inbox_visibility: {
+        Args: { p_conversation_ids: string[]; p_organization_id: string }
+        Returns: {
+          conversation_id: string
+          visible: boolean
+        }[]
+      }
       get_unread_notification_count: {
         Args: { p_organization_id: string }
         Returns: number
@@ -3780,6 +3787,10 @@ export type Database = {
         Returns: boolean
       }
       is_platform_admin: { Args: never; Returns: boolean }
+      is_support_inbox_visible: {
+        Args: { p_conversation_id: string; p_organization_id: string }
+        Returns: boolean
+      }
       is_whatsapp_contact_auto_save_enabled: {
         Args: { p_organization_id: string }
         Returns: boolean
