@@ -173,6 +173,7 @@ begin
       and message.conversation_id = c.id
   ) mentioned on true
   where c.organization_id = p_organization_id
+    and public.is_support_inbox_visible(c.organization_id, c.id)
     and (
       p_queue_key = 'mentioned'
       or p_routing_queue_id is null
