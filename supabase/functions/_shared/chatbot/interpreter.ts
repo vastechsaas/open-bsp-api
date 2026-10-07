@@ -10,6 +10,7 @@ import type {
 import { flowDefinitionV1Schema } from "./flow_definition.ts";
 import { executeNodeStrategy } from "./strategies.ts";
 import {
+  normalizeConversationId,
   normalizeCustomerPhone,
   writableChatbotVariables,
 } from "./system_variables.ts";
@@ -21,6 +22,7 @@ export interface InterpretFlowInputV1 {
   readonly variables: Readonly<Record<string, JsonValue>>;
   /** Trusted transport identity (or the simulator's explicit test context). */
   readonly customer_phone?: string;
+  readonly conversation_id?: string;
   readonly free_text_input?: string;
   readonly option_input?: {
     readonly kind: "button" | "list_selection";
@@ -142,9 +144,11 @@ export async function interpretFlowDefinitionV1(
     input.variables,
   );
   const phone = normalizeCustomerPhone(input.customer_phone);
-  const systemVariables: Record<string, JsonValue> = phone
-    ? { customer_phone: phone }
-    : {};
+  const conversationId = normalizeConversationId(input.conversation_id);
+  const systemVariables: Record<string, JsonValue> = {
+    ...(phone ? { customer_phone: phone } : {}),
+    ...(conversationId ? { conversation_id: conversationId } : {}),
+  };
   const outgoingTexts: string[] = [];
   const outgoingMessages: ChatbotOutgoingMessageV1[] = [];
 

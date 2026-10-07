@@ -301,10 +301,35 @@ Deno.test("condition routes with a text variable and fails safely when missing",
     {
       type: "fail",
       code: "missing_condition_variable",
-      message: "Condition variable customer_city is not available as text",
+      message: "Condition variable customer_city is not available as a scalar",
       details: { variable: "customer_city" },
     },
   );
+});
+
+Deno.test("conditions compare API booleans and numbers without guessing from objects", async () => {
+  const node: ConditionNodeV1 = {
+    id: "route",
+    type: "condition",
+    config: { variable: "result" },
+  };
+  for (const value of [true, false, 42, 0, null]) {
+    assertEquals(
+      await conditionNodeStrategy.execute(node, {
+        variables: { result: value },
+      }),
+      {
+        type: "advance",
+        route: { kind: "condition", value: String(value) },
+      },
+    );
+  }
+  for (const value of [[], {}]) {
+    const result = await conditionNodeStrategy.execute(node, {
+      variables: { result: value },
+    });
+    assertEquals(result.type, "fail");
+  }
 });
 
 Deno.test("end completes execution", async () => {

@@ -266,19 +266,23 @@ export const conditionNodeStrategy: NodeStrategy<ConditionNodeV1> = {
   execute(node, context): Promise<NodeResultV1> {
     const value = context.variables[node.config.variable];
 
-    if (typeof value !== "string") {
+    if (
+      value !== null && typeof value !== "string" &&
+      typeof value !== "boolean" &&
+      !(typeof value === "number" && Number.isFinite(value))
+    ) {
       return Promise.resolve({
         type: "fail",
         code: "missing_condition_variable",
         message:
-          `Condition variable ${node.config.variable} is not available as text`,
+          `Condition variable ${node.config.variable} is not available as a scalar`,
         details: { variable: node.config.variable },
       });
     }
 
     return Promise.resolve({
       type: "advance",
-      route: { kind: "condition", value },
+      route: { kind: "condition", value: String(value) },
     });
   },
 };

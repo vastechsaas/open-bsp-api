@@ -1,7 +1,10 @@
 import { assertEquals } from "../test_assert.ts";
 import { compileFlowDefinition } from "./compiler.ts";
 import { interpretFlowDefinitionV1 } from "./interpreter.ts";
-import { normalizeCustomerPhone } from "./system_variables.ts";
+import {
+  normalizeConversationId,
+  normalizeCustomerPhone,
+} from "./system_variables.ts";
 import { simulateChatbotFlow } from "../../chatbot-management/simulation.ts";
 
 const node = (id: string, node_type: string, config: object = {}) => ({
@@ -28,6 +31,77 @@ const phoneGraph = {
   ],
   edges: [edge("start", "message"), edge("message", "end")],
 };
+
+Deno.test("conversation ID uses trusted runtime context and never editable variables", async () => {
+  const graph = {
+    nodes: [
+      node("start", "start"),
+      node("message", "send_message", {
+        text: "Conversation: {{conversation_id}}",
+      }),
+      node("end", "end"),
+    ],
+    edges: [edge("start", "message"), edge("message", "end")],
+  };
+  const compiled = compileFlowDefinition(graph);
+  assertEquals(compiled.ok, true);
+  if (!compiled.ok) return;
+  const result = await interpretFlowDefinitionV1(compiled.definition, {
+    current_node_id: "start",
+    variables: { conversation_id: "spoofed" },
+    conversation_id: "42",
+  });
+  assertEquals(result.outgoing_texts, ["Conversation: 42"]);
+  assertEquals(result.variables, {});
+  const missing = await interpretFlowDefinitionV1(compiled.definition, {
+    current_node_id: "start",
+    variables: { conversation_id: "42" },
+  });
+  assertEquals(missing.status, "failed");
+  const simulated = await simulateChatbotFlow(graph, {
+    variables: { conversation_id: "spoofed" },
+  });
+  assertEquals(simulated.valid, true);
+  if (simulated.valid) {
+    assertEquals(simulated.outgoing_texts, [
+      "Conversation: 00000000-0000-4000-8000-000000000001",
+    ]);
+  }
+  assertEquals(normalizeConversationId("42"), "42");
+  assertEquals(
+    normalizeConversationId("00000000-0000-4000-8000-000000000001"),
+    "00000000-0000-4000-8000-000000000001",
+  );
+  for (const value of [undefined, "", "spoofed", "0", "-1", '42"}']) {
+    assertEquals(normalizeConversationId(value), undefined);
+  }
+  for (const type of ["collect_input", "webhook"]) {
+    const config = type === "collect_input"
+      ? { prompt: "ID?", variable: "conversation_id", required: true }
+      : {
+        method: "POST",
+        url: "https://example.com/api",
+        headers: [],
+        timeout_ms: 1000,
+        retry_count: 0,
+        response_mappings: [{ variable: "conversation_id", path: "id" }],
+      };
+    const invalid = compileFlowDefinition({
+      nodes: [
+        node("start", "start"),
+        node("write", type, config),
+        node("end", "end"),
+      ],
+      edges: [edge("start", "write"), edge("write", "end")],
+    });
+    assertEquals(invalid.ok, false);
+    if (!invalid.ok) {
+      assertEquals(invalid.issues.map((i) => i.code), [
+        "system_variable_read_only",
+      ]);
+    }
+  }
+});
 
 Deno.test("customer phone normalizes trusted international identity without guessing", () => {
   assertEquals(normalizeCustomerPhone("923001234567"), "+923001234567");
