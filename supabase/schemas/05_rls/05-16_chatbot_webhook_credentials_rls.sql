@@ -9,7 +9,5 @@ on public.chatbot_webhook_credentials
 for select
 to authenticated, anon
 using (
-  organization_id in (
-    select public.get_authorized_orgs('admin')
-  )
+  public.has_module_permission(organization_id, 'chatbot_builder', 'view')
 );

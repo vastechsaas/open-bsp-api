@@ -600,8 +600,8 @@ select throws_like(
 
 select is(
   (select count(*) from public.chatbot_flows),
-  0::bigint,
-  'Supervisor cannot read chatbot flows'
+  1::bigint,
+  'Supervisor defaults to read-only chatbot flow access'
 );
 
 select is(

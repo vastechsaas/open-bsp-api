@@ -162,6 +162,7 @@ check (
     'organization_agent.update',
     'organization_agent.remove',
     'organization_automation.update',
+    'organization_module_permissions.update',
     'organization_media_storage.quota_update',
     'organization_media_storage.reconcile',
     'whatsapp.health_check',
@@ -190,6 +191,7 @@ check (
     target_type = 'organization_media_storage'
     and action_type like 'organization_media_storage.%'
   )
+  or (target_type = 'organization_module_permissions' and action_type = 'organization_module_permissions.update')
   or (target_type = 'whatsapp_account' and action_type like 'whatsapp.%')
 );
 
