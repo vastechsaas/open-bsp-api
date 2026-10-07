@@ -151,14 +151,55 @@ function requireAdmin(
   c: Context<AppEnv>,
   next: () => Promise<void>,
 ): Promise<void> {
-  return authorizeOrganization(c, next, ["admin", "owner"]);
+  return authorizeBuilder(c, next, "manage");
 }
 
 function requireMember(
   c: Context<AppEnv>,
   next: () => Promise<void>,
 ): Promise<void> {
-  return authorizeOrganization(c, next, ["member", "admin", "owner"]);
+  return authorizeBuilder(c, next, "view");
+}
+
+async function authorizeBuilder(
+  c: Context<AppEnv>,
+  next: () => Promise<void>,
+  permission: "view" | "manage",
+): Promise<void> {
+  const organizationId = organizationPayloadSchema.parse(
+    c.req.method === "GET"
+      ? { organization_id: c.req.query("organization_id") }
+      : await c.req.raw.clone().json(),
+  ).organization_id;
+  const { data: allowed, error } = await c.get("supabase").rpc(
+    "has_module_permission",
+    {
+      p_organization_id: organizationId,
+      p_module: "chatbot_builder",
+      p_permission: permission,
+    },
+  );
+  if (error || !allowed) {
+    throw new HTTPException(403, {
+      message: `Chatbot Builder ${permission} permission is required`,
+      cause: error,
+    });
+  }
+  const user = c.get("user");
+  if (user) {
+    const { data: actor, error: actorError } = await serviceClient().from(
+      "agents",
+    )
+      .select("id").eq("organization_id", organizationId).eq("user_id", user.id)
+      .eq("ai", false).maybeSingle();
+    if (actorError || !actor) {
+      throw new HTTPException(403, {
+        message: "Organization membership required",
+      });
+    }
+    c.set("actorAgentId", actor.id);
+  } else c.set("actorAgentId", null);
+  await next();
 }
 
 async function authorizeOrganization(
@@ -242,6 +283,34 @@ function throwDatabaseError(error: DatabaseError, fallback: string): never {
 function serviceClient(): SupabaseClient<Database> {
   return createUnsecureClient();
 }
+
+app.get("/chatbot-management/builder-options", requireMember, async (c) => {
+  const organizationId = c.req.query("organization_id")!;
+  const [agents, queues] = await Promise.all([
+    serviceClient().from("agents").select("id,name,extra")
+      .eq("organization_id", organizationId).eq("ai", false).not(
+        "user_id",
+        "is",
+        null,
+      ),
+    serviceClient().from("routing_queues").select("id,name")
+      .eq("organization_id", organizationId).eq("status", "active"),
+  ]);
+  if (agents.error || queues.error) {
+    throwDatabaseError(
+      agents.error ?? queues.error!,
+      "Unable to load builder options",
+    );
+  }
+  return c.json({
+    agents: agents.data.filter((a) => {
+      const invitation =
+        (a.extra as { invitation?: { status?: string } } | null)?.invitation;
+      return !invitation || invitation.status === "accepted";
+    }).map(({ id, name }) => ({ id, name })),
+    queues: queues.data,
+  });
+});
 
 async function unavailableAgentIssues(
   client: SupabaseClient<Database>,
@@ -393,7 +462,7 @@ app.post("/chatbot-management/flows", requireAdmin, async (c) => {
 
 app.get(
   "/chatbot-management/webhook-credentials",
-  requireAdmin,
+  requireMember,
   async (c) => {
     const organizationId = c.req.query("organization_id")!;
     const { data, error } = await serviceClient()
@@ -550,7 +619,7 @@ app.post(
 
 app.get(
   "/chatbot-management/flows/:flowId/draft",
-  requireAdmin,
+  requireMember,
   async (c) => {
     const organizationId = c.req.query("organization_id")!;
     const { data, error } = await serviceClient()
@@ -619,7 +688,7 @@ app.put(
 
 app.post(
   "/chatbot-management/flows/:flowId/validate",
-  requireAdmin,
+  requireMember,
   async (c) => {
     const payload = validateDraftPayloadSchema.parse(await c.req.json());
     const result = compileFlowDefinition(payload.editor_graph);
@@ -641,7 +710,7 @@ app.post(
 
 app.post(
   "/chatbot-management/flows/:flowId/simulate",
-  requireAdmin,
+  requireMember,
   async (c) => {
     const payload = simulateFlowPayloadSchema.parse(await c.req.json());
     const { data: flow, error } = await serviceClient()
