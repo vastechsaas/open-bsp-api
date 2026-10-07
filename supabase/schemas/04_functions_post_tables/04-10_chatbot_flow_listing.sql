@@ -33,13 +33,7 @@ declare
   normalized_search text;
   normalized_status text;
 begin
-  if not exists (
-    select 1
-    from public.get_authorized_orgs_by_roles(
-      array['owner', 'admin', 'member']::public.role[]
-    ) as authorized_orgs(id)
-    where authorized_orgs.id = p_organization_id
-  ) then
+  if not public.has_module_permission(p_organization_id, 'chatbot_builder', 'view') then
     raise exception using
       errcode = '42501',
       message = 'organization is not accessible to the authenticated user';
