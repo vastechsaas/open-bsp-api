@@ -2280,6 +2280,67 @@ export type Database = {
           },
         ]
       }
+      organization_module_permissions: {
+        Row: {
+          can_manage: boolean
+          can_view: boolean
+          module: string
+          organization_id: string
+          role: Database["public"]["Enums"]["role"]
+        }
+        Insert: {
+          can_manage: boolean
+          can_view: boolean
+          module: string
+          organization_id: string
+          role: Database["public"]["Enums"]["role"]
+        }
+        Update: {
+          can_manage?: boolean
+          can_view?: boolean
+          module?: string
+          organization_id?: string
+          role?: Database["public"]["Enums"]["role"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_module_permissions_organization_id_module_fkey"
+            columns: ["organization_id", "module"]
+            isOneToOne: false
+            referencedRelation: "organization_module_settings"
+            referencedColumns: ["organization_id", "module"]
+          },
+        ]
+      }
+      organization_module_settings: {
+        Row: {
+          module: string
+          organization_id: string
+          revision: number
+          updated_at: string
+        }
+        Insert: {
+          module: string
+          organization_id: string
+          revision?: number
+          updated_at?: string
+        }
+        Update: {
+          module?: string
+          organization_id?: string
+          revision?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_module_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_provisioning: {
         Row: {
           attempt_count: number
@@ -3536,6 +3597,10 @@ export type Database = {
           unassigned_conversations: number
         }[]
       }
+      get_effective_module_permissions: {
+        Args: { p_module: string; p_organization_id: string }
+        Returns: Json
+      }
       get_my_assignment_availability: {
         Args: { p_organization_id: string }
         Returns: {
@@ -3591,6 +3656,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      get_platform_module_permissions: {
+        Args: { p_module: string; p_organization_id: string }
+        Returns: Json
       }
       get_platform_organization_agent_audit_state: {
         Args: { p_agent_id: string }
@@ -3744,9 +3813,24 @@ export type Database = {
         Args: { p_routing_queue_id: string }
         Returns: Json
       }
+      get_support_inbox_visibility: {
+        Args: { p_conversation_ids: string[]; p_organization_id: string }
+        Returns: {
+          conversation_id: string
+          visible: boolean
+        }[]
+      }
       get_unread_notification_count: {
         Args: { p_organization_id: string }
         Returns: number
+      }
+      has_module_permission: {
+        Args: {
+          p_module: string
+          p_organization_id: string
+          p_permission: string
+        }
+        Returns: boolean
       }
       heartbeat_my_assignment_availability: {
         Args: { p_organization_id: string }
@@ -3780,6 +3864,10 @@ export type Database = {
         Returns: boolean
       }
       is_platform_admin: { Args: never; Returns: boolean }
+      is_support_inbox_visible: {
+        Args: { p_conversation_id: string; p_organization_id: string }
+        Returns: boolean
+      }
       is_whatsapp_contact_auto_save_enabled: {
         Args: { p_organization_id: string }
         Returns: boolean
@@ -4761,6 +4849,16 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      update_platform_module_permissions: {
+        Args: {
+          p_expected_revision: number
+          p_module: string
+          p_organization_id: string
+          p_permissions: Json
+          p_request_id: string
+        }
+        Returns: Json
       }
       update_platform_organization_agent: {
         Args: {
