@@ -31,8 +31,8 @@ export type BusinessHoursTimeRange = {
   end_time: string; // HH:mm; 24:00 means midnight at the end of the day
 };
 
-// Configuration only: not yet enforced by assignment or chatbot execution.
-export type BusinessHoursSettings = {
+export type BusinessHoursSchedule = {
+  enabled?: boolean;
   mode: "all_days" | "per_day";
   timezone: string; // IANA timezone captured when first configured
   all_days: BusinessHoursTimeRange;
@@ -40,6 +40,18 @@ export type BusinessHoursSettings = {
     BusinessHoursDay,
     BusinessHoursTimeRange & { enabled: boolean }
   >;
+  holidays?: Array<{
+    date: string;
+    closed: boolean;
+    start_time?: string;
+    end_time?: string;
+  }>;
+};
+
+export type BusinessHoursSettings = BusinessHoursSchedule & {
+  queue_overrides?: Record<string, BusinessHoursSchedule | null>;
+  outside_hours_message?: string;
+  no_agents_message?: string;
 };
 
 export type OrganizationExtra = {

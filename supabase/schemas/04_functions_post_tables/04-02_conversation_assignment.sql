@@ -1,10 +1,19 @@
 create function public.enforce_human_conversation_assignee() returns trigger
-language plpgsql
+language plpgsql security definer
 set search_path to ''
 as $$
 begin
   if new.assigned_agent_id is null then
     return new;
+  end if;
+
+  -- Existing owners keep serving customers after the closing boundary.
+  -- Managers can explicitly cover an after-hours request; ordinary agent
+  -- claims and service-role assignment must respect the effective schedule.
+  if (tg_op='INSERT' or new.assigned_agent_id is distinct from old.assigned_agent_id)
+    and not (public.business_hours_status(new.organization_id,new.routing_queue_id)->>'open')::boolean
+    and coalesce(public.get_request_organization_role(new.organization_id)::text,'') not in ('owner','admin','supervisor') then
+    raise exception 'Support is outside business hours. A manager can override the schedule.' using errcode='23514';
   end if;
 
   if not exists (

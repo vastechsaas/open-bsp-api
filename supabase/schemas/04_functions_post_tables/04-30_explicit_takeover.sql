@@ -49,7 +49,12 @@ begin
   else
     if not exists(select 1 from public.agents where id=agent_id and organization_id=p_organization_id and not ai and user_id is not null
       and coalesce(extra->'invitation'->>'status','accepted')='accepted') then raise exception 'accepted tenant agent required' using errcode='23514'; end if;
-    update public.conversations set routing_queue_id=null,assigned_agent_id=agent_id where id=target.id;
+    update public.conversations set routing_queue_id=null,
+      assigned_agent_id=case when
+        (public.business_hours_status(p_organization_id,null,agent_id)->>'configured')::boolean
+        and public.business_hours_status(p_organization_id,null,agent_id)->>'reason'<>'available'
+        then null else agent_id end where id=target.id;
+    perform public.notify_support_unavailability(target.id,p_support_request->>'id',agent_id);
   end if;
   insert into public.chatbot_node_conversations(organization_id,organization_address,node_conversation_id,conversation_id,
     human_owned,lifecycle_enabled,ownership_revision,state,support_request,last_inbound_wamid)

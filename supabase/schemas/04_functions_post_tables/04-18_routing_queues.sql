@@ -419,6 +419,9 @@ begin
     'chatbot_handoff'
   );
 
+  perform public.notify_support_unavailability(target_conversation.id,
+    'route:' || route_time::text);
+
   return target_conversation;
 end;
 $$;

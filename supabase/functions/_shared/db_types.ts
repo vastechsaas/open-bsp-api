@@ -3157,6 +3157,19 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      business_hours_schedule_open: {
+        Args: { p_at: string; p_schedule: Json }
+        Returns: boolean
+      }
+      business_hours_status: {
+        Args: {
+          p_agent_id?: string
+          p_at?: string
+          p_organization_id: string
+          p_queue_id?: string
+        }
+        Returns: Json
+      }
       claim_campaign_deliveries: {
         Args: { p_limit?: number }
         Returns: {
@@ -3518,6 +3531,10 @@ export type Database = {
       get_authorized_orgs_by_roles: {
         Args: { roles: Database["public"]["Enums"]["role"][] }
         Returns: string[]
+      }
+      get_business_hours_status: {
+        Args: { p_organization_id: string; p_queue_id?: string }
+        Returns: Json
       }
       get_campaign_audience_count: {
         Args: { p_campaign_id: string; p_organization_id: string }
@@ -4431,6 +4448,14 @@ export type Database = {
         Args: { p_shortcut: string }
         Returns: string
       }
+      notify_support_unavailability: {
+        Args: {
+          p_agent_id?: string
+          p_conversation_id: string
+          p_request_id: string
+        }
+        Returns: undefined
+      }
       org_update_by_admin_rules: {
         Args: { p_id: string; p_name: string }
         Returns: boolean
@@ -5071,6 +5096,10 @@ export type Database = {
       }
       upsert_whatsapp_contact_addresses: {
         Args: { p_addresses: Json }
+        Returns: undefined
+      }
+      validate_business_hours_schedule: {
+        Args: { p_schedule: Json }
         Returns: undefined
       }
       validate_quick_reply_input: {
