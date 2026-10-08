@@ -92,8 +92,12 @@ begin
   role := public.get_request_organization_role(p_organization_id);
   if target.id is null or actor is null or role not in ('owner','admin','supervisor','agent')
     or (role = 'agent' and (p_action = 'resume' or (target.assigned_agent_id is distinct from actor
-      and not (p_action = 'takeover' and target.assigned_agent_id is null and target.routing_queue_id is not null
-        and exists(select 1 from public.routing_queue_members where organization_id = p_organization_id and routing_queue_id = target.routing_queue_id and agent_id = actor))))) then
+      and not (p_action = 'takeover' and target.assigned_agent_id is null and (
+        (target.routing_queue_id is not null and exists(select 1 from public.routing_queue_members
+          where organization_id = p_organization_id and routing_queue_id = target.routing_queue_id and agent_id = actor))
+        or exists(select 1 from public.chatbot_node_conversations where organization_id=p_organization_id
+          and conversation_id=target.id and support_request->>'status'='waiting'
+          and support_request->'target'->>'agent_id'=actor::text)))))) then
     raise exception 'conversation action is not permitted' using errcode = '42501'; end if;
   body := jsonb_build_object('observed_last_inbound_wamid',p_observed_last_inbound_wamid,
     'expected_revision',p_expected_revision,'actor_agent_id',actor);
@@ -111,6 +115,10 @@ begin
   if p_expected_revision !~ '^[0-9]+$' or p_expected_revision::numeric < mapping.ownership_revision::numeric
     or (p_action = 'takeover' and p_expected_revision::numeric <> mapping.ownership_revision::numeric) then
     raise exception 'conversation ownership changed' using errcode = '40001'; end if;
+  if p_action='takeover' and role='agent' and
+    (public.business_hours_status(p_organization_id,target.routing_queue_id)->>'open')::boolean is not true then
+    raise exception 'Support is outside business hours. A manager can override the schedule.' using errcode='23514';
+  end if;
   latest_wamid := mapping.last_inbound_wamid;
   if latest_wamid is null then
     select external_id into latest_wamid from public.messages where organization_id = p_organization_id and conversation_id = p_conversation_id

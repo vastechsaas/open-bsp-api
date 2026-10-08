@@ -50,7 +50,12 @@ begin
     end if;
     -- Reuse assignment constraints; clear old queue so a valid tenant agent
     -- isn't incorrectly rejected as a member of a previous routing queue.
-    update public.conversations set routing_queue_id = null, assigned_agent_id = p_agent_id where id = target.id;
+    update public.conversations set routing_queue_id = null,
+      assigned_agent_id = case when
+        (public.business_hours_status(p_organization_id,null,p_agent_id)->>'configured')::boolean
+        and public.business_hours_status(p_organization_id,null,p_agent_id)->>'reason'<>'available'
+        then null else p_agent_id end where id = target.id;
+    perform public.notify_support_unavailability(target.id,p_event_id::text,p_agent_id);
   end if;
   insert into public.chatbot_node_conversations(organization_id, organization_address, node_conversation_id, conversation_id, ownership_revision, lifecycle_enabled)
     values (p_organization_id, p_organization_address, p_node_conversation_id, target.id, coalesce(p_revision,'0'), p_revision is not null)

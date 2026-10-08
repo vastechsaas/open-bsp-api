@@ -39,6 +39,11 @@ begin
 
   if not found then return conversation_row; end if;
 
+  if not (public.business_hours_status(conversation_row.organization_id,
+      conversation_row.routing_queue_id, null, assignment_time)->>'open')::boolean then
+    return conversation_row;
+  end if;
+
   insert into public.routing_queue_assignment_state (
     organization_id, routing_queue_id
   ) values (conversation_row.organization_id, queue_row.id)
@@ -151,9 +156,16 @@ begin
     join public.organization_lifecycle lifecycle
       on lifecycle.organization_id = c.organization_id
       and lifecycle.status = 'active'
+    join public.organizations org on org.id=c.organization_id
     where c.status = 'active' and c.assigned_agent_id is null
       and settings.auto_assign_conversations
       and q.status = 'active' and q.assignment_strategy = 'round_robin'
+      -- Filter before LIMIT: a closed team's old requests must not starve an
+      -- open team's backlog. Do not perform presence-count queries per row.
+      and (org.extra->'business_hours'->>'enabled'='false'
+        or public.business_hours_schedule_open(coalesce(
+          nullif(org.extra->'business_hours'->'queue_overrides'->q.id::text,'null'::jsonb),
+          org.extra->'business_hours'),clock_timestamp()))
       and (p_organization_id is null or c.organization_id = p_organization_id)
       and (p_routing_queue_id is null or c.routing_queue_id = p_routing_queue_id)
     order by coalesce(c.routed_at, c.created_at), c.id
