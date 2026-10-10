@@ -206,6 +206,31 @@ export function createMessageHandler({
         return;
       }
 
+      // Release the main queue so the prerequisite customer/close event can
+      // arrive. Confirm a durable delayed retry before acknowledging this copy.
+      const retries = Number(
+        message.properties.headers?.["x-openbsp-retry"] ?? 0,
+      );
+      if (
+        (result.status === 429 || (result.status ?? 0) >= 500 ||
+          result.status === undefined) && retries < 5
+      ) {
+        channel.sendToQueue(`${topology.queue}.retry`, message.content, {
+          persistent: true,
+          contentType: "application/json",
+          ...(typeof message.properties.messageId === "string"
+            ? { messageId: message.properties.messageId }
+            : {}),
+          headers: {
+            ...message.properties.headers,
+            "x-openbsp-retry": retries + 1,
+          },
+        });
+        await channel.waitForConfirms();
+        channel.ack(message);
+        return;
+      }
+
       await deadLetter(
         channel,
         message,

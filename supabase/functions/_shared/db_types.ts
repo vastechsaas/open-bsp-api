@@ -1237,14 +1237,17 @@ export type Database = {
         Row: {
           closed_at: string | null
           conversation_id: string
+          episode_number: number | null
           human_owned: boolean
           last_inbound_wamid: string | null
+          last_synced_at: string | null
           lifecycle_enabled: boolean
           node_conversation_id: string
           organization_address: string
           organization_id: string
           ownership_revision: string
           pending_request_id: string | null
+          previous_node_conversation_id: string | null
           resolved_by: string | null
           state: string
           support_request: Json | null
@@ -1252,14 +1255,17 @@ export type Database = {
         Insert: {
           closed_at?: string | null
           conversation_id: string
+          episode_number?: number | null
           human_owned?: boolean
           last_inbound_wamid?: string | null
+          last_synced_at?: string | null
           lifecycle_enabled?: boolean
           node_conversation_id: string
           organization_address: string
           organization_id: string
           ownership_revision?: string
           pending_request_id?: string | null
+          previous_node_conversation_id?: string | null
           resolved_by?: string | null
           state?: string
           support_request?: Json | null
@@ -1267,14 +1273,17 @@ export type Database = {
         Update: {
           closed_at?: string | null
           conversation_id?: string
+          episode_number?: number | null
           human_owned?: boolean
           last_inbound_wamid?: string | null
+          last_synced_at?: string | null
           lifecycle_enabled?: boolean
           node_conversation_id?: string
           organization_address?: string
           organization_id?: string
           ownership_revision?: string
           pending_request_id?: string | null
+          previous_node_conversation_id?: string | null
           resolved_by?: string | null
           state?: string
           support_request?: Json | null
@@ -4347,6 +4356,23 @@ export type Database = {
           webhook_validated_at: string
         }[]
       }
+      list_previous_conversations_page: {
+        Args: {
+          p_conversation_id: string
+          p_organization_id: string
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          name: string
+          status: string
+          total_count: number
+          updated_at: string
+        }[]
+      }
       list_quick_replies_page: {
         Args: {
           p_organization_id: string
@@ -4637,6 +4663,7 @@ export type Database = {
         Args: {
           p_agent_id: string
           p_content: Json
+          p_conversation_id?: string
           p_organization_id: string
           p_phone_number_id: string
           p_recipient: string
@@ -4718,6 +4745,17 @@ export type Database = {
       resolve_chatbot_webhook_credential: {
         Args: { p_credential_id: string; p_organization_id: string }
         Returns: Json
+      }
+      resolve_node_conversation_episode: {
+        Args: {
+          p_address: string
+          p_episode_number: number
+          p_node_conversation_id: string
+          p_organization_id: string
+          p_previous_node_conversation_id?: string
+          p_recipient: string
+        }
+        Returns: string
       }
       restore_organization: {
         Args: {
@@ -5899,4 +5937,3 @@ export const Constants = {
     },
   },
 } as const
-

@@ -48,13 +48,13 @@ import {
 } from "../_shared/chatbot/node_bridge_translation.ts";
 import { processNodeBridgeOperation } from "../_shared/chatbot/node_bridge_processor.ts";
 import { conversationLifecycleEnabled } from "../_shared/chatbot/conversation_lifecycle.ts";
+import { lifecycleFresh } from "../_shared/chatbot/lifecycle_snapshot.ts";
 import {
   explicitTakeoverEnabled,
   supportRequestSchema,
 } from "../_shared/chatbot/support_request.ts";
 import {
   conversationReservationError,
-  takeoverSynchronizationPending,
 } from "../_shared/chatbot/takeover_readiness.ts";
 
 type AppEnv = {
@@ -74,6 +74,8 @@ type DatabaseError = {
 };
 
 type OrganizationRole = Database["public"]["Enums"]["role"];
+
+declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 
 const app = new Hono<AppEnv>();
 
@@ -1161,7 +1163,7 @@ app.get(
       });
     }
     const { data: visible } = await c.get("supabase").from("conversations")
-      .select("id,assigned_agent_id,status,routing_queue_id")
+      .select("id,assigned_agent_id,status,routing_queue_id,contact_address")
       .eq("organization_id", organizationId).eq("id", conversationId)
       .maybeSingle();
     if (!visible || !c.get("user")) {
@@ -1177,21 +1179,56 @@ app.get(
         conversationId,
       ).maybeSingle();
     if (!mapping) return c.json({ enabled: false });
-    const remote = await nodeBridgeRequest(
-      nodeBridgeConnection(organizationId, mapping.organization_address),
-      `bridge/conversations/${mapping.node_conversation_id}`,
-    );
-    if (!remote.ok) {
-      throw new HTTPException(503, {
-        message: "Conversation synchronization is unavailable",
-      });
+    const confirmed = lifecycleFresh(mapping.last_synced_at);
+    // Render confirmed local state immediately; Node availability is not on
+    // the GET critical path. Mutating operations still verify Node ownership.
+    if (
+      !mapping.last_synced_at ||
+      Date.now() - Date.parse(mapping.last_synced_at) > 20_000
+    ) {
+      EdgeRuntime.waitUntil((async () => {
+        try {
+          const remote = await nodeBridgeRequest(
+            nodeBridgeConnection(organizationId, mapping.organization_address),
+            `bridge/conversations/${mapping.node_conversation_id}`,
+          );
+          if (!remote.ok) return;
+          const snapshot = (await remote.json()).data;
+          if (
+            !snapshot || !/^\d+$/.test(snapshot.revision) ||
+            !snapshot.last_inbound_wamid
+          ) return;
+          const { error } = await serviceClient().rpc(
+            "apply_node_conversation_lifecycle",
+            {
+              p_organization_id: organizationId,
+              p_address: mapping.organization_address,
+              p_node_conversation_id: mapping.node_conversation_id,
+              p_recipient: visible.contact_address!,
+              p_revision: snapshot.revision,
+              p_state: snapshot.state,
+              p_last_inbound_wamid: snapshot.last_inbound_wamid,
+              p_source_wamid: snapshot.last_inbound_wamid,
+              p_support_request: snapshot.support_request,
+            },
+          );
+          if (!error) {
+            await serviceClient().from("chatbot_node_conversations").update({
+              last_synced_at: new Date().toISOString(),
+            })
+              .eq("organization_id", organizationId).eq(
+                "conversation_id",
+                conversationId,
+              ).eq("ownership_revision", snapshot.revision);
+          }
+        } catch {
+          /* Last confirmed state remains visible, but stale actions stay disabled. */
+        }
+      })());
     }
-    const snapshot = await remote.json();
-    const takeoverSyncPending = takeoverSynchronizationPending({
-      ...mapping,
-      support_request:
-        supportRequestSchema.safeParse(mapping.support_request).data ?? null,
-    }, snapshot.data ?? {});
+    const supportRequest =
+      supportRequestSchema.safeParse(mapping.support_request).data;
+    const takeoverSyncPending = !confirmed || !mapping.lifecycle_enabled;
     const { data: actor } = await c.get("supabase").from("agents").select(
       "extra",
     )
@@ -1230,23 +1267,33 @@ app.get(
       }
       : null;
     return c.json({
-      enabled: snapshot.enabled === true,
-      ...snapshot.data,
+      enabled: mapping.lifecycle_enabled,
+      conversation_id: mapping.node_conversation_id,
+      state: mapping.state,
+      human_owned: mapping.human_owned,
+      lifecycle_enabled: mapping.lifecycle_enabled,
+      episode_enabled: mapping.episode_number !== null,
+      revision: mapping.ownership_revision,
+      last_inbound_wamid: mapping.last_inbound_wamid,
+      support_request: supportRequest,
+      last_synced_at: mapping.last_synced_at,
+      sync_pending: !confirmed,
       pending_request_id: mapping.pending_request_id,
-      takeover_enabled: explicitTakeoverEnabled(organizationId) &&
-        snapshot.takeover_enabled === true,
+      takeover_enabled: explicitTakeoverEnabled(organizationId),
       takeover_sync_pending: takeoverSyncPending,
       can_takeover: explicitTakeoverEnabled(organizationId) &&
-        snapshot.takeover_enabled === true &&
+        confirmed &&
         !takeoverSyncPending &&
-        snapshot.data?.support_request?.status === "waiting" &&
+        supportRequest?.status === "waiting" &&
         (manager ||
           (visible.assigned_agent_id
             ? visible.assigned_agent_id === c.get("actorAgentId")
-            : Boolean(queueMember))),
-      can_resolve: manager ||
-        visible.assigned_agent_id === c.get("actorAgentId"),
-      can_resume: manager,
+            : Boolean(queueMember) ||
+              (supportRequest?.target && "agent_id" in supportRequest.target &&
+                supportRequest.target.agent_id === c.get("actorAgentId")))),
+      can_resolve: confirmed &&
+        (manager || visible.assigned_agent_id === c.get("actorAgentId")),
+      can_resume: confirmed && manager,
       operation,
     });
   },

@@ -121,7 +121,8 @@ create function public.record_external_chatbot_reply(
   p_recipient text,
   p_wamid text,
   p_sent_at timestamp with time zone,
-  p_content jsonb
+  p_content jsonb,
+  p_conversation_id uuid default null
 ) returns table (
   outcome text,
   message_id uuid
@@ -217,6 +218,8 @@ begin
   for update;
 
   if found then
+    if p_conversation_id is not null and existing_message.conversation_id<>p_conversation_id then
+      raise exception 'WAMID belongs to another conversation' using errcode='23505'; end if;
     if existing_message.organization_id <> p_organization_id
       or existing_message.service <> 'whatsapp'::public.service
       or existing_message.organization_address <> normalized_phone_number_id
@@ -279,6 +282,16 @@ begin
     )
   );
 
+  if p_conversation_id is not null then
+    select c.id into target_conversation_id from public.conversations c
+      where c.id=p_conversation_id and c.organization_id=p_organization_id and c.service='whatsapp'
+      and c.organization_address=normalized_phone_number_id and c.contact_address=normalized_recipient and c.group_address is null;
+    if not found then raise exception 'conversation mapping mismatch' using errcode='23514'; end if;
+  else
+  if exists(select 1 from public.chatbot_node_conversations m join public.conversations c on c.id=m.conversation_id
+    where m.organization_id=p_organization_id and m.organization_address=normalized_phone_number_id
+      and c.contact_address=normalized_recipient and m.episode_number is not null) then
+    raise exception 'explicit Node episode context is required' using errcode='40001'; end if;
   select conversation.id
   into target_conversation_id
   from public.conversations as conversation
@@ -304,6 +317,7 @@ begin
       normalized_recipient
     )
     returning id into target_conversation_id;
+  end if;
   end if;
 
   insert into public.messages (
@@ -345,7 +359,8 @@ revoke execute on function public.record_external_chatbot_reply(
   text,
   text,
   timestamp with time zone,
-  jsonb
+  jsonb,
+  uuid
 ) from public, anon, authenticated;
 grant execute on function public.record_external_chatbot_reply(
   uuid,
@@ -354,5 +369,6 @@ grant execute on function public.record_external_chatbot_reply(
   text,
   text,
   timestamp with time zone,
-  jsonb
+  jsonb,
+  uuid
 ) to service_role;

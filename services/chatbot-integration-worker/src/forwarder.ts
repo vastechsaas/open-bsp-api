@@ -40,6 +40,14 @@ function resolveRequest(
           "Content-Type": "application/json",
           "X-Hub-Signature-256": event.payload.x_hub_signature_256,
           "X-OpenBSP-Event-ID": event.event_id,
+          ...(event.payload.node_messages
+            ? {
+              Authorization: `Bearer ${account.openbsp_api_key}`,
+              "X-OpenBSP-Node-Messages": JSON.stringify(
+                event.payload.node_messages,
+              ),
+            }
+            : {}),
         },
         body: event.payload.raw_body,
       },

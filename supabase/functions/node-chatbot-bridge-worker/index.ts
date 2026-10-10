@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createUnsecureClient } from "../_shared/supabase.ts";
 import { processNodeBridgeOperation } from "../_shared/chatbot/node_bridge_processor.ts";
+import { boundedWork } from "../_shared/chatbot/bounded_work.ts";
 
 Deno.serve(async (request) => {
   const serviceKey = Deno.env.get("EDGE_FUNCTIONS_TOKEN") ||
@@ -27,14 +28,14 @@ Deno.serve(async (request) => {
       status: 503,
     });
   }
-  const results = [];
-  for (const operation of data ?? []) {
+  const results: { request_id: string; processed: boolean }[] = [];
+  await boundedWork(data ?? [], async (operation, signal) => {
     try {
-      await processNodeBridgeOperation(operation.request_id);
+      await processNodeBridgeOperation(operation.request_id, signal);
       results.push({ request_id: operation.request_id, processed: true });
     } catch {
       results.push({ request_id: operation.request_id, processed: false });
     }
-  }
+  });
   return Response.json({ results });
 });

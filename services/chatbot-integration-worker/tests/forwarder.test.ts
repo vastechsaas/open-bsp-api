@@ -3,6 +3,27 @@ import test from "node:test";
 import { createForwarder } from "../src/forwarder.js";
 import { account, replyEvent, silentLogger, webhookEvent } from "./fixtures.js";
 
+test("episode routing is authenticated separately without changing the signed Meta body", async () => {
+  const node_messages = {
+    "wamid.original": {
+      node_conversation_id: "200",
+      episode_number: 2,
+      previous_node_conversation_id: "100",
+    },
+  };
+  const result = await makeForwarder((_url, init) => {
+    assert.equal(init?.body, webhookEvent.payload.raw_body);
+    const headers = new Headers(init?.headers);
+    assert.equal(headers.get("Authorization"), "Bearer openbsp-secret");
+    assert.deepEqual(
+      JSON.parse(headers.get("X-OpenBSP-Node-Messages")!),
+      node_messages,
+    );
+    return Promise.resolve(new Response(null, { status: 200 }));
+  })({ ...webhookEvent, payload: { ...webhookEvent.payload, node_messages } });
+  assert.equal(result.outcome, "success");
+});
+
 test("versioned lifecycle events use the dedicated authenticated handler without changing tenant credentials", async () => {
   let capturedUrl = "";
   let body: Record<string, unknown> = {};

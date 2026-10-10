@@ -51,6 +51,9 @@ create table public.chatbot_node_conversations (
   state text not null default 'human_owned' check (state in ('human_owned', 'closed', 'bot_ready', 'bot_active')),
   pending_request_id uuid,
   last_inbound_wamid text,
+  last_synced_at timestamptz,
+  episode_number integer check (episode_number > 0),
+  previous_node_conversation_id text check (previous_node_conversation_id ~ '^[0-9]+$'),
   resolved_by uuid,
   closed_at timestamptz,
   support_request jsonb check (support_request is null or jsonb_typeof(support_request) = 'object'),
@@ -60,6 +63,8 @@ create table public.chatbot_node_conversations (
   foreign key (organization_id, conversation_id)
     references public.conversations(organization_id, id) on delete cascade
 );
+create unique index chatbot_node_episode_successor_idx on public.chatbot_node_conversations
+  (organization_id, organization_address, previous_node_conversation_id) where previous_node_conversation_id is not null;
 create table public.chatbot_node_handoff_receipts (
   event_id uuid primary key,
   organization_id uuid not null references public.organizations(id) on delete cascade,
