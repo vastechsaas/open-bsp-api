@@ -3,11 +3,16 @@ import { z } from "zod";
 import { createApiClient, createUnsecureClient } from "../_shared/supabase.ts";
 import { conversationLifecycleEnabled } from "../_shared/chatbot/conversation_lifecycle.ts";
 import {
+  episodeSchema,
+  resolveConversationEpisode,
+} from "../_shared/chatbot/conversation_episode.ts";
+import {
   explicitTakeoverEnabled,
   supportRequestSchema,
 } from "../_shared/chatbot/support_request.ts";
 
 const schema = z.object({
+  episode: episodeSchema.optional(),
   phone_number_id: z.string().regex(/^\d+$/),
   recipient: z.string().regex(/^\d+$/),
   source_wamid: z.string().startsWith("wamid."),
@@ -81,6 +86,21 @@ Deno.serve(async (request) => {
         status: 422,
       });
     }
+    if (payload.episode) {
+      if (
+        payload.episode.node_conversation_id !== payload.node_conversation_id
+      ) {
+        return Response.json({ message: "Episode context mismatch" }, {
+          status: 422,
+        });
+      }
+      await resolveConversationEpisode(
+        key.organization_id,
+        address.address,
+        payload.recipient,
+        payload.episode,
+      );
+    }
     const { data, error } = payload.mode === "support_requested"
       ? await client.rpc("record_node_support_request", {
         p_organization_id: key.organization_id,
@@ -129,6 +149,6 @@ Deno.serve(async (request) => {
       message: error instanceof z.ZodError
         ? "Invalid handoff payload"
         : "Handoff processing failed",
-    }, { status: error instanceof z.ZodError ? 422 : 500 });
+    }, { status: error instanceof z.ZodError ? 422 : 503 });
   }
 });

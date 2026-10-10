@@ -30,6 +30,7 @@ begin
   select * into mapping from public.chatbot_node_conversations where organization_id=p_organization_id
     and organization_address=p_address and node_conversation_id=p_node_conversation_id for update;
   if found and mapping.conversation_id <> target.id then raise exception 'conversation mapping mismatch' using errcode='23514'; end if;
+  if mapping.episode_number is not null and mapping.state='closed' then return target.id; end if;
   -- A newer bot snapshot can arrive before the request's independent outbox
   -- event. Route that same waiting request once; never revive a handled request.
   if mapping.lifecycle_enabled and p_revision::numeric <= mapping.ownership_revision::numeric
@@ -61,7 +62,7 @@ begin
     values(p_organization_id,p_address,p_node_conversation_id,target.id,false,true,p_revision,'bot_ready',p_support_request,p_support_request->>'source_wamid')
     on conflict(organization_id,organization_address,node_conversation_id) do update set
       human_owned=false,lifecycle_enabled=true,ownership_revision=greatest(p_revision::numeric,chatbot_node_conversations.ownership_revision::numeric)::text,
-      state='bot_ready',support_request=p_support_request;
+      state='bot_ready',support_request=p_support_request,last_synced_at=now();
   insert into public.chatbot_node_handoff_receipts(event_id,organization_id,conversation_id) values(p_event_id,p_organization_id,target.id);
   return target.id;
 end;

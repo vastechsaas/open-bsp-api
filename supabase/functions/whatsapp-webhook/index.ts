@@ -1,4 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { z } from "zod";
+import { createApiClient } from "../_shared/supabase.ts";
+import {
+  episodeSchema,
+  resolveConversationEpisode,
+} from "../_shared/chatbot/conversation_episode.ts";
 import * as log from "../_shared/logger.ts";
 import {
   type ContactAddressInsert,
@@ -524,6 +530,24 @@ async function processMessage(request: Request): Promise<Response> {
   const client = createUnsecureClient();
 
   const payload = JSON.parse(body) as MetaWebhookPayload;
+  const nodeHeader = request.headers.get("X-OpenBSP-Node-Messages");
+  const nodeMessages = nodeHeader
+    ? z.record(z.string(), episodeSchema).parse(JSON.parse(nodeHeader))
+    : undefined;
+  let nodeOrganization: string | undefined;
+  if (nodeMessages) {
+    const authorization = request.headers.get("Authorization");
+    if (!authorization?.startsWith("Bearer ")) {
+      return new Response("Unauthorized episode context", { status: 401 });
+    }
+    const { data: key } = await createApiClient(request).from("api_keys")
+      .select("organization_id").eq("key", authorization.slice(7))
+      .maybeSingle();
+    if (!key) {
+      return new Response("Unauthorized episode context", { status: 401 });
+    }
+    nodeOrganization = key.organization_id;
+  }
 
   if (payload.object !== "whatsapp_business_account") {
     return new Response("Unexpected object", { status: 400 });
@@ -791,6 +815,21 @@ async function processMessage(request: Request): Promise<Response> {
             organization_address,
             contact_address,
             direction: "incoming" as const,
+            ...(nodeMessages?.[webhookMessage.id]
+              ? {
+                conversation_id: await (async () => {
+                  if (nodeOrganization !== organization_id) {
+                    throw new Error("Episode tenant mismatch");
+                  }
+                  return await resolveConversationEpisode(
+                    organization_id,
+                    organization_address,
+                    contact_address,
+                    nodeMessages[webhookMessage.id]!,
+                  );
+                })(),
+              }
+              : {}),
             content,
             timestamp: new Date(webhookMessage.timestamp * 1000).toISOString(),
           };
@@ -818,6 +857,21 @@ async function processMessage(request: Request): Promise<Response> {
             organization_address,
             contact_address: status.recipient_id ?? status.recipient_user_id,
             direction: "outgoing",
+            ...(nodeMessages?.[status.id]
+              ? {
+                conversation_id: await (async () => {
+                  if (nodeOrganization !== organization_id) {
+                    throw new Error("Episode tenant mismatch");
+                  }
+                  return await resolveConversationEpisode(
+                    organization_id,
+                    organization_address,
+                    (status.recipient_id ?? status.recipient_user_id)!,
+                    nodeMessages[status.id]!,
+                  );
+                })(),
+              }
+              : {}),
             content: {} as OutgoingMessage, // this will get merged (it won't overwrite)
             status: {
               [status.status]: new Date(

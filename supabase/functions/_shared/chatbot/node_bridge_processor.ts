@@ -2,11 +2,20 @@ import { createUnsecureClient, type Json } from "../supabase.ts";
 import {
   nodeBridgeConnection,
   nodeBridgePhaseId,
-  nodeBridgeRequest,
+  nodeBridgeRequest as remoteRequest,
 } from "./node_bridge_client.ts";
 import { conversationOperationError } from "./conversation_lifecycle.ts";
 
-export async function processNodeBridgeOperation(requestId: string) {
+export async function processNodeBridgeOperation(
+  requestId: string,
+  signal?: AbortSignal,
+) {
+  const nodeBridgeRequest = (
+    connection: Parameters<typeof remoteRequest>[0],
+    path: string,
+    method = "GET",
+    body?: unknown,
+  ) => remoteRequest(connection, path, method, body, signal);
   const client = createUnsecureClient();
   const { data: operation, error } = await client.from(
     "chatbot_node_operations",
@@ -270,7 +279,7 @@ export async function processNodeBridgeOperation(requestId: string) {
     throw new Error("Unable to commit bridge acknowledgment");
   }
   if (data.phase === "activate" && data.status === "pending") {
-    return await processNodeBridgeOperation(requestId);
+    return await processNodeBridgeOperation(requestId, signal);
   }
   return data;
 }

@@ -38,10 +38,14 @@ function message(body: unknown): ConsumeMessage {
 }
 
 function channelMock() {
-  const calls = { ack: 0, nack: 0, publish: 0, confirmed: 0 };
+  const calls = { ack: 0, nack: 0, publish: 0, confirmed: 0, retry: 0 };
   return {
     calls,
     channel: {
+      sendToQueue: () => {
+        calls.retry++;
+        return true;
+      },
       ack: () => {
         calls.ack += 1;
       },
@@ -77,6 +81,48 @@ test("acknowledges only after successful forwarding", async () => {
   assert.equal(forwarded, true);
   assert.equal(calls.ack, 1);
   assert.equal(state.processed, 1);
+});
+
+test("out-of-order transient failures confirm a delayed retry and free the prerequisite queue", async () => {
+  const { channel, calls } = channelMock();
+  await createMessageHandler({
+    channel,
+    logger: silentLogger,
+    state: createWorkerState(),
+    forward: () =>
+      Promise.resolve({
+        outcome: "permanent_failure",
+        status: 503,
+        reason: "dependency pending",
+        attempts: 3,
+      }),
+  })(message(replyEvent));
+  assert.equal(calls.retry, 1);
+  assert.equal(calls.publish, 0);
+  assert.equal(calls.confirmed, 1);
+  assert.equal(calls.ack, 1);
+});
+
+test("dependency retry exhaustion dead-letters without guessing a conversation", async () => {
+  const { channel, calls } = channelMock();
+  const incoming = message(replyEvent);
+  incoming.properties.headers = { "x-openbsp-retry": 5 };
+  await createMessageHandler({
+    channel,
+    logger: silentLogger,
+    state: createWorkerState(),
+    forward: () =>
+      Promise.resolve({
+        outcome: "permanent_failure",
+        status: 503,
+        reason: "dependency pending",
+        attempts: 3,
+      }),
+  })(incoming);
+  assert.equal(calls.retry, 0);
+  assert.equal(calls.publish, 1);
+  assert.equal(calls.confirmed, 1);
+  assert.equal(calls.ack, 1);
 });
 
 test("confirms dead-letter publication before acknowledging permanent failures", async () => {

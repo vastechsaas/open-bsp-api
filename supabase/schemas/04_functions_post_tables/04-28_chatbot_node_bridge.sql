@@ -30,6 +30,8 @@ begin
       and c.contact_address = p_recipient and m.organization_id = p_organization_id
       and m.external_id = p_source_wamid and m.direction = 'incoming' for update of c;
   if not found then raise exception 'source customer message has not arrived' using errcode = '40001'; end if;
+  if exists(select 1 from public.chatbot_node_conversations where organization_id=p_organization_id and conversation_id=target.id
+    and episode_number is not null and state='closed') then return target.id; end if;
   if exists(select 1 from public.chatbot_node_conversations where organization_id = p_organization_id and conversation_id = target.id
     and lifecycle_enabled and (p_revision is null or p_revision::numeric < ownership_revision::numeric
       or (p_revision::numeric = ownership_revision::numeric and not human_owned))) then
@@ -61,7 +63,7 @@ begin
     values (p_organization_id, p_organization_address, p_node_conversation_id, target.id, coalesce(p_revision,'0'), p_revision is not null)
     on conflict (organization_id, organization_address, node_conversation_id)
     do update set human_owned = true, state = 'human_owned', ownership_revision = coalesce(p_revision,chatbot_node_conversations.ownership_revision),
-      lifecycle_enabled = chatbot_node_conversations.lifecycle_enabled or p_revision is not null;
+      lifecycle_enabled = chatbot_node_conversations.lifecycle_enabled or p_revision is not null,last_synced_at=now();
   insert into public.chatbot_node_handoff_receipts(event_id, organization_id, conversation_id)
     values(p_event_id, p_organization_id, target.id);
   return target.id;

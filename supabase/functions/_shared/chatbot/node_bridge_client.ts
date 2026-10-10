@@ -29,6 +29,7 @@ export async function nodeBridgeRequest(
   path: string,
   method = "GET",
   body?: unknown,
+  signal?: AbortSignal,
 ) {
   return await fetch(`${connection.url.replace(/\/$/, "")}/api/v1/${path}`, {
     method,
@@ -38,7 +39,9 @@ export async function nodeBridgeRequest(
       "Content-Type": "application/json",
     },
     body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(10_000),
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(10_000)])
+      : AbortSignal.timeout(10_000),
     redirect: "error",
   });
 }

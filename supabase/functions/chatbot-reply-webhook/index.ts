@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { z } from "zod";
 import * as log from "../_shared/logger.ts";
+import { resolveConversationEpisode } from "../_shared/chatbot/conversation_episode.ts";
 import {
   createApiClient,
   createUnsecureClient,
@@ -144,6 +145,22 @@ Deno.serve(async (request) => {
   }
 
   const content = toOutgoingMessageContent(payload);
+  let conversationId: string | undefined;
+  if (payload.episode) {
+    try {
+      conversationId = await resolveConversationEpisode(
+        apiKey.organization_id,
+        payload.phone_number_id,
+        payload.recipient,
+        payload.episode,
+      );
+    } catch {
+      return jsonResponse(
+        { message: "Conversation episode is not ready" },
+        503,
+      );
+    }
+  }
   const { data: recordedRows, error: recordError } = await serviceClient.rpc(
     "record_external_chatbot_reply",
     {
@@ -154,6 +171,7 @@ Deno.serve(async (request) => {
       p_wamid: externalId,
       p_sent_at: payload.sent_at,
       p_content: content as unknown as Json,
+      p_conversation_id: conversationId,
     },
   );
 

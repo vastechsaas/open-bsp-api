@@ -3,8 +3,13 @@ import { z } from "zod";
 import { createApiClient, createUnsecureClient } from "../_shared/supabase.ts";
 import { conversationLifecycleEnabled } from "../_shared/chatbot/conversation_lifecycle.ts";
 import { supportRequestSchema } from "../_shared/chatbot/support_request.ts";
+import {
+  episodeSchema,
+  resolveConversationEpisode,
+} from "../_shared/chatbot/conversation_episode.ts";
 
 const schema = z.object({
+  episode: episodeSchema.optional(),
   phone_number_id: z.string().regex(/^\d+$/),
   recipient: z.string().regex(/^\d+$/),
   node_conversation_id: z.string().regex(/^\d+$/),
@@ -48,6 +53,21 @@ Deno.serve(async (request) => {
         status: 409,
       });
     }
+    if (payload.episode) {
+      if (
+        payload.episode.node_conversation_id !== payload.node_conversation_id
+      ) {
+        return Response.json({ message: "Episode context mismatch" }, {
+          status: 422,
+        });
+      }
+      await resolveConversationEpisode(
+        key.organization_id,
+        address.address,
+        payload.recipient,
+        payload.episode,
+      );
+    }
     const { data, error } = await createUnsecureClient().rpc(
       "apply_node_conversation_lifecycle",
       {
@@ -84,6 +104,6 @@ Deno.serve(async (request) => {
       message: error instanceof z.ZodError
         ? "Invalid lifecycle payload"
         : "Lifecycle processing failed",
-    }, { status: error instanceof z.ZodError ? 422 : 500 });
+    }, { status: error instanceof z.ZodError ? 422 : 503 });
   }
 });

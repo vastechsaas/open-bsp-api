@@ -49,4 +49,12 @@ export async function assertTopology(
     topology.routingKey,
   );
   await channel.prefetch(1);
+  await channel.assertQueue(`${topology.queue}.retry`, {
+    durable: true,
+    arguments: {
+      "x-message-ttl": 30_000,
+      "x-dead-letter-exchange": topology.exchange,
+      "x-dead-letter-routing-key": topology.routingKey,
+    },
+  });
 }

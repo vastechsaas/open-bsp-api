@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { OutgoingMessage } from "../_shared/supabase.ts";
+import { episodeSchema } from "../_shared/chatbot/conversation_episode.ts";
 
 const digitsSchema = z.string().trim().regex(/^[0-9]+$/).min(5).max(32);
 const identifierSchema = z.string().trim().min(1).max(512);
@@ -74,6 +75,7 @@ const interactiveMessageSchema = z.object({
 }).strict();
 
 export const chatbotReplyPayloadSchema = z.object({
+  episode: episodeSchema.optional(),
   phone_number_id: digitsSchema,
   recipient: digitsSchema,
   wamid: wamidSchema.nullable().optional(),

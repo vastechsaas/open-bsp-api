@@ -612,17 +612,17 @@ select throws_ok(
 select ok(
   not has_function_privilege(
     'anon',
-    'public.record_external_chatbot_reply(uuid,uuid,text,text,text,timestamp with time zone,jsonb)',
+    'public.record_external_chatbot_reply(uuid,uuid,text,text,text,timestamp with time zone,jsonb,uuid)',
     'EXECUTE'
   )
   and not has_function_privilege(
     'authenticated',
-    'public.record_external_chatbot_reply(uuid,uuid,text,text,text,timestamp with time zone,jsonb)',
+    'public.record_external_chatbot_reply(uuid,uuid,text,text,text,timestamp with time zone,jsonb,uuid)',
     'EXECUTE'
   )
   and has_function_privilege(
     'service_role',
-    'public.record_external_chatbot_reply(uuid,uuid,text,text,text,timestamp with time zone,jsonb)',
+    'public.record_external_chatbot_reply(uuid,uuid,text,text,text,timestamp with time zone,jsonb,uuid)',
     'EXECUTE'
   ),
   'only service-role callers can execute the reply-recording RPC'

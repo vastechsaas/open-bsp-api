@@ -172,6 +172,20 @@ begin
     return new;
   end if;
 
+  -- A delivery status may update an old message after its episode closes.
+  if new.external_id is not null then
+    select m.conversation_id into new.conversation_id from public.messages m
+      where m.organization_id=new.organization_id and m.external_id=new.external_id;
+    if new.conversation_id is not null then return new; end if;
+  end if;
+  if (new.direction='incoming' or new.content='{}'::jsonb) and exists(
+    select 1 from public.chatbot_node_conversations m join public.conversations c on c.id=m.conversation_id
+      where m.organization_id=new.organization_id and m.organization_address=new.organization_address
+        and c.contact_address is not distinct from new.contact_address and m.episode_number is not null
+  ) then
+    raise exception 'Node episode context required' using errcode='40001';
+  end if;
+
   -- Look up conversation_id from conversation table
   -- Node's durable conversation mapping survives closure; never split history.
   perform pg_advisory_xact_lock(hashtextextended(new.organization_id::text || ':' || new.organization_address || ':' || coalesce(new.contact_address,''), 123));
@@ -223,6 +237,7 @@ language plpgsql
 as $$
 begin
   new.direction := old.direction;
+  new.conversation_id := old.conversation_id;
   return new;
 end;
 $$;

@@ -33,6 +33,7 @@ begin
       values(p_organization_id, p_address, p_node_conversation_id, target.id) returning * into mapping;
   end if;
   if target.contact_address is distinct from p_recipient then raise exception 'conversation mapping mismatch' using errcode = '23514'; end if;
+  if mapping.episode_number is not null and mapping.state = 'closed' then return target.id; end if;
   if p_revision::numeric <= mapping.ownership_revision::numeric and mapping.lifecycle_enabled then return target.id; end if;
   -- Reopen and handoff events may arrive ahead of the original inbound webhook.
   if not exists(select 1 from public.messages where organization_id = p_organization_id and conversation_id = target.id
@@ -49,7 +50,8 @@ begin
     and organization_id = p_organization_id and conversation_id = target.id; end if;
   update public.chatbot_node_conversations set lifecycle_enabled = true,
     ownership_revision = p_revision, state = p_state, human_owned = (p_state = 'human_owned'),
-    pending_request_id = null,
+    pending_request_id = case when pending_request_id = p_request_id then null else pending_request_id end,
+    last_synced_at = now(),
     support_request = coalesce(p_support_request, support_request),
     last_inbound_wamid = coalesce(last_inbound_wamid, p_last_inbound_wamid),
     resolved_by = case when p_state = 'closed' then nullif(operation.payload->>'actor_agent_id','')::uuid else resolved_by end,
@@ -167,7 +169,8 @@ begin
     or not exists(select 1 from public.agents where id = new.agent_id and not ai) then return new; end if;
   select * into target from public.conversations where id = new.conversation_id for update;
   if exists(select 1 from public.chatbot_node_conversations where conversation_id = target.id and lifecycle_enabled
-    and (not human_owned or pending_request_id is not null or target.status = 'closed')) then
+    and (not human_owned or pending_request_id is not null or target.status = 'closed'
+      or (episode_number is not null and (last_synced_at is null or last_synced_at < now()-interval '60 seconds')))) then
     raise exception 'Human sending is unavailable while closing or while the chatbot owns this conversation.' using errcode = '42501'; end if;
   return new;
 end;
@@ -181,7 +184,7 @@ begin
   update public.chatbot_node_conversations set last_inbound_wamid = new.external_id where organization_id = new.organization_id
     and conversation_id = new.conversation_id;
   if exists(select 1 from public.chatbot_node_conversations where conversation_id = new.conversation_id and lifecycle_enabled
-    and not human_owned and pending_request_id is null and support_request->>'status' is distinct from 'waiting') then
+      and episode_number is null and not human_owned and pending_request_id is null and support_request->>'status' is distinct from 'waiting') then
     update public.conversations set status = 'active', assigned_agent_id = null, routing_queue_id = null, routed_at = null
       where id = new.conversation_id and status = 'closed';
   end if;

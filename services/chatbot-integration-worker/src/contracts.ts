@@ -2,11 +2,17 @@ import { z } from "zod";
 
 const digits = z.string().trim().regex(/^\d+$/).min(5).max(32);
 const wamid = z.string().trim().regex(/^wamid\..+/).max(512);
+export const episodeSchema = z.object({
+  node_conversation_id: z.string().regex(/^\d+$/),
+  episode_number: z.number().int().positive(),
+  previous_node_conversation_id: z.string().regex(/^\d+$/).optional(),
+}).strict();
 
 const whatsappWebhookPayload = z.object({
   raw_body: z.string().min(2).max(2_000_000),
   x_hub_signature_256: z.string().regex(/^sha256=[a-fA-F0-9]{64}$/),
   app_id: digits,
+  node_messages: z.record(episodeSchema).optional(),
 }).strict().superRefine((payload, context) => {
   try {
     JSON.parse(payload.raw_body);
@@ -75,6 +81,7 @@ const interactiveContent = z.union([interactiveButton, interactiveList])
   });
 
 const chatbotReplyPayload = z.object({
+  episode: episodeSchema.optional(),
   phone_number_id: digits,
   recipient: digits,
   wamid,
@@ -121,6 +128,7 @@ export const integrationEventSchema = z.discriminatedUnion("event_type", [
       node_conversation_id: z.string().regex(/^\d+$/),
       revision: z.string().regex(/^\d+$/),
       state: z.enum(["human_owned", "closed", "bot_ready", "bot_active"]),
+      episode: episodeSchema.optional(),
       last_inbound_wamid: wamid,
       source_wamid: wamid.optional(),
       request_id: z.string().uuid().optional(),
@@ -134,6 +142,7 @@ export const integrationEventSchema = z.discriminatedUnion("event_type", [
       phone_number_id: digits,
       recipient: digits,
       source_wamid: wamid,
+      episode: episodeSchema.optional(),
       node_conversation_id: z.string().regex(/^\d+$/),
       revision: z.string().regex(/^\d+$/).optional(),
       mode: z.enum(["support_requested", "immediate_handoff"]).optional(),
