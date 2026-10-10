@@ -8,6 +8,10 @@ import {
 } from "./flow_definition.ts";
 import { parseChatbotTemplate } from "./template.ts";
 import { CHATBOT_SYSTEM_VARIABLES } from "./system_variables.ts";
+import {
+  nodeConfigurationIssue,
+  selectedSchemaIssues,
+} from "./node_diagnostics.ts";
 
 export interface CompileIssue {
   readonly code: string;
@@ -16,6 +20,8 @@ export interface CompileIssue {
   readonly node_id?: string;
   readonly edge_id?: string;
   readonly field?: string;
+  readonly field_path?: ReadonlyArray<string | number>;
+  readonly params?: Readonly<Record<string, number>>;
   readonly category?: "configuration" | "connection" | "flow" | "reference";
 }
 
@@ -85,7 +91,7 @@ function sortIssues(issues: CompileIssue[]): CompileIssue[] {
           issue.node_id ?? "",
           issue.edge_id ?? "",
           issue.field ?? "",
-          issue.node_id || issue.edge_id ? "" : JSON.stringify(issue.path),
+          JSON.stringify(issue.path),
         ]
           .join("\u0000"),
         issue,
@@ -197,143 +203,6 @@ function structuralEdge(rawEdge: EditorEdge, sourceIndex: number):
       ? { outcome: candidate.outcome }
       : {}),
     sourceIndex,
-  };
-}
-
-function nodeConfigurationIssue(
-  nodeType: unknown,
-  path: ReadonlyArray<PropertyKey>,
-  fallbackMessage: string,
-): Pick<CompileIssue, "code" | "message" | "field" | "category"> {
-  const field = path[0] === "config" && typeof path[1] === "string"
-    ? path[1]
-    : typeof path[0] === "string"
-    ? path[0]
-    : undefined;
-  const category = "configuration" as const;
-  if (fallbackMessage === "System variables are read-only") {
-    return {
-      code: "system_variable_read_only",
-      message: fallbackMessage,
-      field,
-      category,
-    };
-  }
-
-  if (field === "id") {
-    return {
-      code: "node_id_invalid",
-      message: "Node ID is invalid",
-      field,
-      category,
-    };
-  }
-  if (field === "type") {
-    return {
-      code: "node_type_invalid",
-      message: "Node type is invalid",
-      field,
-      category,
-    };
-  }
-  if (nodeType === "assign_agent") {
-    if (field === "acknowledgment_text") {
-      return {
-        code: "handoff_acknowledgment_invalid",
-        message: "Customer acknowledgment must contain 1–4096 characters",
-        field,
-        category,
-      };
-    }
-    const handoffField = field === "agent_id" ? "agent_id" : "routing_queue_id";
-    return {
-      code: handoffField === "agent_id"
-        ? "handoff_agent_invalid"
-        : "handoff_queue_required",
-      message: handoffField === "agent_id"
-        ? "Destination agent is invalid"
-        : "Destination queue is required",
-      field: handoffField,
-      category,
-    };
-  }
-  if (nodeType === "send_message" && field === "text") {
-    return {
-      code: "message_text_required",
-      message: "Message text is required",
-      field,
-      category,
-    };
-  }
-  if (nodeType === "collect_input" && field === "prompt") {
-    return {
-      code: "input_prompt_required",
-      message: "Input prompt is required",
-      field,
-      category,
-    };
-  }
-  if (nodeType === "collect_input" && field === "variable") {
-    return {
-      code: "input_variable_invalid",
-      message: "Input variable is invalid",
-      field,
-      category,
-    };
-  }
-  if (
-    (nodeType === "interactive_buttons" && field === "buttons") ||
-    (nodeType === "list_message" && field === "sections") ||
-    (nodeType === "text_menu" && field === "options")
-  ) {
-    return {
-      code: "options_required",
-      message: "Add at least one option",
-      field,
-      category,
-    };
-  }
-  if (nodeType === "condition" && field === "variable") {
-    return {
-      code: "condition_variable_required",
-      message: "Condition variable is required",
-      field,
-      category,
-    };
-  }
-  if (nodeType === "webhook" && field === "url") {
-    return {
-      code: "webhook_url_invalid",
-      message: "Webhook URL is invalid",
-      field,
-      category,
-    };
-  }
-  if (nodeType === "webhook" && field === "secret_id") {
-    return {
-      code: "webhook_credential_required",
-      message: "Webhook credential is required",
-      field,
-      category,
-    };
-  }
-  if (nodeType === "webhook" && field === "response_mappings") {
-    return {
-      code: path.includes("format")
-        ? "webhook_response_format_invalid"
-        : "webhook_response_mapping_invalid",
-      message: path.includes("format")
-        ? "Check the list template, separators, empty text and item limit"
-        : "Check the response path and output variable",
-      field,
-      category,
-    };
-  }
-  return {
-    code: "node_configuration_invalid",
-    message: fallbackMessage,
-    ...(field === undefined ? {} : { field }),
-    category,
   };
 }
 
@@ -622,11 +491,16 @@ export function compileFlowDefinition(editorGraph: unknown): CompileFlowResult {
 
     if (identity !== undefined) invalidNodeIds.add(identity.id);
 
-    for (const validationIssue of result.error.issues) {
+    for (
+      const validationIssue of selectedSchemaIssues(
+        result.error.issues,
+        editorNodeToCandidate(rawNode),
+      )
+    ) {
       const diagnostic = nodeConfigurationIssue(
         identity?.type,
-        validationIssue.path,
-        validationIssue.message,
+        validationIssue,
+        editorNodeToCandidate(rawNode),
       );
       issues.push({
         ...diagnostic,

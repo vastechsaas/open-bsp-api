@@ -344,7 +344,7 @@ Deno.test("handoff acknowledgment is optional, bounded and reports its own field
     } else {
       if (result.ok) throw new Error("Invalid acknowledgment accepted");
       assertEquals(result.issues.map((issue) => issue.code), [
-        "handoff_acknowledgment_invalid",
+        acknowledgment_text.length > 4096 ? "field_too_long" : "field_required",
       ]);
       assertEquals(result.issues[0].field, "acknowledgment_text");
     }
@@ -412,8 +412,8 @@ Deno.test("interactive nodes require one known edge per unique option", () => {
   };
 
   const codes = issueCodes(graph);
-  assertEquals(codes.includes("duplicate_option_id"), true);
-  assertEquals(codes.includes("option_route_missing"), true);
+  assertEquals(codes.includes("option_id_duplicate"), true);
+  assertEquals(codes.includes("option_route_missing"), false);
 });
 
 Deno.test("reports unreachable nodes", () => {
@@ -630,7 +630,7 @@ Deno.test("node configuration errors use actionable codes and fields", () => {
     {
       nodeType: "condition",
       config: { variable: "not valid" },
-      code: "condition_variable_required",
+      code: "condition_variable_invalid",
       field: "variable",
     },
     {

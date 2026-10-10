@@ -70,6 +70,25 @@ const replyButtonSchema = z.object({
     .refine((value) => value.trim().length > 0, "Must not be blank"),
 }).strict();
 
+function duplicateOptionIds(
+  options: ReadonlyArray<{ id: string }>,
+  context: z.RefinementCtx,
+  prefix: (string | number)[] = [],
+) {
+  const seen = new Set<string>();
+  options.forEach((option, index) => {
+    if (seen.has(option.id)) {
+      context.addIssue({
+        code: "custom",
+        path: [...prefix, index, "id"],
+        message: "Option IDs must be unique",
+        params: { rule: "duplicate_option_id" },
+      });
+    }
+    seen.add(option.id);
+  });
+}
+
 const interactiveButtonsNodeSchema = z.object({
   id: stableIdSchema,
   type: z.literal("interactive_buttons"),
@@ -78,7 +97,9 @@ const interactiveButtonsNodeSchema = z.object({
     buttons: z.array(replyButtonSchema).min(1).max(
       CHATBOT_REPLY_BUTTON_MAX_COUNT,
     ),
-  }).strict(),
+  }).strict().superRefine((config, context) =>
+    duplicateOptionIds(config.buttons, context, ["buttons"])
+  ),
 }).strict();
 
 const listRowSchema = z.object({
@@ -115,6 +136,11 @@ const listMessageNodeSchema = z.object({
         code: "custom",
         path: ["sections"],
         message: `Must contain no more than ${CHATBOT_LIST_MAX_ROWS} rows`,
+        params: {
+          rule: "option_count_limit",
+          limit: CHATBOT_LIST_MAX_ROWS,
+          actual: rowCount,
+        },
       });
     }
     if (config.render_as_buttons) {
@@ -126,11 +152,29 @@ const listMessageNodeSchema = z.object({
               path: ["sections", sectionIndex, "rows", rowIndex, "title"],
               message:
                 `Button-rendered list titles must contain no more than ${CHATBOT_REPLY_BUTTON_TITLE_MAX_LENGTH} characters`,
+              params: {
+                rule: "button_title_limit",
+                limit: CHATBOT_REPLY_BUTTON_TITLE_MAX_LENGTH,
+              },
             });
           }
         })
       );
     }
+    const seen = new Set<string>();
+    config.sections.forEach((section, sectionIndex) =>
+      section.rows.forEach((row, rowIndex) => {
+        if (seen.has(row.id)) {
+          context.addIssue({
+            code: "custom",
+            path: ["sections", sectionIndex, "rows", rowIndex, "id"],
+            message: "Option IDs must be unique",
+            params: { rule: "duplicate_option_id" },
+          });
+        }
+        seen.add(row.id);
+      })
+    );
   }),
 }).strict();
 
@@ -153,6 +197,7 @@ const collectInputConfigSchema = z.object({
       code: "custom",
       path: ["max_length"],
       message: "Must be greater than or equal to min_length",
+      params: { rule: "input_length_range" },
     });
   }
 });
@@ -192,13 +237,19 @@ const textMenuNodeSchema = z.object({
     const normalized = config.options.map((option) =>
       option.value.trim().toLowerCase()
     );
-    if (new Set(normalized).size !== normalized.length) {
-      context.addIssue({
-        code: "custom",
-        path: ["options"],
-        message: "Text menu option values must be unique",
-      });
-    }
+    const seen = new Set<string>();
+    normalized.forEach((value, index) => {
+      if (seen.has(value)) {
+        context.addIssue({
+          code: "custom",
+          path: ["options", index, "value"],
+          message: "Text menu option values must be unique",
+          params: { rule: "duplicate_option_value" },
+        });
+      }
+      seen.add(value);
+    });
+    duplicateOptionIds(config.options, context, ["options"]);
   }),
 }).strict();
 
@@ -236,7 +287,10 @@ const webhookHeaderSchema = z.object({
     !["authorization", "cookie", "proxy-authorization", "x-api-key"].includes(
       header.name.toLowerCase(),
     ),
-  "Sensitive headers must come from a protected credential",
+  {
+    message: "Sensitive headers must come from a protected credential",
+    params: { rule: "protected_header" },
+  },
 );
 
 const webhookResponseMappingSchema = z.object({
