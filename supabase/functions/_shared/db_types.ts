@@ -2341,6 +2341,38 @@ export type Database = {
           },
         ]
       }
+      organization_notification_preferences: {
+        Row: {
+          enabled: boolean
+          notification_type: string
+          organization_id: string
+          updated_at: string
+          updated_by_user_id: string | null
+        }
+        Insert: {
+          enabled?: boolean
+          notification_type: string
+          organization_id: string
+          updated_at?: string
+          updated_by_user_id?: string | null
+        }
+        Update: {
+          enabled?: boolean
+          notification_type?: string
+          organization_id?: string
+          updated_at?: string
+          updated_by_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_notification_preferences_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_provisioning: {
         Row: {
           attempt_count: number
@@ -3658,6 +3690,13 @@ export type Database = {
           used_bytes: number
         }[]
       }
+      get_organization_notification_preferences: {
+        Args: { p_organization_id: string }
+        Returns: {
+          enabled: boolean
+          notification_type: string
+        }[]
+      }
       get_organization_ui_settings: {
         Args: { p_organization_id: string }
         Returns: {
@@ -4871,6 +4910,26 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "organization_automation_settings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      update_organization_notification_preference: {
+        Args: {
+          p_enabled: boolean
+          p_notification_type: string
+          p_organization_id: string
+        }
+        Returns: {
+          enabled: boolean
+          notification_type: string
+          organization_id: string
+          updated_at: string
+          updated_by_user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organization_notification_preferences"
           isOneToOne: true
           isSetofReturn: false
         }
