@@ -506,6 +506,17 @@ begin
       message = 'notification recipient must be an accepted human in the organization';
   end if;
 
+  -- Preferences affect notification delivery only, never the originating action.
+  -- An absent row defaults to enabled for both existing and new organizations.
+  if not coalesce((
+    select preference.enabled
+    from public.organization_notification_preferences preference
+    where preference.organization_id = p_organization_id
+      and preference.notification_type = p_notification_type
+  ), true) then
+    return null;
+  end if;
+
   insert into public.user_notifications (
     organization_id,
     recipient_agent_id,
