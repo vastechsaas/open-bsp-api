@@ -331,7 +331,8 @@ $$;
 
 create function public.route_conversation_to_queue(
   p_conversation_id uuid,
-  p_routing_queue_id uuid
+  p_routing_queue_id uuid,
+  p_send_notice boolean default true
 ) returns public.conversations
 language plpgsql
 volatile
@@ -419,8 +420,10 @@ begin
     'chatbot_handoff'
   );
 
-  perform public.notify_support_unavailability(target_conversation.id,
-    'route:' || route_time::text);
+  if p_send_notice then
+    perform public.notify_support_unavailability(target_conversation.id,
+      'route:' || route_time::text);
+  end if;
 
   return target_conversation;
 end;
@@ -428,7 +431,7 @@ $$;
 
 revoke execute on function public.validate_routing_queue_agent_ids(uuid, uuid[]) from public;
 revoke execute on function public.replace_routing_queue_members(uuid, uuid, uuid[]) from public;
-revoke execute on function public.route_conversation_to_queue(uuid, uuid) from public;
+revoke execute on function public.route_conversation_to_queue(uuid, uuid, boolean) from public;
 revoke execute on function public.list_routing_queues_page(uuid, integer, integer, text) from public;
 revoke execute on function public.list_routing_queue_options(uuid) from public;
 revoke execute on function public.create_routing_queue(uuid, text, uuid[]) from public;

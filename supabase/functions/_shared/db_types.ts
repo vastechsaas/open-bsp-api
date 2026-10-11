@@ -4516,7 +4516,9 @@ export type Database = {
       notify_support_unavailability: {
         Args: {
           p_agent_id?: string
+          p_always?: boolean
           p_conversation_id: string
+          p_handoff_text?: string
           p_request_id: string
         }
         Returns: undefined
@@ -4691,6 +4693,7 @@ export type Database = {
       }
       record_node_support_request: {
         Args: {
+          p_acknowledgment?: Json
           p_address: string
           p_event_id: string
           p_node_conversation_id: string
@@ -4774,7 +4777,11 @@ export type Database = {
         Returns: number
       }
       route_conversation_to_queue: {
-        Args: { p_conversation_id: string; p_routing_queue_id: string }
+        Args: {
+          p_conversation_id: string
+          p_routing_queue_id: string
+          p_send_notice?: boolean
+        }
         Returns: {
           assigned_agent_id: string | null
           contact_address: string | null

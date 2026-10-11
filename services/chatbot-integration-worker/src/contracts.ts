@@ -146,6 +146,10 @@ export const integrationEventSchema = z.discriminatedUnion("event_type", [
       node_conversation_id: z.string().regex(/^\d+$/),
       revision: z.string().regex(/^\d+$/).optional(),
       mode: z.enum(["support_requested", "immediate_handoff"]).optional(),
+      acknowledgment: z.object({
+        text: z.string().trim().min(1).max(4096).optional(),
+        original_event_id: z.string().uuid().optional(),
+      }).strict().optional(),
       support_request: supportRequestSchema.optional(),
       target: z.union([
         z.object({ agent_id: z.string().uuid() }).strict(),

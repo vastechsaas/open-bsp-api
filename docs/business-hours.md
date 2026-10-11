@@ -16,10 +16,11 @@ evaluates the named time zone, including daylight-saving transitions.
   forcibly unassigned at closing time.
 - Owner/admin/supervisor actions can explicitly cover after-hours support.
 - Outside hours, or when no eligible agent has a fresh available heartbeat, a
-  handoff stays queued and receives the configured availability notice. Notices
-  supplement the existing handoff acknowledgment; keep that acknowledgment
-  neutral (for example, "Your support request has been recorded"), not a promise
-  that an agent is already online.
+  handoff stays queued and receives the configured availability notice.
+  [Settings-managed Node acknowledgments](shared-handoff-messages.md) select a
+  single appropriate support message, preserving branch-specific overrides.
+  Legacy/non-enrolled tenants retain their existing notices. Keep all wording
+  neutral rather than promising that an agent is already online.
 - There is no automatic promise of a response time. Pending queue work becomes
   eligible through the existing heartbeat/backlog processor after opening.
   Manual queues remain manual. Bot ownership and explicit-takeover rules are
