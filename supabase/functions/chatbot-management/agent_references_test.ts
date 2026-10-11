@@ -54,6 +54,8 @@ Deno.test("assignment references are unique and unavailable agents are reported"
       message:
         "Assign Agent must reference an active human agent in this organization",
       node_id: "handoff-two",
+      field: "agent_id",
+      category: "reference",
     }],
   );
 });
@@ -74,6 +76,8 @@ Deno.test("routing queue references are unique and unavailable queues are report
       message:
         "Human Handoff must reference an active routing queue in this organization",
       node_id: "handoff-queue-two",
+      field: "routing_queue_id",
+      category: "reference",
     }],
   );
 });
