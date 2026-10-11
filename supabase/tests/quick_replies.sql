@@ -69,13 +69,50 @@ select throws_like(
   'Agents cannot bypass the RPC with a direct insert'
 );
 
+select lives_ok(
+  $$ select public.create_quick_reply(
+    '98000000-0000-4000-8000-000000000001', '/agent', 'Created by Agent'
+  ) $$,
+  'Agents can create shared quick replies'
+);
+
+select results_eq(
+  $$ select content from public.update_quick_reply(
+    '98300000-0000-4000-8000-000000000001', '/alpha', 'Updated by Agent'
+  ) $$,
+  $$ values ('Updated by Agent'::text) $$,
+  'Agents can update shared replies created by someone else'
+);
+
+select lives_ok(
+  $$ select public.delete_quick_reply(
+    (select id from public.quick_replies where shortcut='/agent'
+      and organization_id='98000000-0000-4000-8000-000000000001')
+  ) $$,
+  'Agents can delete shared quick replies'
+);
+
 select throws_ok(
   $$ select public.create_quick_reply(
-    '98000000-0000-4000-8000-000000000001', '/blocked', 'Blocked'
+    '99000000-0000-4000-8000-000000000001', '/cross_org', 'Blocked'
   ) $$,
   '42501',
-  'owner, admin, or supervisor role required to manage quick replies',
-  'Agents cannot create quick replies'
+  'owner, admin, supervisor, or agent role required to manage quick replies',
+  'Agent creates remain organization scoped'
+);
+select throws_ok(
+  $$ select public.update_quick_reply(
+    '99300000-0000-4000-8000-000000000001', '/other', 'Blocked'
+  ) $$,
+  '42501',
+  'owner, admin, supervisor, or agent role required to manage quick replies',
+  'Agents cannot update another organization reply'
+);
+select throws_ok(
+  $$ select public.delete_quick_reply('99300000-0000-4000-8000-000000000001') $$,
+  '42501',
+  'owner, admin, supervisor, or agent role required to manage quick replies',
+  'Agents cannot delete another organization reply'
 );
 
 reset role;
@@ -99,7 +136,7 @@ select throws_ok(
     '98000000-0000-4000-8000-000000000001', '/blocked', 'Blocked'
   ) $$,
   '42501',
-  'owner, admin, or supervisor role required to manage quick replies',
+  'owner, admin, supervisor, or agent role required to manage quick replies',
   'Members cannot create quick replies'
 );
 
@@ -115,6 +152,29 @@ select throws_ok(
   '42501',
   'organization is not accessible to the authenticated user',
   'Pending invitations cannot read quick replies'
+);
+
+select throws_ok(
+  $$ select public.create_quick_reply(
+    '98000000-0000-4000-8000-000000000001', '/pending', 'Blocked'
+  ) $$,
+  '42501',
+  'owner, admin, supervisor, or agent role required to manage quick replies',
+  'Pending Agents cannot create quick replies'
+);
+select throws_ok(
+  $$ select public.update_quick_reply(
+    '98300000-0000-4000-8000-000000000001', '/alpha', 'Blocked'
+  ) $$,
+  '42501',
+  'owner, admin, supervisor, or agent role required to manage quick replies',
+  'Pending Agents cannot update quick replies'
+);
+select throws_ok(
+  $$ select public.delete_quick_reply('98300000-0000-4000-8000-000000000001') $$,
+  '42501',
+  'owner, admin, supervisor, or agent role required to manage quick replies',
+  'Pending Agents cannot delete quick replies'
 );
 
 reset role;
@@ -190,7 +250,7 @@ select throws_ok(
     '99000000-0000-4000-8000-000000000001', '/cross_org', 'Blocked'
   ) $$,
   '42501',
-  'owner, admin, or supervisor role required to manage quick replies',
+  'owner, admin, supervisor, or agent role required to manage quick replies',
   'Manager writes enforce organization isolation'
 );
 
@@ -294,6 +354,19 @@ select throws_ok(
   '22023',
   'maximum limit of 50 quick replies reached for this organization',
   'The 51st quick reply is rejected'
+);
+
+reset role;
+select set_config('request.jwt.claim.sub', '98100000-0000-4000-8000-000000000005', true);
+set local role authenticated;
+set local search_path = extensions, public, auth, storage;
+select throws_ok(
+  $$ select public.create_quick_reply(
+    '98000000-0000-4000-8000-000000000001', '/reply_51', 'One too many'
+  ) $$,
+  '22023',
+  'maximum limit of 50 quick replies reached for this organization',
+  'Agents keep the same organization reply cap'
 );
 
 select results_eq(
