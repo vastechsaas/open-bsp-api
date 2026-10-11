@@ -169,6 +169,10 @@ if (mode === "bootstrap") {
   if (mode === "run") {
     const connection = await amqp.connect(env.CLOUDAMQP_URL);
     const channel = await connection.createConfirmChannel();
+    let unroutable = false;
+    channel.on("return", () => {
+      unroutable = true;
+    });
     const samples = [];
     const webhook = (value, episodeWamid, episode) => {
       const raw = JSON.stringify({
@@ -210,7 +214,7 @@ if (mode === "bootstrap") {
         env.RABBITMQ_EXCHANGE || "openbsp.integration",
         ctx.queue,
         Buffer.from(JSON.stringify(event)),
-        { persistent: true, messageId: event.event_id },
+        { persistent: true, mandatory: true, messageId: event.event_id },
       );
       return event;
     };
@@ -277,11 +281,14 @@ if (mode === "bootstrap") {
             env.RABBITMQ_EXCHANGE || "openbsp.integration",
             ctx.queue,
             Buffer.from(JSON.stringify(reply)),
-            { persistent: true, messageId: reply.event_id },
+            { persistent: true, mandatory: true, messageId: reply.event_id },
           );
         }
         samples.push({ incoming, outgoing, occurred, conversation });
         await channel.waitForConfirms();
+        if (unroutable) {
+          throw new Error("Canary queue not ready/bound; publication returned");
+        }
         await new Promise((resolve) => setTimeout(resolve, 2_000));
       }
       save("samples.json", samples);

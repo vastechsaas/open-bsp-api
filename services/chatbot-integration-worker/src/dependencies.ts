@@ -6,6 +6,7 @@ import { eventLane, webhookValues } from "./routing.js";
 // unknown producers, the authenticated handler still checks the database and
 // returns a durable-retry response if the original message is absent.
 export class ReplyDependencies {
+  private disposed = false;
   private pending = new Map<string, {
     ready: Promise<void>;
     release: () => void;
@@ -20,7 +21,7 @@ export class ReplyDependencies {
     return JSON.stringify([integration, number, customer, id]);
   }
   reserve(event: IntegrationEvent) {
-    if (event.event_type !== "chatbot_reply") return;
+    if (this.disposed || event.event_type !== "chatbot_reply") return;
     const key = this.key(
       event.integration_key,
       event.payload.phone_number_id,
@@ -75,6 +76,7 @@ export class ReplyDependencies {
     return Promise.all(waits).then(() => undefined);
   }
   dispose() {
+    this.disposed = true;
     for (const pending of this.pending.values()) pending.release();
   }
 }

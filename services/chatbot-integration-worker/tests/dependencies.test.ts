@@ -61,6 +61,8 @@ test("failed or interrupted writes release bounded waits and retain database ver
   const waiting = dependencies.wait(statusEvent());
   dependencies.dispose(); // reconnect/shutdown: no stuck jobs or timers
   await waiting;
+  dependencies.reserve(replyEvent); // late ingress cannot extend shutdown
+  await dependencies.wait(statusEvent());
 });
 test("different receipt fields/messages can run concurrently while identical fields remain ordered", () => {
   const read = eventReservation(statusEvent());
