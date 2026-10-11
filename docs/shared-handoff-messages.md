@@ -80,24 +80,25 @@ Released with explicit approval to staging and Main:
   Main with the existing parallel lanes, regional routing and latency fixes.
 - Main migration `20261011150827_shared_handoff_messages.sql` applied and
   `chatbot-handoff-webhook` deployed. Supabase Git integration reported success
-  for both Main and staging; direct staging CLI inspection is unavailable to
-  the current account (HTTP 403).
+  for both Main and staging; direct staging CLI inspection is unavailable to the
+  current account (HTTP 403).
 - Main schema/data/role backups are stored privately under
-  `.codex/backups/shared-handoff-messages-20261011/` on the deployment workstation.
-  Oracle's Node database backup and previous configuration are under
-  `/opt/chatbots/node-engine/backups/shared-handoff-20261011/`; its restore
-  inventory was checked. The worker configuration is backed up under its
+  `.codex/backups/shared-handoff-messages-20261011/` on the deployment
+  workstation. Oracle's Node database backup and previous configuration are
+  under `/opt/chatbots/node-engine/backups/shared-handoff-20261011/`; its
+  restore inventory was checked. The worker configuration is backed up under its
   corresponding `backups/shared-handoff-20261011/` directory.
-- Previous images retained as `node-chatbot-engine:rollback-shared-handoff-20261011`
-  and `openbsp-main-chatbot-worker:rollback-shared-handoff-20261011`.
+- Previous images retained as
+  `node-chatbot-engine:rollback-shared-handoff-20261011` and
+  `openbsp-main-chatbot-worker:rollback-shared-handoff-20261011`.
 - DKR (Node company 1) is enrolled with `support_messages: "settings"`. Other
   tenant routes are unchanged. Node processing was briefly held at the mode
   boundary; there were zero undelivered legacy handoff events and zero
   unresolved legacy waiting-acknowledgment dispatches. No queue was purged.
 - Node HTTPS readiness and Main worker readiness passed. Worker readiness
   reported connected, consuming, parallel lanes ready and no pending work.
-- Vercel production deployments succeeded for both frontend environments.
-  The shared-message labels were verified on `socialconnect.vastech.biz` and
+- Vercel production deployments succeeded for both frontend environments. The
+  shared-message labels were verified on `socialconnect.vastech.biz` and
   `vistagalaxy.vastech.biz` with cache-bypassed locale requests.
 - Main-focused release checks passed: 20 database assertions, 51 integration
   worker tests/build, 20 UI tests, generated DB type synchronization and the
