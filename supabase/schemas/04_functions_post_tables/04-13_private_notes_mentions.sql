@@ -534,11 +534,14 @@ begin
     order by message.timestamp desc, message.id desc
     limit 1
   ) preview on true
-  where normalized_search = ''
-    or lower(coalesce(conversation.name, '')) like '%' || normalized_search || '%'
-    or lower(coalesce(conversation.contact_address, '')) like '%' || normalized_search || '%'
-    or lower(coalesce(conversation.group_address, '')) like '%' || normalized_search || '%'
-    or lower(conversation.organization_address) like '%' || normalized_search || '%'
+  where public.is_support_inbox_visible(conversation.organization_id, conversation.id)
+    and (
+      normalized_search = ''
+      or lower(coalesce(conversation.name, '')) like '%' || normalized_search || '%'
+      or lower(coalesce(conversation.contact_address, '')) like '%' || normalized_search || '%'
+      or lower(coalesce(conversation.group_address, '')) like '%' || normalized_search || '%'
+      or lower(conversation.organization_address) like '%' || normalized_search || '%'
+    )
   order by mention.latest_mention_at desc, conversation.id desc
   offset (normalized_page - 1) * normalized_page_size
   limit normalized_page_size;
