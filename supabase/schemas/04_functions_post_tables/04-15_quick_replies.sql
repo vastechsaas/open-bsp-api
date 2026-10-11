@@ -113,11 +113,11 @@ declare
 begin
   request_role := public.get_request_organization_role(p_organization_id);
   if request_role is null
-    or request_role not in ('owner'::public.role, 'admin'::public.role, 'supervisor'::public.role)
+    or request_role not in ('owner'::public.role, 'admin'::public.role, 'supervisor'::public.role, 'agent'::public.role)
   then
     raise exception using
       errcode = '42501',
-      message = 'owner, admin, or supervisor role required to manage quick replies';
+      message = 'owner, admin, supervisor, or agent role required to manage quick replies';
   end if;
 
   perform public.validate_quick_reply_input(normalized_shortcut, normalized_content);
@@ -185,11 +185,11 @@ begin
 
   request_role := public.get_request_organization_role(existing_reply.organization_id);
   if request_role is null
-    or request_role not in ('owner'::public.role, 'admin'::public.role, 'supervisor'::public.role)
+    or request_role not in ('owner'::public.role, 'admin'::public.role, 'supervisor'::public.role, 'agent'::public.role)
   then
     raise exception using
       errcode = '42501',
-      message = 'owner, admin, or supervisor role required to manage quick replies';
+      message = 'owner, admin, supervisor, or agent role required to manage quick replies';
   end if;
 
   perform public.validate_quick_reply_input(normalized_shortcut, normalized_content);
@@ -233,11 +233,11 @@ begin
 
   request_role := public.get_request_organization_role(existing_reply.organization_id);
   if request_role is null
-    or request_role not in ('owner'::public.role, 'admin'::public.role, 'supervisor'::public.role)
+    or request_role not in ('owner'::public.role, 'admin'::public.role, 'supervisor'::public.role, 'agent'::public.role)
   then
     raise exception using
       errcode = '42501',
-      message = 'owner, admin, or supervisor role required to manage quick replies';
+      message = 'owner, admin, supervisor, or agent role required to manage quick replies';
   end if;
 
   delete from public.quick_replies reply
