@@ -57,6 +57,14 @@ Deno.test("missing original retries without creating placeholders", async () => 
   );
   assertEquals(updates, []);
 });
+Deno.test("known identity metadata is status-only; unfamiliar contacts remain rejected", () => {
+  const body = payload();
+  const value = body.entry[0].changes[0].value as Record<string, unknown>;
+  value.contacts = [{ wa_id: "923000001", user_id: "identity" }];
+  assertEquals(parseStatusOnly(body)?.length, 1);
+  value.contacts = [{ wa_id: "923000001", unfamiliar: {} }];
+  assertEquals(parseStatusOnly(body), undefined);
+});
 Deno.test("tenant mismatch rejected before writing", async () => {
   const { client, updates } = mock([]);
   assertEquals(

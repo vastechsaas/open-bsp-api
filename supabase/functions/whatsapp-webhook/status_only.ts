@@ -10,6 +10,24 @@ type StatusUpdate = {
 const record = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
+function knownContacts(value: unknown): boolean {
+  const text = (item: unknown) =>
+    item === undefined || item === null || typeof item === "string";
+  return value === undefined ||
+    (Array.isArray(value) &&
+      value.every((contact) =>
+        record(contact) && Object.keys(contact).every((key) =>
+          ["wa_id", "user_id", "profile"].includes(key)
+        ) &&
+        text(contact.wa_id) && text(contact.user_id) &&
+        (contact.profile === undefined ||
+          (record(contact.profile) &&
+            Object.keys(contact.profile).every((key) =>
+              key === "name"
+            ) && text(contact.profile.name)))
+      ));
+}
+
 export function parseStatusOnly(payload: unknown): StatusUpdate[] | undefined {
   if (
     !record(payload) || payload.object !== "whatsapp_business_account" ||
@@ -27,9 +45,11 @@ export function parseStatusOnly(payload: unknown): StatusUpdate[] | undefined {
       const value = change.value;
       if (
         Object.keys(value).some((key) =>
-          !["messaging_product", "metadata", "statuses"].includes(key)
+          !["messaging_product", "metadata", "statuses", "contacts"].includes(
+            key,
+          )
         ) ||
-        !record(value.metadata) ||
+        !knownContacts(value.contacts) || !record(value.metadata) ||
         typeof value.metadata.phone_number_id !== "string" ||
         !Array.isArray(value.statuses) || !value.statuses.length
       ) return;

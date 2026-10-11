@@ -106,6 +106,16 @@ test("strict status-only classification; mixed/unknown/signed bodies remain unch
     },
   } as typeof webhookEvent;
   assert.equal(eventLane(event), "statuses");
+  const value = body.entry[0]!.changes[0]!.value as Record<string, unknown>;
+  value.contacts = [{ wa_id: "923000001", user_id: "identity" }];
+  event.payload = { ...event.payload, raw_body: JSON.stringify(body) };
+  assert.equal(eventLane(event), "statuses");
+  value.contacts = [{ wa_id: "923000001", unfamiliar: {} }];
+  event.payload = { ...event.payload, raw_body: JSON.stringify(body) };
+  assert.equal(eventLane(event), "messages");
+  value.contacts = [{ wa_id: "923000001", profile: { name: "Synthetic" } }];
+  event.payload = { ...event.payload, raw_body: JSON.stringify(body) };
+  assert.equal(eventLane(event), "statuses");
   assert.equal(eventLane(replyEvent), "messages");
   (body.entry[0]!.changes[0]!.value as Record<string, unknown>).messages = [{
     from: "923000001",

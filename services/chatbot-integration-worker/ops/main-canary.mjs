@@ -263,11 +263,21 @@ if (mode === "bootstrap") {
             "whatsapp_webhook",
             webhook(
               {
+                contacts: [{
+                  wa_id: customer,
+                  user_id: `synthetic-${customer}`,
+                }],
                 statuses: [{
                   id: outgoing,
                   recipient_id: customer,
                   status,
                   timestamp,
+                  recipient_user_id: `synthetic-${customer}`,
+                  pricing: {
+                    billable: false,
+                    category: "service",
+                    pricing_model: "PMP",
+                  },
                 }],
               },
               outgoing,

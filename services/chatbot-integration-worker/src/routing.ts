@@ -5,6 +5,26 @@ type Value = Record<string, unknown>;
 const record = (value: unknown): value is Value =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
+// Identity metadata accompanies Main's real receipts. It is not an inbound
+// message. Unknown contact payloads still use the conservative message lane.
+function knownContacts(value: unknown): boolean {
+  const text = (item: unknown) =>
+    item === undefined || item === null || typeof item === "string";
+  return value === undefined ||
+    (Array.isArray(value) &&
+      value.every((contact) =>
+        record(contact) && Object.keys(contact).every((key) =>
+          ["wa_id", "user_id", "profile"].includes(key)
+        ) &&
+        text(contact.wa_id) && text(contact.user_id) &&
+        (contact.profile === undefined ||
+          (record(contact.profile) &&
+            Object.keys(contact.profile).every((key) =>
+              key === "name"
+            ) && text(contact.profile.name)))
+      ));
+}
+
 export function webhookValues(raw: string): Value[] | undefined {
   try {
     const body: unknown = JSON.parse(raw);
@@ -38,10 +58,12 @@ export function eventLane(event: IntegrationEvent): Lane {
   return values.every((value) => {
       if (
         Object.keys(value).some((key) =>
-          !["messaging_product", "metadata", "statuses"].includes(key)
+          !["messaging_product", "metadata", "statuses", "contacts"].includes(
+            key,
+          )
         )
       ) return false;
-      return record(value.metadata) &&
+      return knownContacts(value.contacts) && record(value.metadata) &&
         typeof value.metadata.phone_number_id === "string" &&
         Array.isArray(value.statuses) && value.statuses.length > 0 &&
         value.statuses.every((status) =>
