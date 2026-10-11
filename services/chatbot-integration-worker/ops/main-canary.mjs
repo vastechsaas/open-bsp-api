@@ -329,6 +329,41 @@ if (mode === "bootstrap") {
         row.ownership_revision !== "0"
       )
     ) throw new Error("Canary ownership/count mismatch");
+    // Database insertion precedes response completion. The rollout gate must
+    // include storage, handler completion and durable retries, not insertion
+    // alone. Capture `docker logs <canary> > worker.log` in this private mount.
+    const rawEvents = await api(
+      `chatbot_integration_raw_events?queue_name=eq.${ctx.queue}&select=raw_payload`,
+    );
+    const events = rawEvents.map((row) => JSON.parse(row.raw_payload));
+    const logs = readFileSync(`${directory}/worker.log`, "utf8").split("\n")
+      .flatMap((line) => {
+        try {
+          return [JSON.parse(line)];
+        } catch {
+          return [];
+        }
+      });
+    const completions = events.map((event) => {
+      const success = logs.find((line) =>
+        line.message === "Edge Function request completed" &&
+        line.event_id === event.event_id && line.response_status >= 200 &&
+        line.response_status < 300
+      );
+      if (!success) throw new Error("Canary event has no confirmed forwarding");
+      return {
+        type: event.event_type,
+        duration: Date.parse(success.timestamp) - Date.parse(event.occurred_at),
+      };
+    });
+    if (completions.length !== 140) {
+      throw new Error("Canary raw-event count mismatch");
+    }
+    const percentile = (values) => {
+      values.sort((a, b) => a - b);
+      return values[Math.ceil(values.length * 0.95) - 1];
+    };
+    const forwardingP95 = percentile(completions.map((row) => row.duration));
     const report = {
       organization: ctx.id,
       stored_messages: rows.length,
@@ -338,7 +373,14 @@ if (mode === "bootstrap") {
       mean_store_ms: Math.round(
         timings.reduce((sum, value) => sum + value, 0) / timings.length,
       ),
-      passed: timings[Math.ceil(timings.length * 0.95) - 1] <= 5000,
+      confirmed_events: completions.length,
+      p95_forward_ms: forwardingP95,
+      p95_reply_forward_ms: percentile(
+        completions.filter((row) => row.type === "chatbot_reply").map((row) =>
+          row.duration
+        ),
+      ),
+      passed: forwardingP95 <= 5000,
     };
     save("report.json", report);
     console.log(JSON.stringify(report));

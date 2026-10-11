@@ -14,6 +14,8 @@ import {
 import { createConfirmedPublisher } from "./publisher.js";
 import { eventReservation } from "./routing.js";
 import { Scheduler } from "./scheduler.js";
+import { settleWithin } from "./deadline.js";
+import type { Duplex } from "node:stream";
 
 async function main() {
   const config = loadConfig();
@@ -158,21 +160,34 @@ async function main() {
       state.connected = false;
       state.consuming = false;
       for (const lane of Object.values(state.lanes)) lane.consuming = false;
-      await Promise.all(
-        consumers.map(({ channel, tag }) =>
-          channel.cancel(tag).catch(() => undefined)
-        ),
-      );
-      for (const scheduler of schedulers) scheduler.stop();
       const deadline = Date.now() + 45_000;
+      // Stop local scheduling immediately, even when broker cancellation stalls.
+      for (const scheduler of schedulers) scheduler.stop();
+      await settleWithin(
+        Promise.all(
+          consumers.map(({ channel, tag }) =>
+            channel.cancel(tag).catch(() => undefined)
+          ),
+        ),
+        1_000,
+      );
       while (state.inFlight && Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, 50));
       }
       abort.abort();
-      await Promise.all(
-        channels.map((channel) => channel.close().catch(() => undefined)),
+      await settleWithin(
+        Promise.all(
+          channels.map((channel) => channel.close().catch(() => undefined)),
+        ),
+        2_000,
       );
-      await connection?.close().catch(() => undefined);
+      if (connection && !await settleWithin(connection.close(), 2_000)) {
+        // amqplib 0.10.8 exposes the underlying stream on its Connection.
+        // Break a stalled close handshake so unacknowledged deliveries recover.
+        (connection.connection as typeof connection.connection & {
+          stream: Duplex;
+        }).stream.destroy();
+      }
       if (!state.shuttingDown) {
         await new Promise((resolve) => setTimeout(resolve, 5_000));
       }
