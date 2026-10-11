@@ -65,17 +65,44 @@ $$;
 revoke all on function public.resolve_node_conversation_episode(uuid,text,text,text,integer,text) from public,anon,authenticated;
 grant execute on function public.resolve_node_conversation_episode(uuid,text,text,text,integer,text) to service_role;
 
+-- History is shared across support agents, not across customers or tenants.
+-- Keep ordinary inbox/message RLS and all mutation permissions unchanged.
+-- Only the scoped read RPCs below can use this internal authorization helper.
+create function public.authorize_previous_chat_context(
+  p_organization_id uuid, p_conversation_id uuid
+) returns public.conversations
+language plpgsql stable security definer set search_path = '' as $$
+declare
+  target public.conversations;
+  request_role public.role;
+begin
+  if auth.uid() is null then
+    raise exception 'organization is not accessible' using errcode='42501';
+  end if;
+  request_role := public.get_request_organization_role(p_organization_id);
+  if request_role is null then
+    raise exception 'organization is not accessible' using errcode='42501';
+  end if;
+  select * into target from public.conversations c
+    where c.organization_id=p_organization_id and c.id=p_conversation_id;
+  if not found or target.group_address is not null or target.contact_address is null
+    or (request_role='agent'::public.role
+      and not public.agent_can_read_conversation(p_organization_id,p_conversation_id)) then
+    raise exception 'conversation is not accessible' using errcode='42501';
+  end if;
+  return target;
+end;
+$$;
+revoke all on function public.authorize_previous_chat_context(uuid,uuid) from public,anon,authenticated;
+
 create function public.list_previous_conversations_page(
   p_organization_id uuid, p_conversation_id uuid, p_page integer default 1,
   p_page_size integer default 10, p_search text default null
 ) returns table(id uuid,name text,status text,created_at timestamptz,updated_at timestamptz,total_count bigint)
-language plpgsql stable security invoker set search_path = '' as $$
+language plpgsql stable security definer set search_path = '' as $$
 declare target public.conversations;
 begin
-  if auth.uid() is null or not exists(select 1 from public.get_authorized_orgs('agent') a(id) where a.id=p_organization_id) then
-    raise exception 'organization is not accessible' using errcode='42501'; end if;
-  select * into target from public.conversations c where c.organization_id=p_organization_id and c.id=p_conversation_id;
-  if not found then raise exception 'conversation is not accessible' using errcode='42501'; end if;
+  target := public.authorize_previous_chat_context(p_organization_id,p_conversation_id);
   return query select c.id,c.name,c.status,c.created_at,c.updated_at,count(*) over()
     from public.conversations c where c.organization_id=p_organization_id and c.id<>target.id
     and c.service=target.service and c.organization_address=target.organization_address
@@ -87,3 +114,33 @@ end;
 $$;
 revoke all on function public.list_previous_conversations_page(uuid,uuid,integer,integer,text) from public,anon;
 grant execute on function public.list_previous_conversations_page(uuid,uuid,integer,integer,text) to authenticated;
+
+create function public.list_previous_conversation_messages(
+  p_organization_id uuid, p_conversation_id uuid, p_previous_conversation_id uuid,
+  p_before_timestamp timestamptz default null, p_before_id uuid default null,
+  p_page_size integer default 30
+) returns setof public.messages
+language plpgsql stable security definer set search_path = '' as $$
+declare target public.conversations;
+begin
+  -- Recheck the current conversation and membership on every message page.
+  target := public.authorize_previous_chat_context(p_organization_id,p_conversation_id);
+  if not exists(select 1 from public.conversations c
+    where c.organization_id=p_organization_id and c.id=p_previous_conversation_id
+      and c.id<>target.id and c.group_address is null
+      and c.service=target.service and c.organization_address=target.organization_address
+      and c.contact_address=target.contact_address) then
+    raise exception 'previous conversation is not accessible' using errcode='42501';
+  end if;
+  if (p_before_timestamp is null) <> (p_before_id is null) then
+    raise exception 'both history cursor values are required' using errcode='22023';
+  end if;
+  return query select m.* from public.messages m
+    where m.organization_id=p_organization_id and m.conversation_id=p_previous_conversation_id
+      and (p_before_timestamp is null or (m.timestamp,m.id)<(p_before_timestamp,p_before_id))
+    order by m.timestamp desc,m.id desc
+    limit greatest(1,least(coalesce(p_page_size,30),50));
+end;
+$$;
+revoke all on function public.list_previous_conversation_messages(uuid,uuid,uuid,timestamptz,uuid,integer) from public,anon;
+grant execute on function public.list_previous_conversation_messages(uuid,uuid,uuid,timestamptz,uuid,integer) to authenticated;

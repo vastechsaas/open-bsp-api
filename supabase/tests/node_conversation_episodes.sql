@@ -56,7 +56,8 @@ reset role;
 update public.conversations set assigned_agent_id='12720000-0000-4000-8000-000000000002'
  where id=(select id from episodes where number=1);
 set local role authenticated;
-select is((select count(*) from public.list_previous_conversations_page('12700000-0000-4000-8000-000000000001',(select id from episodes where number=2),1,10)),0::bigint,'Previous history does not reveal a restricted thread assigned to another agent');
+select is((select count(*) from public.list_previous_conversations_page('12700000-0000-4000-8000-000000000001',(select id from episodes where number=2),1,10)),1::bigint,'Previous customer history includes a thread handled by another agent');
+select is((select count(*) from public.list_previous_conversation_messages('12700000-0000-4000-8000-000000000001',(select id from episodes where number=2),(select id from episodes where number=1))),1::bigint,'Agent can read another agent completed episode through scoped history');
 reset role;
 select * from finish();
 rollback;
