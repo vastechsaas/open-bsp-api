@@ -184,8 +184,8 @@ language plpgsql stable security definer set search_path = ''
 as $$
 declare v_agent_id uuid;
 begin
-  if public.get_request_organization_role(p_organization_id) <> 'agent'::public.role then
-    raise exception using errcode = '42501', message = 'accepted Agent role required';
+  if coalesce(public.get_request_organization_role(p_organization_id)::text, '') not in ('agent', 'supervisor') then
+    raise exception using errcode = '42501', message = 'accepted Agent or Supervisor role required';
   end if;
   v_agent_id := public.get_current_human_agent_id(p_organization_id);
   return query
@@ -204,9 +204,9 @@ language plpgsql volatile security definer set search_path = ''
 as $$
 declare v_agent_id uuid; state public.agent_assignment_presence;
 begin
-  if public.get_request_organization_role(p_organization_id) <> 'agent'::public.role
+  if coalesce(public.get_request_organization_role(p_organization_id)::text, '') not in ('agent', 'supervisor')
     or p_available is null then
-    raise exception using errcode = '42501', message = 'accepted Agent role required';
+    raise exception using errcode = '42501', message = 'accepted Agent or Supervisor role required';
   end if;
   v_agent_id := public.get_current_human_agent_id(p_organization_id);
   insert into public.agent_assignment_presence (
@@ -233,8 +233,8 @@ language plpgsql volatile security definer set search_path = ''
 as $$
 declare v_agent_id uuid; state public.agent_assignment_presence;
 begin
-  if public.get_request_organization_role(p_organization_id) <> 'agent'::public.role then
-    raise exception using errcode = '42501', message = 'accepted Agent role required';
+  if coalesce(public.get_request_organization_role(p_organization_id)::text, '') not in ('agent', 'supervisor') then
+    raise exception using errcode = '42501', message = 'accepted Agent or Supervisor role required';
   end if;
   v_agent_id := public.get_current_human_agent_id(p_organization_id);
   update public.agent_assignment_presence p
