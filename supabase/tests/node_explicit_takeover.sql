@@ -84,7 +84,7 @@ set local role authenticated;
 select lives_ok($$select public.begin_node_conversation_operation('12400000-0000-4000-8000-000000000001','12430000-0000-4000-8000-000000000002','12440000-0000-4000-8000-000000000033','takeover','wamid.resolution.2','1')$$,'Manager can take over unassigned queue request');
 reset role;
 select is((select support_request->'target'->>'routing_queue_id' from public.chatbot_node_conversations where node_conversation_id='2'),'12450000-0000-4000-8000-000000000001','Override retains original request queue');
-select ok(not has_function_privilege('authenticated','public.record_node_support_request(uuid,text,text,text,uuid,text,jsonb)','execute'),'Browser cannot forge support events');
+select ok(not has_function_privilege('authenticated','public.record_node_support_request(uuid,text,text,text,uuid,text,jsonb,jsonb)','execute'),'Browser cannot forge support events');
 select ok(not has_function_privilege('authenticated','public.apply_node_conversation_lifecycle(uuid,text,text,text,text,text,text,text,uuid,jsonb)','execute'),'Browser cannot forge ownership');
 select * from finish();
 rollback;

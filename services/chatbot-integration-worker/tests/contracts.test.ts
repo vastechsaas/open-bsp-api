@@ -32,11 +32,15 @@ test("preserves optional support-request mode without changing legacy handoff", 
       ...event.payload,
       mode: "support_requested",
       support_request: request,
+      acknowledgment: { text: "Existing custom message." },
     },
   });
   assert.equal(parsed.event_type, "chatbot_handoff");
   if (parsed.event_type === "chatbot_handoff") {
     assert.deepEqual(parsed.payload.support_request, request);
+    assert.deepEqual(parsed.payload.acknowledgment, {
+      text: "Existing custom message.",
+    });
   }
   assert.equal(
     integrationEventSchema.safeParse({
@@ -55,6 +59,30 @@ test("preserves optional support-request mode without changing legacy handoff", 
     }).success,
     false,
   );
+});
+
+test("handoff acknowledgment rejects blank text, oversize text and unknown fields", () => {
+  for (
+    const acknowledgment of [{ text: " " }, { text: "x".repeat(4097) }, {
+      credential: "never accepted",
+    }]
+  ) {
+    assert.equal(
+      integrationEventSchema.safeParse({
+        ...replyEvent,
+        event_type: "chatbot_handoff",
+        payload: {
+          phone_number_id: account.phone_number_id,
+          recipient: "923000000001",
+          source_wamid: "wamid.test",
+          node_conversation_id: "1",
+          target: { routing_queue_id: "00000000-0000-4000-8000-000000000124" },
+          acknowledgment,
+        },
+      }).success,
+      false,
+    );
+  }
 });
 
 test("accepts the two version-one event contracts", () => {

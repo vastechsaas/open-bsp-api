@@ -49,6 +49,7 @@ export type BusinessHoursSchedule = {
 };
 
 export type BusinessHoursSettings = BusinessHoursSchedule & {
+  handoff_message?: string;
   queue_overrides?: Record<string, BusinessHoursSchedule | null>;
   outside_hours_message?: string;
   no_agents_message?: string;

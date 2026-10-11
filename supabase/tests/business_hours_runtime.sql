@@ -26,7 +26,7 @@ select throws_ok($$select public.validate_business_hours_schedule((select value|
 select throws_ok($$select public.validate_business_hours_schedule((select value||'{"holidays":[{"date":"2026-12-25","closed":true},{"date":"2026-12-25","closed":true}]}' from hours_schedule))$$,'22023',null,'duplicate holiday dates rejected');
 select throws_ok($$select public.validate_business_hours_schedule((select value||'{"mode":"all_days","all_days":{"start_time":"17:00","end_time":"09:00"}}' from hours_schedule))$$,'22023',null,'unsupported overnight range rejected clearly');
 select ok(not has_function_privilege('anon','public.business_hours_status(uuid,uuid,uuid,timestamptz)','EXECUTE'),'internal availability is not anonymous');
-select ok(not has_function_privilege('authenticated','public.notify_support_unavailability(uuid,text,uuid)','EXECUTE'),'clients cannot originate arbitrary support notices');
+select ok(not has_function_privilege('authenticated','public.notify_support_unavailability(uuid,text,uuid,text,boolean)','EXECUTE'),'clients cannot originate arbitrary support notices');
 
 insert into auth.users(instance_id,id,aud,role,email,encrypted_password,raw_app_meta_data,raw_user_meta_data,
  email_confirmed_at,created_at,updated_at,confirmation_token,recovery_token,email_change_token_new,email_change)

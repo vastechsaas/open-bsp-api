@@ -20,6 +20,10 @@ const schema = z.object({
   revision: z.string().regex(/^\d+$/).optional(),
   mode: z.enum(["support_requested", "immediate_handoff"]).optional(),
   support_request: supportRequestSchema.optional(),
+  acknowledgment: z.object({
+    text: z.string().trim().min(1).max(4096).optional(),
+    original_event_id: z.uuid().optional(),
+  }).strict().optional(),
   target: z.union([
     z.object({ agent_id: z.uuid() }).strict(),
     z.object({ routing_queue_id: z.uuid() }).strict(),
@@ -45,6 +49,11 @@ Deno.serve(async (request) => {
   try {
     const eventId = z.uuid().parse(request.headers.get("X-OpenBSP-Event-ID"));
     const payload = schema.parse(await request.json());
+    if (payload.acknowledgment && payload.mode !== "support_requested") {
+      return Response.json({
+        message: "Settings acknowledgments require explicit takeover",
+      }, { status: 422 });
+    }
     const client = createUnsecureClient();
     const { data: address, error: addressError } = await client.from(
       "organizations_addresses",
@@ -110,6 +119,7 @@ Deno.serve(async (request) => {
         p_event_id: eventId,
         p_revision: payload.revision!,
         p_support_request: payload.support_request!,
+        p_acknowledgment: payload.acknowledgment,
       })
       : await client.rpc("record_node_chatbot_handoff", {
         p_organization_id: key.organization_id,

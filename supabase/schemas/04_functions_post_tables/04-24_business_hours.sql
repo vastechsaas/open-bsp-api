@@ -65,7 +65,7 @@ begin
       perform public.validate_business_hours_schedule(q.value);
     end loop;
   end if;
-  foreach field in array array['outside_hours_message','no_agents_message'] loop
+  foreach field in array array['handoff_message','outside_hours_message','no_agents_message'] loop
     if s ? field and (jsonb_typeof(s->field)<>'string' or length(btrim(s->>field)) not between 1 and 4096) then
       raise exception 'Unavailable support messages must contain 1 to 4096 characters' using errcode='22023'; end if;
   end loop;
@@ -136,7 +136,7 @@ end;
 $$;
 
 create function public.notify_support_unavailability(p_conversation_id uuid, p_request_id text,
-  p_agent_id uuid default null) returns void
+  p_agent_id uuid default null, p_handoff_text text default null, p_always boolean default false) returns void
 language plpgsql security definer set search_path='' as $$
 declare c public.conversations; availability jsonb; root jsonb; body text; latest_inbound timestamptz;
 begin
@@ -145,11 +145,17 @@ begin
     or exists(select 1 from public.contacts_addresses where organization_id=c.organization_id
       and address=c.contact_address and status='blocked') then return; end if;
   availability := public.business_hours_status(c.organization_id,c.routing_queue_id,p_agent_id);
-  if not (availability->>'configured')::boolean or availability->>'reason' not in ('outside_hours','no_agents') then return; end if;
+  if not p_always and (not (availability->>'configured')::boolean or availability->>'reason' not in ('outside_hours','no_agents')) then return; end if;
   select extra->'business_hours' into root from public.organizations where id=c.organization_id;
-  body := case when availability->>'reason'='outside_hours' then
+  -- Select exactly one message. Availability wins over the branch override;
+  -- otherwise an existing custom node message wins over the shared default.
+  body := case when (availability->>'configured')::boolean and availability->>'reason'='outside_hours' then
     coalesce(root->>'outside_hours_message','Our support team is currently outside business hours. Your request is queued and will be reviewed when support is available.')
-    else coalesce(root->>'no_agents_message','All support agents are currently unavailable. Your request is queued for the next available support agent.') end;
+    when (availability->>'configured')::boolean and availability->>'reason'='no_agents' then
+      coalesce(root->>'no_agents_message','All support agents are currently unavailable. Your request is queued for the next available support agent.')
+    else coalesce(nullif(btrim(p_handoff_text),''),root->>'handoff_message',
+      E'Your request has been sent to our support team.\n\nYou can continue using the chatbot while you wait. We’ll let you know when an agent takes over.') end;
+  if length(body) not between 1 and 4096 then raise exception 'Support message must contain 1 to 4096 characters' using errcode='22023'; end if;
   -- Do not originate a free-form notice outside the customer service window.
   select max(timestamp) into latest_inbound from public.messages where conversation_id=c.id and direction='incoming' and content<>'{}'::jsonb;
   if latest_inbound is null or latest_inbound < now()-interval '24 hours' then return; end if;
@@ -166,7 +172,7 @@ revoke all on function public.validate_business_hours_schedule(jsonb) from publi
 revoke all on function public.guard_business_hours_settings() from public,anon,authenticated;
 revoke all on function public.business_hours_schedule_open(jsonb,timestamptz) from public,anon,authenticated;
 revoke all on function public.business_hours_status(uuid,uuid,uuid,timestamptz) from public,anon,authenticated;
-revoke all on function public.notify_support_unavailability(uuid,text,uuid) from public,anon,authenticated;
+revoke all on function public.notify_support_unavailability(uuid,text,uuid,text,boolean) from public,anon,authenticated;
 revoke all on function public.get_business_hours_status(uuid,uuid) from public,anon;
 grant execute on function public.get_business_hours_status(uuid,uuid) to authenticated,service_role;
 grant execute on function public.business_hours_status(uuid,uuid,uuid,timestamptz) to service_role;

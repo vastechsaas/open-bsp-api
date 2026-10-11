@@ -1,7 +1,7 @@
 -- A support request is not a transfer of execution ownership.
 create function public.record_node_support_request(
   p_organization_id uuid, p_address text, p_recipient text, p_node_conversation_id text,
-  p_event_id uuid, p_revision text, p_support_request jsonb
+  p_event_id uuid, p_revision text, p_support_request jsonb, p_acknowledgment jsonb default null
 ) returns uuid language plpgsql security definer set search_path = '' as $$
 declare
   target public.conversations;
@@ -9,12 +9,26 @@ declare
   receipt public.chatbot_node_handoff_receipts;
   queue_id uuid;
   agent_id uuid;
+  original_receipt public.chatbot_node_handoff_receipts;
 begin
   perform pg_advisory_xact_lock(hashtextextended(p_event_id::text,117));
   select * into receipt from public.chatbot_node_handoff_receipts where event_id = p_event_id;
   if found then
     if receipt.organization_id <> p_organization_id then raise exception 'event belongs to another tenant' using errcode='42501'; end if;
     return receipt.conversation_id;
+  end if;
+  if p_acknowledgment is not null then
+    if jsonb_typeof(p_acknowledgment) <> 'object'
+      or exists(select 1 from jsonb_object_keys(p_acknowledgment) k where k not in ('text','original_event_id'))
+      or (p_acknowledgment ? 'text' and (jsonb_typeof(p_acknowledgment->'text') <> 'string'
+        or length(btrim(p_acknowledgment->>'text')) not between 1 and 4096)) then
+      raise exception 'Invalid handoff acknowledgment' using errcode='22023'; end if;
+    if p_acknowledgment ? 'original_event_id' then
+      select * into original_receipt from public.chatbot_node_handoff_receipts
+        where event_id=(p_acknowledgment->>'original_event_id')::uuid;
+      if not found then raise exception 'original handoff has not arrived' using errcode='40001'; end if;
+      if original_receipt.organization_id <> p_organization_id then raise exception 'handoff belongs to another tenant' using errcode='42501'; end if;
+    end if;
   end if;
   if not public.is_organization_active(p_organization_id) or not public.is_node_managed_number(p_organization_id,p_address) then
     raise exception 'tenant or Node binding unavailable' using errcode='42501'; end if;
@@ -45,8 +59,16 @@ begin
   queue_id := (p_support_request->'target'->>'routing_queue_id')::uuid;
   agent_id := (p_support_request->'target'->>'agent_id')::uuid;
   if (queue_id is null) = (agent_id is null) then raise exception 'exactly one support target required' using errcode='23514'; end if;
+  if p_acknowledgment ? 'original_event_id' then
+    if original_receipt.conversation_id <> target.id or mapping.support_request->>'id' is distinct from p_support_request->>'id' then
+      raise exception 'acknowledgment conversation mismatch' using errcode='23514'; end if;
+    -- A repeat request only acknowledges. Never reroute or clear an assignment.
+    perform public.notify_support_unavailability(target.id,p_event_id::text,agent_id,p_acknowledgment->>'text',true);
+    insert into public.chatbot_node_handoff_receipts(event_id,organization_id,conversation_id) values(p_event_id,p_organization_id,target.id);
+    return target.id;
+  end if;
   update public.conversations set status='active' where id=target.id and status='closed';
-  if queue_id is not null then perform public.route_conversation_to_queue(target.id,queue_id);
+  if queue_id is not null then perform public.route_conversation_to_queue(target.id,queue_id,p_acknowledgment is null);
   else
     if not exists(select 1 from public.agents where id=agent_id and organization_id=p_organization_id and not ai and user_id is not null
       and coalesce(extra->'invitation'->>'status','accepted')='accepted') then raise exception 'accepted tenant agent required' using errcode='23514'; end if;
@@ -55,7 +77,7 @@ begin
         (public.business_hours_status(p_organization_id,null,agent_id)->>'configured')::boolean
         and public.business_hours_status(p_organization_id,null,agent_id)->>'reason'<>'available'
         then null else agent_id end where id=target.id;
-    perform public.notify_support_unavailability(target.id,p_support_request->>'id',agent_id);
+    if p_acknowledgment is null then perform public.notify_support_unavailability(target.id,p_support_request->>'id',agent_id); end if;
   end if;
   insert into public.chatbot_node_conversations(organization_id,organization_address,node_conversation_id,conversation_id,
     human_owned,lifecycle_enabled,ownership_revision,state,support_request,last_inbound_wamid)
@@ -63,12 +85,15 @@ begin
     on conflict(organization_id,organization_address,node_conversation_id) do update set
       human_owned=false,lifecycle_enabled=true,ownership_revision=greatest(p_revision::numeric,chatbot_node_conversations.ownership_revision::numeric)::text,
       state='bot_ready',support_request=p_support_request,last_synced_at=now();
+  if p_acknowledgment is not null then
+    perform public.notify_support_unavailability(target.id,p_event_id::text,agent_id,p_acknowledgment->>'text',true);
+  end if;
   insert into public.chatbot_node_handoff_receipts(event_id,organization_id,conversation_id) values(p_event_id,p_organization_id,target.id);
   return target.id;
 end;
 $$;
-revoke all on function public.record_node_support_request(uuid,text,text,text,uuid,text,jsonb) from public,anon,authenticated;
-grant execute on function public.record_node_support_request(uuid,text,text,text,uuid,text,jsonb) to service_role;
+revoke all on function public.record_node_support_request(uuid,text,text,text,uuid,text,jsonb,jsonb) from public,anon,authenticated;
+grant execute on function public.record_node_support_request(uuid,text,text,text,uuid,text,jsonb,jsonb) to service_role;
 
 create function public.guard_node_takeover_assignment() returns trigger language plpgsql set search_path='' as $$
 begin
