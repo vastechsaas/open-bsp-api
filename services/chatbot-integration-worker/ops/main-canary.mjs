@@ -148,9 +148,9 @@ if (mode === "bootstrap") {
     RABBITMQ_DLQ: `${queue}.dlq`,
     RABBITMQ_DLQ_ROUTING_KEY: `${queue}.dlq`,
     OPENBSP_EDGE_REGION: "ap-northeast-1",
-    WORKER_MODE: "parallel",
-    WORKER_MESSAGE_CONCURRENCY: "4",
-    WORKER_STATUS_CONCURRENCY: "2",
+    WORKER_MODE: process.env.CANARY_WORKER_MODE || "parallel",
+    WORKER_MESSAGE_CONCURRENCY: process.env.CANARY_MESSAGE_CONCURRENCY || "4",
+    WORKER_STATUS_CONCURRENCY: process.env.CANARY_STATUS_CONCURRENCY || "2",
   };
   save(
     "worker.env",

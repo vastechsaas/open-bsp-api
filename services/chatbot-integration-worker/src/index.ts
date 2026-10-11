@@ -16,6 +16,7 @@ import { eventReservation } from "./routing.js";
 import { Scheduler } from "./scheduler.js";
 import { settleWithin } from "./deadline.js";
 import type { Duplex } from "node:stream";
+import { ReplyDependencies } from "./dependencies.js";
 
 async function main() {
   const config = loadConfig();
@@ -36,6 +37,7 @@ async function main() {
     const consumers: Array<{ channel: ConfirmChannel; tag: string }> = [];
     const schedulers = new Set<Scheduler>();
     const abort = new AbortController();
+    const dependencies = new ReplyDependencies();
     let endSession = () => {};
     try {
       const ended = new Promise<void>((resolve) => {
@@ -95,6 +97,7 @@ async function main() {
           topology: config.topology,
           acceptedEventTypes: config.acceptedEventTypes,
           lane,
+          onForwardSuccess: (event) => dependencies.complete(event),
         });
         const consumer = await channel.consume(
           laneQueue(config.topology, lane),
@@ -112,16 +115,21 @@ async function main() {
               : { integration: "*", keys: [] };
             let started = false;
             state.lanes[lane].pending++;
-            void scheduler.enqueue(reservation, async () => {
-              started = true;
-              state.lanes[lane].pending--;
-              state.lanes[lane].active++;
-              try {
-                await handle(message, received);
-              } finally {
-                state.lanes[lane].active--;
-              }
-            }).catch(() => undefined).finally(() => {
+            const prerequisite = lane === "statuses" && parsed?.success
+              ? dependencies.wait(parsed.data)
+              : Promise.resolve();
+            void prerequisite.then(() =>
+              scheduler.enqueue(reservation, async () => {
+                started = true;
+                state.lanes[lane].pending--;
+                state.lanes[lane].active++;
+                try {
+                  await handle(message, received);
+                } finally {
+                  state.lanes[lane].active--;
+                }
+              })
+            ).catch(() => undefined).finally(() => {
               if (!started) state.lanes[lane].pending--;
             });
           },
@@ -142,6 +150,8 @@ async function main() {
           endSession();
           return;
         }
+        const parsed = parseEvent(message);
+        if (parsed?.success) dependencies.reserve(parsed.data);
         void route(message).catch(() => endSession());
       }, { noAck: false });
       consumers.push({ channel: ingress, tag: source.consumerTag });
@@ -163,6 +173,7 @@ async function main() {
       const deadline = Date.now() + 45_000;
       // Stop local scheduling immediately, even when broker cancellation stalls.
       for (const scheduler of schedulers) scheduler.stop();
+      dependencies.dispose();
       await settleWithin(
         Promise.all(
           consumers.map(({ channel, tag }) =>

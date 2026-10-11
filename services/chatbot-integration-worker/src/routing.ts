@@ -64,6 +64,27 @@ export function eventReservation(event: IntegrationEvent): Reservation {
     };
   }
   const values = webhookValues(event.payload.raw_body);
+  if (eventLane(event) === "statuses") {
+    // Database status merging is atomic. Only repeats of the same status for
+    // the same message need local ordering; receipts for different messages or
+    // different status fields must not serialize an entire customer burst.
+    const keys = (values ?? []).flatMap((value) => {
+      const number =
+        (value.metadata as { phone_number_id: string }).phone_number_id;
+      return (value.statuses as Array<
+        { id: string; recipient_id: string; status: string }
+      >).map(
+        (status) =>
+          JSON.stringify([
+            number,
+            status.recipient_id,
+            status.id,
+            status.status,
+          ]),
+      );
+    });
+    return { integration, keys: [...new Set(keys)].sort() };
+  }
   const keys: string[] = [];
   for (const value of values ?? []) {
     if (

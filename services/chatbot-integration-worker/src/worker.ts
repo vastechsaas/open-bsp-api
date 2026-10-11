@@ -72,6 +72,7 @@ export function createMessageHandler({
   storeRawEvent = () => Promise.resolve(),
   publish = createConfirmedPublisher(channel),
   lane = "messages",
+  onForwardSuccess = () => {},
 }: {
   channel: ConfirmChannel;
   forward: ForwardEvent;
@@ -82,6 +83,7 @@ export function createMessageHandler({
   storeRawEvent?: StoreRawEvent;
   publish?: PublishConfirmed;
   lane?: Lane;
+  onForwardSuccess?: (event: IntegrationEvent) => void;
 }) {
   return async (message: ConsumeMessage | null, receivedAt = Date.now()) => {
     if (!message) return;
@@ -172,6 +174,7 @@ export function createMessageHandler({
         };
       }
       if (result.outcome === "success") {
+        onForwardSuccess(event);
         channel.ack(message);
         state.processed++;
         state.lastSuccessAt = new Date().toISOString();

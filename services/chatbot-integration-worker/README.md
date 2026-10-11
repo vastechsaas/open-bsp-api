@@ -79,7 +79,12 @@ OPENBSP_EDGE_REGION=ap-northeast-1
 ```
 
 Set the region only for the intended project (Main is Tokyo); omit it to retain
-automatic routing. Each customer is serialized within a lane. Multi-customer
+automatic routing. Message/lifecycle work is serialized per customer. Status
+updates serialize only identical message/status fields; the existing database
+trigger atomically merges different status fields without erasing content. Known
+local reply writes delay status scheduling without holding a processing slot,
+for at most ten seconds. This is only a local optimization: the handler always
+checks the durable original, including after restart or timeout. Multi-customer
 batches reserve all their keys atomically; unfamiliar events use a tenant
 barrier. No new producer contract or database migration is required.
 
