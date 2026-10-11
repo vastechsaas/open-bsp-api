@@ -136,6 +136,11 @@ customer events. Raw-event persistence is idempotent by payload hash.
 
 ## Main rollout / rollback
 
+See the
+[Main latency implementation and acceptance record](ops/MAIN-WORKER-LATENCY.md)
+for benchmark results, accepted limitations, deployed versus candidate versions,
+private backup locations and remaining verification work.
+
 Use an isolated integration/number and unique ingress/routing/DLQ names for the
 canary. Deploy the compatible `whatsapp-webhook` handler before the new worker:
 authenticated `X-OpenBSP-Status-Only: 1` requests UPDATE existing messages only,

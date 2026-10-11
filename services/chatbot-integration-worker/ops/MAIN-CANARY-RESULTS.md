@@ -1,5 +1,11 @@
 # Main latency canary — 2026-10-11
 
+> Historical initial benchmark. For the subsequent live classification finding,
+> representative 5.146-second result, user acceptance and actual deployment
+> status, see [Main worker latency record](MAIN-WORKER-LATENCY.md). The initial
+> passing result below does not establish that the later candidate is deployed
+> or that the thirty-minute observation completed.
+
 ## Rollout decision: final canary passed
 
 The initial canaries failed and prevented live rollout. After the measured
