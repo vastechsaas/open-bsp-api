@@ -77,6 +77,7 @@ implementation.
 - Integration worker build/lint and all 35 tests passed.
 - Node TypeScript/Prisma build, 9 boundary/broker tests, 57 core assertions and
   9 explicit-takeover integration tests passed against dedicated local services.
-- Frontend focused Business Hours tests passed (20); full validation is recorded
-  in the feature delivery summary.
+- Frontend focused Business Hours tests passed (20). Full frontend validation
+  passed: 371 tests, generated-type synchronization, formatting/lint, TypeScript
+  and the production build.
 - No live customer message, handoff, takeover or DKR flow change was performed.
