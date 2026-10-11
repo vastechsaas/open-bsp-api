@@ -61,7 +61,7 @@ edits are included.
   assertions, including 23 support-inbox assertions.
 - Focused lifecycle, takeover readiness, bridge operation/processor tests: 14
   passed.
-- Frontend: full validation passes: 350 tests, matching generated types, lint
+- Frontend: full validation passes: 353 tests, matching generated types, lint
   (zero errors; 389 existing/non-blocking warnings), TypeScript and Vite build.
 - Node: boundaries/routing 9, core 57, lifecycle 6 and focused takeover/episode
   tests pass; Prisma generation and TypeScript build pass. New BUTTON and LIST
@@ -72,12 +72,11 @@ edits are included.
 
 ## Rollout and verification
 
-This branch is not a live deployment. Deploy compatible Node API/worker and
-backend before the dependent UI. Back up the target database first and confirm
-the linked Supabase project. Main needs staging's already-generated
-`20261006155552_support_inbox_visibility.sql`; do not generate a duplicate
-migration or apply it again on staging where it already exists. No Node
-migration is needed.
+Deploy compatible Node API/worker and backend before the dependent UI. Back up
+the target database first and confirm the linked Supabase project. Main needs
+staging's already-generated `20261006155552_support_inbox_visibility.sql`; do
+not generate a duplicate migration or apply it again on staging where it already
+exists. No Node migration is needed.
 
 Verify on an explicitly authorized test customer:
 
@@ -99,3 +98,38 @@ Verify on an explicitly authorized test customer:
 Do not roll the UI back to an older "chatbot paused while waiting" label while
 the new Node behavior is active. Restoring the previous Node image restores its
 old waiting behavior; no schema removal or history deletion is part of rollback.
+
+## Deployment record — 2026-10-11
+
+- Backend feature commit: `785717d`; staging port: `45fce39` plus documentation
+  formatting `e553b88`. Both target branches have the focused fix; unrelated
+  worker-latency and validation-editor differences are not merged between them.
+- Main support-inbox migration was the only pending migration in the verified
+  dry run. It was applied to `buvjopvpkgvzhykwsxnk`; a subsequent dry run
+  reports no pending migrations. `chatbot-management` was deployed to Main.
+  Supabase's Git integration also reports success for staging and Main.
+- Main backups are outside Git in
+  `C:/Users/Hurera Mujeeb/.codex/backups/support-lifecycle-20261011-main-*.sql`:
+  schema, COPY-format public/billing/auth/storage data and roles. These include
+  sensitive data and storage metadata, not storage file contents.
+- Oracle API and worker run `node-chatbot-engine:c072ca8`, merged from Node
+  Main. Prisma reported seven applied migrations and none pending. API readiness
+  and HTTPS `/readyz` returned healthy; the worker reported ready with zero
+  restarts.
+- Oracle's private backup directory is
+  `/opt/chatbots/node-engine/backups/support-lifecycle-20261011`. It contains
+  the PostgreSQL custom dump (restore list verified), environment and prior
+  compose configuration. Retained image:
+  `node-chatbot-engine:rollback-support-lifecycle-20261011` (`5cd21f0`).
+- The staging UI port includes its missing shared lifecycle/Previous chats
+  prerequisites (`b2504e1` and `f6af31b` from Main) before the two focused
+  fixes. Staging checks pass 370 tests, generated-type synchronization and
+  TypeScript.
+- The CLI account cannot access staging directly. Staging deployment
+  confirmation comes from its successful Supabase Git integration check; no
+  direct staging database changes or backup were attempted after that
+  authorization failure.
+- PHP, queue-worker images, Meta webhook configuration and the active DKR flow
+  remain unchanged. No customer messages or live takeover/closure actions were
+  performed. The live first-click and waiting-menu acceptance checks above
+  remain necessary; health and automated tests are not a substitute for them.
