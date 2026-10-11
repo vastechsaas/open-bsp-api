@@ -1,6 +1,6 @@
 // Explicit operator-run synthetic canary. Never sends a request to Meta.
 // Input/config files must be mounted in a private 0700 directory, never committed.
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 const require = createRequire("/app/package.json");
@@ -36,14 +36,17 @@ const api = async (path, method = "GET", body) => {
   return response.status === 204 ? [] : response.json();
 };
 if (mode === "bootstrap") {
-  const id = randomUUID();
-  const suffix = Date.now().toString();
+  const previous = existsSync(`${directory}/context.json`)
+    ? JSON.parse(readFileSync(`${directory}/context.json`, "utf8"))
+    : undefined;
+  const id = previous?.id ?? randomUUID();
+  const suffix = previous?.suffix ?? Date.now().toString();
   const number = `9999${suffix}`;
-  const key = randomBytes(32).toString("hex");
+  const key = previous?.key ?? randomBytes(32).toString("hex");
   const source = Object.values(JSON.parse(env.OPENBSP_ACCOUNT_CONFIG_JSON))[0];
   const integration = `latency-${suffix}`;
   const queue = `openbsp.canary.latency.${suffix}`;
-  const customers = Array.from(
+  const customers = previous?.customers ?? Array.from(
     { length: 20 },
     (_, index) => ({
       customer: `999${suffix}${String(index).padStart(2, "0")}`,
@@ -62,35 +65,37 @@ if (mode === "bootstrap") {
     key,
   };
   save("context.json", context);
-  await api("organizations", "POST", {
-    id,
-    name: `TEST Worker latency ${suffix}`,
-    extra: { authorized_contacts_only: true, response_delay_seconds: 0 },
-  });
-  await api("organizations_addresses", "POST", {
-    organization_id: id,
-    service: "whatsapp",
-    address: number,
-    status: "connected",
-    extra: {
-      waba_id: `9998${suffix}`,
-      phone_number: number,
-      verified_name: "Synthetic worker canary",
-    },
-  });
-  await api("api_keys", "POST", {
-    organization_id: id,
-    role: "owner",
-    name: integration,
-    key,
-  });
-  await api("chatbot_node_bridges", "POST", {
-    organization_id: id,
-    organization_address: number,
-    engine: "disabled",
-    node_company_id: "999999",
-    sync_status: "disabled",
-  });
+  if (!previous) {
+    await api("organizations", "POST", {
+      id,
+      name: `TEST Worker latency ${suffix}`,
+      extra: { authorized_contacts_only: true, response_delay_seconds: 0 },
+    });
+    await api("organizations_addresses", "POST", {
+      organization_id: id,
+      service: "whatsapp",
+      address: number,
+      status: "connected",
+      extra: {
+        waba_id: `9998${suffix}`,
+        phone_number: number,
+        verified_name: "Synthetic worker canary",
+      },
+    });
+    await api("api_keys", "POST", {
+      organization_id: id,
+      role: "owner",
+      name: integration,
+      key,
+    });
+    await api("chatbot_node_bridges", "POST", {
+      organization_id: id,
+      organization_address: number,
+      engine: "disabled",
+      node_company_id: "999999",
+      sync_status: "disabled",
+    });
+  }
   await api(
     "contacts_addresses",
     "POST",
@@ -98,7 +103,7 @@ if (mode === "bootstrap") {
       organization_id: id,
       address: customer,
       service: "whatsapp",
-      name: "Synthetic canary",
+      extra: { profile: { name: "Synthetic canary" } },
     })),
   );
   await api(
