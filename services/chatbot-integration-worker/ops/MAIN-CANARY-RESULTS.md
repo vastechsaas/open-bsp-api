@@ -1,10 +1,11 @@
 # Main latency canary — 2026-10-11
 
-## Rollout decision: STOP
+## Rollout decision: final canary passed
 
-Do not merge/deploy the live Main worker from this branch yet. The controlled
-canary failed the agreed five-second P95 forwarding gate. There was no Main
-worker rollout or thirty-minute post-rollout observation.
+The initial canaries failed and prevented live rollout. After the measured
+worker-only refinements below, the final complete canary passed the agreed
+five-second P95 gate and restart/redelivery checks. Main rollout is authorized
+by the implementation plan; the thirty-minute live observation is still pending.
 
 The compatible `whatsapp-webhook` handler was deployed to Main. Its new path
 requires a verified Meta signature, existing tenant API authentication and the
@@ -12,10 +13,10 @@ worker's status-only header. The legacy live worker does not use that path. No
 database migration, frontend, Node engine, PSDF or staging change was made.
 
 Validation passed: the complete backend suite (980 database assertions), four
-focused status-handler tests, forty-five worker tests, worker lint and build.
-The final worker follow-up bounds broker cancellation/close RPCs so a broken
+focused status-handler tests, fifty worker tests, worker lint and build. The
+final worker follow-up bounds broker cancellation/close RPCs so a broken
 connection cannot extend the shutdown drain indefinitely. That follow-up was
-tested and built locally; it was not deployed to the failed canary or Main.
+tested and built locally, then exercised in the final Oracle canary.
 
 ## Test configuration
 
@@ -28,7 +29,7 @@ tested and built locally; it was not deployed to the failed canary or Main.
 - No Meta sends, real customer messages, human conversation actions or live
   bot/flow edits. All tests used synthetic identifiers.
 
-## Results
+## Initial results — failed, not used for rollout
 
 | Check                                           | Result                                  |
 | ----------------------------------------------- | --------------------------------------- |
@@ -68,21 +69,40 @@ Message processing averaged 1,545 ms per attempt; mean raw storage was 415 ms.
 These are worker/HTTP/storage measurements, not pure RabbitMQ latency and not
 browser rendering latency.
 
-## Next work before any rollout
+## Refinements and final result
 
-1. Measure a like-for-like serial baseline using another isolated fixture.
-2. Tune bounded status capacity from measured throughput and retest without
-   weakening the five-second gate or excluding initial requests/retries.
-3. Investigate slow initial Edge calls and status prerequisites. If meeting the
-   gate requires consolidating database calls or changing handler contracts,
-   agree that additional scope before implementing it; this plan explicitly
-   excluded database-call consolidation initially.
-4. Verify restart/redelivery and serial compatibility mode using only isolated
-   queues, then rerun the entire correctness/performance canary.
-5. Only after a pass: merge Main, stop the legacy live worker, deploy the new
-   worker, and observe normal traffic for at least thirty minutes.
+- The candidate's serial compatibility mode correctly drained the same load. P95
+  was 99,416 ms across events and 31,647 ms for replies. This is an isolated
+  serial-mode comparison, not a replay of the old live worker's workload.
+- Four status slots alone: P95 9,432 ms overall / 4,075 ms replies; 29 retries.
+- Known-reply prerequisites and narrower receipt ordering, four status slots:
+  P95 5,882 ms overall / 3,967 ms replies; zero retries.
+- Eight status slots with those refinements: P95 5,539 ms overall / 3,809 ms
+  replies; zero retries. More slots alone did not meet the gate.
+- Final worker also suppresses repeat HTTP calls for exact signed receipt
+  payloads only after a successful verified update under the same credentials.
+  Every envelope is still stored. The cache is bounded, lasts sixty seconds, and
+  never handles customer/reply/handoff/lifecycle events.
+- **Final four-message/four-status run:** P95 **4,949 ms across all 140 unique
+  envelopes**, **3,558 ms replies**. All forty message rows were correct;
+  ownership was unchanged, zero retries and zero dead-lettered events. Forty
+  receipt envelopes reused a previously confirmed identical update; they are
+  included in the overall percentile, not discarded from the benchmark.
+- Replayed forty already persisted synthetic envelopes, stopped the worker while
+  work was outstanding, restarted and verified all forty reached a successful
+  outcome after replay, with no extra/missing/misrouted message rows or
+  ownership changes. Unstarted deliveries recovered through the broker.
+- One intermediate fixture run started publishing before its new ingress was
+  bound; eight publications were unroutable. That run was invalid and excluded,
+  not reported as a pass. The producer now uses mandatory publications, detects
+  returns, and deployment waits for readiness before starting the benchmark.
+
+No database-call consolidation, handler polling, schema change or relaxed
+performance threshold was required. The narrow 51 ms margin means this is a
+controlled-load result, not a guarantee of every real message arriving in five
+seconds. Observe Main's actual load and retries for at least thirty minutes.
 
 The previous live image and private deployment configuration were retained on
 Oracle. Canary audit records and durable queues are retained; do not purge them.
-The disposable API key was revoked, its fake number disconnected, and the canary
-container stopped. The live Main worker is still running its original image.
+Disposable test credentials/numbers must be retired and canary containers
+stopped after final checks; preserve their audit records and queues.

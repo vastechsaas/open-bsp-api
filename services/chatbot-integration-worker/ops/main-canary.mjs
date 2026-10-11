@@ -397,6 +397,8 @@ if (mode === "bootstrap") {
       if (!success) throw new Error("Canary event has no confirmed forwarding");
       return {
         type: event.event_type,
+        duplicate:
+          success.message === "Confirmed duplicate status acknowledged",
         duration: Date.parse(success.timestamp) - Date.parse(event.occurred_at),
       };
     });
@@ -438,6 +440,9 @@ if (mode === "bootstrap") {
         timings.reduce((sum, value) => sum + value, 0) / timings.length,
       ),
       confirmed_events: completions.length,
+      confirmed_duplicate_statuses: completions.filter((row) =>
+        row.duplicate
+      ).length,
       p95_forward_ms: forwardingP95,
       p95_reply_forward_ms: percentile(
         completions.filter((row) => row.type === "chatbot_reply").map((row) =>
