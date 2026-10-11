@@ -99,6 +99,37 @@ function makeForwarder(fetchImpl: typeof fetch, sleeps: number[] = []) {
   });
 }
 
+test("pins execution region without changing signed bodies", async () => {
+  const logs: unknown[] = [];
+  const result = await createForwarder({
+    functionsBaseUrl: "https://example.supabase.co/functions/v1",
+    accounts: { psdf: account },
+    edgeRegion: "ap-northeast-1",
+    logger: {
+      ...silentLogger,
+      info: (_message, fields) => {
+        logs.push(fields);
+      },
+    },
+    fetchImpl: (_url, init) => {
+      assert.equal(
+        new Headers(init?.headers).get("x-region"),
+        "ap-northeast-1",
+      );
+      assert.equal(init?.body, webhookEvent.payload.raw_body);
+      assert.ok(init?.signal);
+      return Promise.resolve(
+        new Response(null, {
+          status: 200,
+          headers: { "x-sb-edge-region": "ap-northeast-1" },
+        }),
+      );
+    },
+  })(webhookEvent);
+  assert.equal(result.outcome, "success");
+  assert.ok(JSON.stringify(logs).includes("ap-northeast-1"));
+});
+
 test("forwards the exact raw webhook body, signature and configured app ID", async () => {
   let capturedUrl = "";
   let capturedInit: RequestInit | undefined;
@@ -140,7 +171,7 @@ test("adds tenant credentials and chatbot identity only at forwarding time", asy
   assert.equal(body.wamid, "wamid.outgoing-1");
 });
 
-test("retries network, 429 and 5xx failures in the configured order", async () => {
+test("network failure releases the slot for durable retry without sleeping", async () => {
   const sleeps: number[] = [];
   let attempt = 0;
   const result = await makeForwarder(() => {
@@ -152,11 +183,12 @@ test("retries network, 429 and 5xx failures in the configured order", async () =
     return Promise.resolve(new Response(null, { status: 200 }));
   }, sleeps)(replyEvent);
 
-  assert.deepEqual(sleeps, [1_000, 5_000]);
-  assert.deepEqual(result, { outcome: "success", status: 200, attempts: 3 });
+  assert.deepEqual(sleeps, []);
+  assert.equal(attempt, 1);
+  assert.equal(result.outcome, "permanent_failure");
 });
 
-test("retries an exhausted 5xx response three times", async () => {
+test("returns 5xx after one attempt for durable retry", async () => {
   const sleeps: number[] = [];
   let attempts = 0;
   const result = await makeForwarder(() => {
@@ -164,17 +196,17 @@ test("retries an exhausted 5xx response three times", async () => {
     return Promise.resolve(new Response(null, { status: 503 }));
   }, sleeps)(replyEvent);
 
-  assert.equal(attempts, 3);
-  assert.deepEqual(sleeps, [1_000, 5_000]);
+  assert.equal(attempts, 1);
+  assert.deepEqual(sleeps, []);
   assert.deepEqual(result, {
     outcome: "permanent_failure",
     status: 503,
-    reason: "transient Edge Function failure exhausted retries",
-    attempts: 3,
+    reason: "Edge Function returned HTTP 503",
+    attempts: 1,
   });
 });
 
-test("retries request timeouts three times", async () => {
+test("request timeout is ambiguous and returned for durable retry", async () => {
   const sleeps: number[] = [];
   let attempts = 0;
   const forward = createForwarder({
@@ -193,12 +225,12 @@ test("retries request timeouts three times", async () => {
   });
 
   const result = await forward(replyEvent);
-  assert.equal(attempts, 3);
-  assert.deepEqual(sleeps, [1_000, 5_000]);
+  assert.equal(attempts, 1);
+  assert.deepEqual(sleeps, []);
   assert.deepEqual(result, {
     outcome: "permanent_failure",
-    reason: "network failure exhausted retries",
-    attempts: 3,
+    reason: "network request failed; durable retry required",
+    attempts: 1,
   });
 });
 

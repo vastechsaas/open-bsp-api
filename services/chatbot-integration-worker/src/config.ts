@@ -10,6 +10,10 @@ export type WorkerConfig = {
   accounts: Record<string, AccountConfig>;
   port: number;
   logLevel: "debug" | "info" | "warn" | "error";
+  edgeRegion?: string;
+  messageConcurrency: number;
+  statusConcurrency: number;
+  mode: "parallel" | "serial";
   topology: QueueTopology;
   acceptedEventTypes: ReadonlySet<
     | "whatsapp_webhook"
@@ -30,6 +34,10 @@ const environmentSchema = z.object({
   OPENBSP_ACCOUNT_CONFIG_JSON: z.string().min(2),
   PORT: z.coerce.number().int().min(1).max(65535).default(8080),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  OPENBSP_EDGE_REGION: z.string().regex(/^[a-z]{2}-[a-z]+-\d$/).optional(),
+  WORKER_MESSAGE_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(4),
+  WORKER_STATUS_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(2),
+  WORKER_MODE: z.enum(["parallel", "serial"]).default("parallel"),
   RABBITMQ_EXCHANGE: z.string().min(1).default(defaultTopology.exchange),
   RABBITMQ_QUEUE: z.string().min(1).default(defaultTopology.queue),
   RABBITMQ_ROUTING_KEY: z.string().min(1).default(defaultTopology.routingKey),
@@ -85,6 +93,10 @@ export function loadConfig(
     accounts,
     port: parsed.PORT,
     logLevel: parsed.LOG_LEVEL,
+    edgeRegion: parsed.OPENBSP_EDGE_REGION,
+    messageConcurrency: parsed.WORKER_MESSAGE_CONCURRENCY,
+    statusConcurrency: parsed.WORKER_STATUS_CONCURRENCY,
+    mode: parsed.WORKER_MODE,
     topology: {
       exchange: parsed.RABBITMQ_EXCHANGE,
       queue: parsed.RABBITMQ_QUEUE,

@@ -1,0 +1,7 @@
+# No dependency changes: reuse the pinned, previously deployed runtime layers.
+# The compiled dist artifact is produced by the single validated local build.
+ARG BASE_IMAGE=openbsp-main-chatbot-worker:8886b26
+FROM ${BASE_IMAGE}
+USER root
+COPY dist /app/dist
+USER node

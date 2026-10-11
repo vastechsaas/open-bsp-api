@@ -1,299 +1,188 @@
+/* eslint-disable @typescript-eslint/require-await -- Async test doubles implement the production Promise interface. */
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ConfirmChannel, ConsumeMessage } from "amqplib";
+import type { ConfirmChannel, ConsumeMessage, Options } from "amqplib";
 import { createWorkerState } from "../src/state.js";
-import { createMessageHandler } from "../src/worker.js";
-import type { LogFields } from "../src/logger.js";
+import { createIngressHandler, createMessageHandler } from "../src/worker.js";
+import { defaultTopology } from "../src/topology.js";
 import { replyEvent, silentLogger, webhookEvent } from "./fixtures.js";
 
-function message(body: unknown): ConsumeMessage {
-  return {
+function setup(body: unknown = replyEvent, retry = 0) {
+  const incoming = {
     content: Buffer.from(
       typeof body === "string" ? body : JSON.stringify(body),
     ),
-    fields: {
-      consumerTag: "test",
-      deliveryTag: 1,
-      redelivered: false,
-      exchange: "openbsp.integration",
-      routingKey: "chatbot.event.v1",
-    },
     properties: {
-      contentType: "application/json",
-      contentEncoding: undefined,
-      headers: {},
-      deliveryMode: 2,
-      priority: undefined,
-      correlationId: undefined,
-      replyTo: undefined,
-      expiration: undefined,
       messageId: replyEvent.event_id,
-      timestamp: undefined,
-      type: undefined,
-      userId: undefined,
-      appId: undefined,
-      clusterId: undefined,
+      headers: { "x-openbsp-retry": retry },
     },
+  } as unknown as ConsumeMessage;
+  const calls = {
+    ack: 0,
+    nack: 0,
+    published: [] as Array<
+      { queue: string; content: Buffer; properties?: Options.Publish }
+    >,
   };
-}
-
-function channelMock() {
-  const calls = { ack: 0, nack: 0, publish: 0, confirmed: 0, retry: 0 };
-  return {
-    calls,
-    channel: {
-      sendToQueue: () => {
-        calls.retry++;
-        return true;
-      },
-      ack: () => {
-        calls.ack += 1;
-      },
-      nack: () => {
-        calls.nack += 1;
-      },
-      publish: () => {
-        calls.publish += 1;
-        return true;
-      },
-      waitForConfirms: () => {
-        calls.confirmed += 1;
-        return Promise.resolve();
-      },
-    } as unknown as ConfirmChannel,
+  const channel = {
+    ack: () => {
+      calls.ack++;
+    },
+    nack: () => {
+      calls.nack++;
+    },
+  } as unknown as ConfirmChannel;
+  const publish = (
+    queue: string,
+    content: Buffer,
+    properties?: Options.Publish,
+  ) => {
+    assert.equal(calls.ack, 0);
+    calls.published.push({ queue, content, properties });
+    return Promise.resolve();
   };
-}
-
-test("acknowledges only after successful forwarding", async () => {
-  const { channel, calls } = channelMock();
   const state = createWorkerState();
-  let forwarded = false;
-  await createMessageHandler({
+  const options = {
     channel,
-    logger: silentLogger,
+    publish,
     state,
-    forward: () => {
-      assert.equal(calls.ack, 0);
-      forwarded = true;
-      return Promise.resolve({ outcome: "success", status: 201, attempts: 1 });
+    logger: silentLogger,
+    forward: async () => ({
+      outcome: "success" as const,
+      status: 200,
+      attempts: 1,
+    }),
+  };
+  return { incoming, calls, options, state };
+}
+
+test("stores original raw bytes before forwarding and acknowledges success only", async () => {
+  const { incoming, calls, options, state } = setup(
+    `${JSON.stringify(replyEvent)}\n`,
+  );
+  const order: string[] = [];
+  await createMessageHandler({
+    ...options,
+    storeRawEvent: async (raw) => {
+      assert.equal(raw, incoming.content.toString());
+      order.push("store");
     },
-  })(message(replyEvent));
-  assert.equal(forwarded, true);
+    forward: async () => {
+      assert.equal(calls.ack, 0);
+      order.push("forward");
+      return { outcome: "success", status: 200, attempts: 1 };
+    },
+  })(incoming);
+  assert.deepEqual(order, ["store", "forward"]);
   assert.equal(calls.ack, 1);
+  assert.equal(state.inFlight, 0);
   assert.equal(state.processed, 1);
 });
 
-test("out-of-order transient failures confirm a delayed retry and free the prerequisite queue", async () => {
-  const { channel, calls } = channelMock();
-  await createMessageHandler({
-    channel,
-    logger: silentLogger,
-    state: createWorkerState(),
-    forward: () =>
-      Promise.resolve({
+for (const status of [undefined, 429, 500, 503]) {
+  test(`durable retry for ${status} frees the prerequisite lane`, async () => {
+    const { incoming, calls, options } = setup();
+    await createMessageHandler({
+      ...options,
+      forward: async () => ({
         outcome: "permanent_failure",
-        status: 503,
-        reason: "dependency pending",
-        attempts: 3,
-      }),
-  })(message(replyEvent));
-  assert.equal(calls.retry, 1);
-  assert.equal(calls.publish, 0);
-  assert.equal(calls.confirmed, 1);
-  assert.equal(calls.ack, 1);
-});
-
-test("dependency retry exhaustion dead-letters without guessing a conversation", async () => {
-  const { channel, calls } = channelMock();
-  const incoming = message(replyEvent);
-  incoming.properties.headers = { "x-openbsp-retry": 5 };
-  await createMessageHandler({
-    channel,
-    logger: silentLogger,
-    state: createWorkerState(),
-    forward: () =>
-      Promise.resolve({
-        outcome: "permanent_failure",
-        status: 503,
-        reason: "dependency pending",
-        attempts: 3,
-      }),
-  })(incoming);
-  assert.equal(calls.retry, 0);
-  assert.equal(calls.publish, 1);
-  assert.equal(calls.confirmed, 1);
-  assert.equal(calls.ack, 1);
-});
-
-test("confirms dead-letter publication before acknowledging permanent failures", async () => {
-  const { channel, calls } = channelMock();
-  const state = createWorkerState();
-  await createMessageHandler({
-    channel,
-    logger: silentLogger,
-    state,
-    forward: () =>
-      Promise.resolve({
-        outcome: "permanent_failure",
-        status: 400,
-        reason: "bad request",
+        reason: "pending",
+        status,
         attempts: 1,
       }),
-  })(message(replyEvent));
-  assert.equal(calls.publish, 1);
-  assert.equal(calls.confirmed, 1);
-  assert.equal(calls.ack, 1);
-  assert.equal(state.deadLettered, 1);
-});
-
-test("dead-letters malformed messages without forwarding", async () => {
-  const { channel, calls } = channelMock();
-  let forwarded = false;
+    })(incoming);
+    assert.equal(
+      calls.published[0]!.queue,
+      "openbsp.chatbot.events.v1.messages.retry.1",
+    );
+    assert.equal(calls.published[0]!.content, incoming.content);
+    assert.equal(
+      (calls.published[0]!.properties?.headers as Record<string, unknown>)[
+        "x-openbsp-retry"
+      ],
+      1,
+    );
+    assert.equal(calls.ack, 1);
+  });
+}
+test("raw-store outages use bounded durable retry without forwarding", async () => {
+  const { incoming, calls, options } = setup();
   await createMessageHandler({
-    channel,
-    logger: silentLogger,
-    state: createWorkerState(),
-    forward: () => {
-      forwarded = true;
-      throw new Error("not expected");
+    ...options,
+    storeRawEvent: async () => {
+      throw new Error("offline");
     },
-  })(message("not-json"));
-  assert.equal(forwarded, false);
-  assert.equal(calls.publish, 1);
-  assert.equal(calls.ack, 1);
-});
-
-test("requeues an unexpected processing failure without acknowledging", async () => {
-  const { channel, calls } = channelMock();
-  await createMessageHandler({
-    channel,
-    logger: silentLogger,
-    state: createWorkerState(),
-    forward: () => Promise.reject(new Error("unexpected")),
-  })(message(replyEvent));
-  assert.equal(calls.ack, 0);
-  assert.equal(calls.nack, 1);
-});
-
-test("dead-letters an event type disabled for this worker instance", async () => {
-  const { channel, calls } = channelMock();
-  let forwarded = false;
-  await createMessageHandler({
-    channel,
-    logger: silentLogger,
-    state: createWorkerState(),
-    acceptedEventTypes: new Set(["whatsapp_webhook"]),
-    forward: () => {
-      forwarded = true;
-      return Promise.resolve({ outcome: "success", status: 200, attempts: 1 });
+    forward: async () => {
+      throw new Error("must not run");
     },
-  })(message(replyEvent));
-  assert.equal(forwarded, false);
-  assert.equal(calls.publish, 1);
+  })(incoming);
+  assert.equal(calls.published[0]!.queue.endsWith("messages.retry.1"), true);
   assert.equal(calls.ack, 1);
 });
-
-test("logs a safe summary of queued WhatsApp webhook contents", async () => {
-  const { channel } = channelMock();
-  const infoLogs: Array<{ message: string; fields?: LogFields }> = [];
-  const logger = {
-    ...silentLogger,
-    info(message: string, fields?: LogFields) {
-      infoLogs.push({ message, fields });
-    },
-  };
-  const event = {
-    ...webhookEvent,
-    payload: {
-      ...webhookEvent.payload,
-      raw_body: JSON.stringify({
-        object: "whatsapp_business_account",
-        entry: [{
-          changes: [{
-            value: {
-              metadata: { phone_number_id: "1064550806750058" },
-              messages: [{ id: "wamid.incoming-1", type: "text" }],
-            },
-          }, {
-            value: {
-              metadata: { phone_number_id: "1064550806750058" },
-              statuses: [{ id: "wamid.outgoing-1", status: "delivered" }],
-            },
-          }],
-        }],
+for (
+  const [body, status, retry] of [["not json", 400, 0], [replyEvent, 401, 0], [
+    replyEvent,
+    503,
+    5,
+  ]] as const
+) {
+  test(`invalid/permanent/exhausted event goes to DLQ (${status}/${retry})`, async () => {
+    const { incoming, calls, options } = setup(body, retry);
+    await createMessageHandler({
+      ...options,
+      forward: async () => ({
+        outcome: "permanent_failure",
+        status,
+        reason: "failure",
+        attempts: 1,
       }),
-    },
-  };
-
+    })(incoming);
+    assert.equal(calls.published[0]!.queue, defaultTopology.deadLetterQueue);
+    assert.equal(calls.published[0]!.content, incoming.content);
+    assert.equal(calls.ack, 1);
+  });
+}
+test("failed durable publication never acknowledges the original", async () => {
+  const { incoming, calls, options } = setup("invalid");
   await createMessageHandler({
-    channel,
-    logger,
-    state: createWorkerState(),
-    forward: () =>
-      Promise.resolve({ outcome: "success", status: 200, attempts: 1 }),
-  })(message(event));
-
-  assert.deepEqual(infoLogs, [{
-    message: "WhatsApp webhook event received from queue",
-    fields: {
-      event_id: webhookEvent.event_id,
-      integration_key: "psdf",
-      phone_number_ids: ["1064550806750058"],
-      messages_count: 1,
-      statuses_count: 1,
-      message_types: ["text"],
-      message_wamids: ["wamid.incoming-1"],
+    ...options,
+    publish: async () => {
+      throw new Error("broker lost");
     },
-  }]);
-  assert.equal(
-    JSON.stringify(infoLogs).includes("whatsapp_business_account"),
-    false,
-  );
-  assert.equal(JSON.stringify(infoLogs).includes("sha256="), false);
-});
-
-test("stores the untouched queue payload before parsing and forwarding", async () => {
-  const { channel, calls } = channelMock();
-  const rawPayload = `${JSON.stringify(replyEvent)}\n`;
-  const order: string[] = [];
-  let storedPayload = "";
-
-  await createMessageHandler({
-    channel,
-    logger: silentLogger,
-    state: createWorkerState(),
-    storeRawEvent: (payload) => {
-      order.push("stored");
-      storedPayload = payload;
-      return Promise.resolve();
-    },
-    forward: () => {
-      order.push("forwarded");
-      return Promise.resolve({ outcome: "success", status: 200, attempts: 1 });
-    },
-  })(message(rawPayload));
-
-  assert.equal(storedPayload, rawPayload);
-  assert.deepEqual(order, ["stored", "forwarded"]);
-  assert.equal(calls.ack, 1);
-});
-
-test("requeues without forwarding when raw Supabase storage fails", async () => {
-  const { channel, calls } = channelMock();
-  let forwarded = false;
-
-  await createMessageHandler({
-    channel,
-    logger: silentLogger,
-    state: createWorkerState(),
-    storeRawEvent: () => Promise.reject(new Error("database unavailable")),
-    forward: () => {
-      forwarded = true;
-      return Promise.resolve({ outcome: "success", status: 200, attempts: 1 });
-    },
-  })(message(replyEvent));
-
-  assert.equal(forwarded, false);
+  })(incoming);
   assert.equal(calls.ack, 0);
   assert.equal(calls.nack, 1);
+});
+test("ingress routes unchanged bytes only after confirmation", async () => {
+  const { incoming, calls, options } = setup();
+  await createIngressHandler({ ...options, topology: defaultTopology })(
+    incoming,
+  );
+  assert.equal(calls.published[0]!.queue, `${defaultTopology.queue}.messages`);
+  assert.equal(calls.published[0]!.content, incoming.content);
+  assert.equal(calls.ack, 1);
+});
+test("disabled event is retained in DLQ", async () => {
+  const { incoming, calls, options } = setup(replyEvent);
+  await createMessageHandler({
+    ...options,
+    acceptedEventTypes: new Set(["whatsapp_webhook"]),
+  })(incoming);
+  assert.equal(calls.published[0]!.queue, defaultTopology.deadLetterQueue);
+});
+test("metrics contain no body/signature/customer identifiers", async () => {
+  const { incoming, options } = setup(webhookEvent);
+  const logs: unknown[] = [];
+  await createMessageHandler({
+    ...options,
+    logger: {
+      ...silentLogger,
+      info: (_message, fields) => {
+        logs.push(fields);
+      },
+    },
+  })(incoming);
+  assert.equal(JSON.stringify(logs).includes("sha256="), false);
+  assert.equal(JSON.stringify(logs).includes("raw_body"), false);
+  assert.equal(JSON.stringify(logs).includes("923001234567"), false);
 });

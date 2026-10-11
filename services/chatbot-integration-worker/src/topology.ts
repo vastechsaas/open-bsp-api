@@ -1,4 +1,14 @@
 import type { ConfirmChannel } from "amqplib";
+import type { Lane } from "./routing.js";
+
+export const retryDelaysMs = [5_000, 15_000, 30_000, 60_000, 120_000];
+export const laneQueue = (topology: QueueTopology, lane: Lane) =>
+  `${topology.queue}.${lane}`;
+export const retryQueue = (
+  topology: QueueTopology,
+  lane: Lane,
+  attempt: number,
+) => `${laneQueue(topology, lane)}.retry.${attempt}`;
 
 export type QueueTopology = {
   exchange: string;
@@ -57,4 +67,22 @@ export async function assertTopology(
       "x-dead-letter-routing-key": topology.routingKey,
     },
   });
+  // Never alter the existing ingress/retry queue arguments in place.
+  for (const lane of ["messages", "statuses"] as const) {
+    const queue = laneQueue(topology, lane);
+    await channel.assertQueue(queue, {
+      durable: true,
+      arguments: { "x-single-active-consumer": true },
+    });
+    for (const [index, delay] of retryDelaysMs.entries()) {
+      await channel.assertQueue(retryQueue(topology, lane, index + 1), {
+        durable: true,
+        arguments: {
+          "x-message-ttl": delay,
+          "x-dead-letter-exchange": "",
+          "x-dead-letter-routing-key": queue,
+        },
+      });
+    }
+  }
 }

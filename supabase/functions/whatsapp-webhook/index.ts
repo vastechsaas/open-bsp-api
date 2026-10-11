@@ -32,6 +32,7 @@ import {
   contactAddressKey,
   prepareContactAddresses,
 } from "./contact_addresses.ts";
+import { processStatusOnly } from "./status_only.ts";
 
 const API_VERSION = "v24.0";
 const VERIFY_TOKEN = Deno.env.get("WHATSAPP_VERIFY_TOKEN");
@@ -535,7 +536,8 @@ async function processMessage(request: Request): Promise<Response> {
     ? z.record(z.string(), episodeSchema).parse(JSON.parse(nodeHeader))
     : undefined;
   let nodeOrganization: string | undefined;
-  if (nodeMessages) {
+  const statusOnly = request.headers.get("X-OpenBSP-Status-Only") === "1";
+  if (nodeMessages || statusOnly) {
     const authorization = request.headers.get("Authorization");
     if (!authorization?.startsWith("Bearer ")) {
       return new Response("Unauthorized episode context", { status: 401 });
@@ -556,6 +558,18 @@ async function processMessage(request: Request): Promise<Response> {
   // Collect all unique organization addresses and build lookup map
   const uniqueOrgAddresses = collectOrgAddresses(payload);
   const orgAddressMap = await buildOrgAddressMap(client, uniqueOrgAddresses);
+  if (statusOnly) {
+    return await processStatusOnly(
+      payload,
+      nodeOrganization!,
+      new Set(
+        Array.from(orgAddressMap.values()).filter((account) =>
+          account.organization_id === nodeOrganization
+        ).map((account) => account.address),
+      ),
+      client,
+    );
+  }
   const webhookReceivedAt = new Date().toISOString();
   const heartbeatAccountMap = new Map(
     Array.from(orgAddressMap.values()).map((account) => [

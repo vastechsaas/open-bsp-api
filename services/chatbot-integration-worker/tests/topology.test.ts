@@ -43,4 +43,12 @@ test("declares durable queues, dead lettering, single consumer and prefetch one"
   assert.ok(
     calls.some(([method, count]) => method === "prefetch" && count === 1),
   );
+  const queues = calls.filter(([method]) => method === "assertQueue");
+  assert.equal(queues.length, 15);
+  assert.ok(
+    queues.some(([, queue, options]) =>
+      queue === `${topology.queue}.statuses.retry.5` &&
+      JSON.stringify(options).includes("120000")
+    ),
+  );
 });

@@ -7,7 +7,10 @@ export const account = {
   openbsp_api_key: "openbsp-secret",
 };
 
-export const webhookEvent: IntegrationEvent = {
+export const webhookEvent: Extract<
+  IntegrationEvent,
+  { event_type: "whatsapp_webhook" }
+> = {
   version: 1,
   event_id: "00000000-0000-4000-8000-000000000001",
   event_type: "whatsapp_webhook",
@@ -21,7 +24,10 @@ export const webhookEvent: IntegrationEvent = {
   },
 };
 
-export const replyEvent: IntegrationEvent = {
+export const replyEvent: Extract<
+  IntegrationEvent,
+  { event_type: "chatbot_reply" }
+> = {
   version: 1,
   event_id: "11111111-1111-4111-8111-111111111111",
   event_type: "chatbot_reply",

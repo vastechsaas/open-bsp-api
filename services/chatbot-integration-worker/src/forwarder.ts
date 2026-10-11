@@ -1,5 +1,6 @@
 import type { AccountConfig, IntegrationEvent } from "./contracts.js";
 import type { Logger } from "./logger.js";
+import { eventLane } from "./routing.js";
 
 export type ForwardResult =
   | { outcome: "success"; status: number; attempts: number }
@@ -17,9 +18,9 @@ export type ForwarderOptions = {
   fetchImpl?: typeof fetch;
   sleep?: (milliseconds: number) => Promise<void>;
   timeoutMs?: number;
+  edgeRegion?: string;
+  signal?: AbortSignal;
 };
-
-const retryDelays = [1_000, 5_000];
 
 function resolveRequest(
   event: IntegrationEvent,
@@ -40,6 +41,12 @@ function resolveRequest(
           "Content-Type": "application/json",
           "X-Hub-Signature-256": event.payload.x_hub_signature_256,
           "X-OpenBSP-Event-ID": event.event_id,
+          ...(eventLane(event) === "statuses"
+            ? {
+              Authorization: `Bearer ${account.openbsp_api_key}`,
+              "X-OpenBSP-Status-Only": "1",
+            }
+            : {}),
           ...(event.payload.node_messages
             ? {
               Authorization: `Bearer ${account.openbsp_api_key}`,
@@ -83,10 +90,6 @@ function resolveRequest(
   };
 }
 
-function isRetriableStatus(status: number) {
-  return status === 429 || status >= 500;
-}
-
 function errorReason(error: unknown) {
   if (error instanceof DOMException && error.name === "TimeoutError") {
     return "request timeout";
@@ -96,9 +99,6 @@ function errorReason(error: unknown) {
 
 export function createForwarder(options: ForwarderOptions) {
   const fetchImpl = options.fetchImpl ?? fetch;
-  const sleep = options.sleep ??
-    ((milliseconds: number) =>
-      new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
   const timeoutMs = options.timeoutMs ?? 10_000;
 
   return async (event: IntegrationEvent): Promise<ForwardResult> => {
@@ -120,67 +120,57 @@ export function createForwarder(options: ForwarderOptions) {
       };
     }
 
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
-      const startedAt = Date.now();
-      try {
-        const response = await fetchImpl(request.url, {
-          ...request.init,
-          signal: AbortSignal.timeout(timeoutMs),
-        });
-        options.logger.info("Edge Function request completed", {
-          event_id: event.event_id,
-          event_type: event.event_type,
-          integration_key: event.integration_key,
-          attempt,
-          duration_ms: Date.now() - startedAt,
-          response_status: response.status,
-        });
+    // Retry scheduling belongs to durable RabbitMQ lanes, never this HTTP slot.
+    const attempt = 1;
+    const startedAt = Date.now();
+    try {
+      const response = await fetchImpl(request.url, {
+        ...request.init,
+        headers: {
+          ...request.init.headers,
+          ...(options.edgeRegion ? { "x-region": options.edgeRegion } : {}),
+        },
+        signal: options.signal
+          ? AbortSignal.any([options.signal, AbortSignal.timeout(timeoutMs)])
+          : AbortSignal.timeout(timeoutMs),
+      });
+      options.logger.info("Edge Function request completed", {
+        event_id: event.event_id,
+        event_type: event.event_type,
+        integration_key: event.integration_key,
+        attempt,
+        duration_ms: Date.now() - startedAt,
+        response_status: response.status,
+        edge_region: response.headers.get("x-sb-edge-region"),
+      });
 
-        if (response.ok) {
-          return {
-            outcome: "success",
-            status: response.status,
-            attempts: attempt,
-          };
-        }
-        if (!isRetriableStatus(response.status)) {
-          return {
-            outcome: "permanent_failure",
-            status: response.status,
-            reason: `Edge Function returned HTTP ${response.status}`,
-            attempts: attempt,
-          };
-        }
-
-        if (attempt === 3) {
-          return {
-            outcome: "permanent_failure",
-            status: response.status,
-            reason: "transient Edge Function failure exhausted retries",
-            attempts: attempt,
-          };
-        }
-      } catch (error) {
-        options.logger.warn("Edge Function request failed", {
-          event_id: event.event_id,
-          event_type: event.event_type,
-          integration_key: event.integration_key,
-          attempt,
-          duration_ms: Date.now() - startedAt,
-          error: errorReason(error),
-        });
-        if (attempt === 3) {
-          return {
-            outcome: "permanent_failure",
-            reason: "network failure exhausted retries",
-            attempts: attempt,
-          };
-        }
+      if (response.ok) {
+        return {
+          outcome: "success",
+          status: response.status,
+          attempts: attempt,
+        };
       }
-
-      await sleep(retryDelays[attempt - 1] ?? retryDelays.at(-1)!);
+      return {
+        outcome: "permanent_failure",
+        status: response.status,
+        reason: `Edge Function returned HTTP ${response.status}`,
+        attempts: attempt,
+      };
+    } catch (error) {
+      options.logger.warn("Edge Function request failed", {
+        event_id: event.event_id,
+        event_type: event.event_type,
+        integration_key: event.integration_key,
+        attempt,
+        duration_ms: Date.now() - startedAt,
+        error: errorReason(error),
+      });
+      return {
+        outcome: "permanent_failure",
+        reason: "network request failed; durable retry required",
+        attempts: attempt,
+      };
     }
-
-    throw new Error("unreachable retry state");
   };
 }

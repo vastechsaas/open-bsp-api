@@ -4,117 +4,59 @@ import type { ForwardResult } from "./forwarder.js";
 import type { Logger } from "./logger.js";
 import type { StoreRawEvent } from "./raw-event-store.js";
 import type { WorkerState } from "./state.js";
-import { defaultTopology, type QueueTopology } from "./topology.js";
+import {
+  defaultTopology,
+  laneQueue,
+  type QueueTopology,
+  retryDelaysMs,
+  retryQueue,
+} from "./topology.js";
+import {
+  createConfirmedPublisher,
+  type PublishConfirmed,
+} from "./publisher.js";
+import { eventLane, type Lane } from "./routing.js";
 
 export type ForwardEvent = (event: IntegrationEvent) => Promise<ForwardResult>;
-
-type WebhookSummary = {
-  phone_number_ids: string[];
-  messages_count: number;
-  statuses_count: number;
-  message_types: string[];
-  message_wamids: string[];
-};
-
-export function summarizeWhatsAppWebhook(rawBody: string): WebhookSummary {
-  const summary: WebhookSummary = {
-    phone_number_ids: [],
-    messages_count: 0,
-    statuses_count: 0,
-    message_types: [],
-    message_wamids: [],
-  };
-
-  const body = JSON.parse(rawBody) as {
-    entry?: Array<{
-      changes?: Array<{
-        value?: {
-          metadata?: { phone_number_id?: unknown };
-          messages?: Array<{ id?: unknown; type?: unknown }>;
-          statuses?: unknown[];
-        };
-      }>;
-    }>;
-  };
-
-  for (const entry of body.entry ?? []) {
-    for (const change of entry.changes ?? []) {
-      const value = change.value;
-      if (!value) continue;
-
-      if (typeof value.metadata?.phone_number_id === "string") {
-        summary.phone_number_ids.push(value.metadata.phone_number_id);
-      }
-
-      const messages = Array.isArray(value.messages) ? value.messages : [];
-      const statuses = Array.isArray(value.statuses) ? value.statuses : [];
-      summary.messages_count += messages.length;
-      summary.statuses_count += statuses.length;
-
-      for (const message of messages) {
-        if (typeof message.type === "string") {
-          summary.message_types.push(message.type);
-        }
-        if (typeof message.id === "string") {
-          summary.message_wamids.push(message.id);
-        }
-      }
-    }
-  }
-
-  summary.phone_number_ids = [...new Set(summary.phone_number_ids)];
-  summary.message_types = [...new Set(summary.message_types)];
-  summary.message_wamids = [...new Set(summary.message_wamids)];
-  return summary;
-}
-
-function failureRecord(
-  message: ConsumeMessage,
-  reason: string,
-  status?: number,
-) {
-  let original: unknown;
+export function parseEvent(message: ConsumeMessage) {
   try {
-    original = JSON.parse(message.content.toString("utf8")) as unknown;
+    return integrationEventSchema.safeParse(
+      JSON.parse(message.content.toString("utf8")),
+    );
   } catch {
-    original = { encoded_message: message.content.toString("base64") };
+    return undefined;
   }
-  return Buffer.from(JSON.stringify({
-    event: original,
-    failure: {
-      reason,
-      status,
-      failed_at: new Date().toISOString(),
-    },
-  }));
 }
 
-async function deadLetter(
-  channel: ConfirmChannel,
-  message: ConsumeMessage,
-  reason: string,
-  topology: QueueTopology,
-  status?: number,
+export function createIngressHandler(
+  { channel, publish, topology, state, logger }: {
+    channel: ConfirmChannel;
+    publish: PublishConfirmed;
+    topology: QueueTopology;
+    state: WorkerState;
+    logger: Logger;
+  },
 ) {
-  channel.publish(
-    topology.deadLetterExchange,
-    topology.deadLetterRoutingKey,
-    failureRecord(message, reason, status),
-    {
-      persistent: true,
-      contentType: "application/json",
-      messageId: typeof message.properties.messageId === "string"
-        ? message.properties.messageId
-        : undefined,
-      timestamp: Date.now(),
-      headers: {
-        failure_reason: reason,
-        ...(status === undefined ? {} : { failure_status: status }),
-      },
-    },
-  );
-  await channel.waitForConfirms();
-  channel.ack(message);
+  return async (message: ConsumeMessage | null) => {
+    if (!message) return;
+    state.inFlight++;
+    try {
+      const parsed = parseEvent(message);
+      const lane = parsed?.success ? eventLane(parsed.data) : "messages";
+      await publish(
+        laneQueue(topology, lane),
+        message.content,
+        message.properties,
+      );
+      channel.ack(message);
+      state.routed++;
+    } catch {
+      logger.error("Ingress durable routing failed");
+      channel.nack(message, false, true);
+    } finally {
+      state.inFlight--;
+    }
+  };
 }
 
 export function createMessageHandler({
@@ -128,6 +70,8 @@ export function createMessageHandler({
     "chatbot_reply",
   ]),
   storeRawEvent = () => Promise.resolve(),
+  publish = createConfirmedPublisher(channel),
+  lane = "messages",
 }: {
   channel: ConfirmChannel;
   forward: ForwardEvent;
@@ -136,125 +80,126 @@ export function createMessageHandler({
   topology?: QueueTopology;
   acceptedEventTypes?: ReadonlySet<IntegrationEvent["event_type"]>;
   storeRawEvent?: StoreRawEvent;
+  publish?: PublishConfirmed;
+  lane?: Lane;
 }) {
-  return async (message: ConsumeMessage | null) => {
+  return async (message: ConsumeMessage | null, receivedAt = Date.now()) => {
     if (!message) return;
-    state.inFlight = true;
-    try {
-      const rawPayload = message.content.toString("utf8");
-      await storeRawEvent(rawPayload);
-
-      let input: unknown;
-      try {
-        input = JSON.parse(rawPayload);
-      } catch {
-        await deadLetter(
-          channel,
-          message,
-          "message is not valid JSON",
-          topology,
+    state.inFlight++;
+    const started = Date.now();
+    const parsed = parseEvent(message);
+    const event = parsed?.success ? parsed.data : undefined;
+    const suppliedRetry: unknown = message.properties.headers
+      ?.["x-openbsp-retry"];
+    const retries =
+      typeof suppliedRetry === "number" && Number.isInteger(suppliedRetry) &&
+        suppliedRetry >= 0 && suppliedRetry <= 5
+        ? suppliedRetry
+        : suppliedRetry === undefined
+        ? 0
+        : 5;
+    let rawStoreMs = 0;
+    const fields = {
+      event_id: event?.event_id,
+      event_type: event?.event_type,
+      lane,
+      retry_count: retries,
+    };
+    const settleFailure = async (
+      reason: string,
+      retryable: boolean,
+      status?: number,
+    ) => {
+      if (retryable && retries < retryDelaysMs.length) {
+        await publish(
+          retryQueue(topology, lane, retries + 1),
+          message.content,
+          {
+            ...message.properties,
+            headers: {
+              ...message.properties.headers,
+              "x-openbsp-retry": retries + 1,
+            },
+          },
         );
-        state.deadLettered += 1;
-        state.lastFailureAt = new Date().toISOString();
-        return;
-      }
-
-      const parsed = integrationEventSchema.safeParse(input);
-      if (!parsed.success) {
-        await deadLetter(
-          channel,
-          message,
-          "event contract validation failed",
-          topology,
-        );
-        state.deadLettered += 1;
-        state.lastFailureAt = new Date().toISOString();
+        state.retried++;
+        logger.warn("Event scheduled for durable retry", {
+          ...fields,
+          reason,
+          response_status: status,
+          retry_delay_ms: retryDelaysMs[retries],
+        });
+      } else {
+        await publish(topology.deadLetterQueue, message.content, {
+          ...message.properties,
+          headers: {
+            ...message.properties.headers,
+            failure_reason: reason,
+            ...(status === undefined ? {} : { failure_status: status }),
+          },
+        });
+        state.deadLettered++;
         logger.warn("Event sent to dead-letter queue", {
-          event_id: typeof input === "object" && input && "event_id" in input
-            ? input.event_id
-            : undefined,
-          reason: "event contract validation failed",
-        });
-        return;
-      }
-
-      if (!acceptedEventTypes.has(parsed.data.event_type)) {
-        await deadLetter(
-          channel,
-          message,
-          "event type is not enabled for this worker instance",
-          topology,
-        );
-        state.deadLettered += 1;
-        state.lastFailureAt = new Date().toISOString();
-        return;
-      }
-
-      if (parsed.data.event_type === "whatsapp_webhook") {
-        logger.info("WhatsApp webhook event received from queue", {
-          event_id: parsed.data.event_id,
-          integration_key: parsed.data.integration_key,
-          ...summarizeWhatsAppWebhook(parsed.data.payload.raw_body),
+          ...fields,
+          reason,
+          response_status: status,
         });
       }
-
-      const result = await forward(parsed.data);
+      state.lastFailureAt = new Date().toISOString();
+      channel.ack(message);
+    };
+    try {
+      try {
+        const rawStarted = Date.now();
+        await storeRawEvent(message.content.toString("utf8"));
+        rawStoreMs = Date.now() - rawStarted;
+      } catch {
+        await settleFailure("raw-event storage unavailable", true);
+        return;
+      }
+      if (!event || !acceptedEventTypes.has(event.event_type)) {
+        await settleFailure("event contract invalid or type disabled", false);
+        return;
+      }
+      let result: ForwardResult;
+      try {
+        result = await forward(event);
+      } catch {
+        result = {
+          outcome: "permanent_failure",
+          reason: "unexpected forwarding failure",
+          attempts: 1,
+        };
+      }
       if (result.outcome === "success") {
         channel.ack(message);
-        state.processed += 1;
+        state.processed++;
         state.lastSuccessAt = new Date().toISOString();
         return;
       }
-
-      // Release the main queue so the prerequisite customer/close event can
-      // arrive. Confirm a durable delayed retry before acknowledging this copy.
-      const retries = Number(
-        message.properties.headers?.["x-openbsp-retry"] ?? 0,
-      );
-      if (
-        (result.status === 429 || (result.status ?? 0) >= 500 ||
-          result.status === undefined) && retries < 5
-      ) {
-        channel.sendToQueue(`${topology.queue}.retry`, message.content, {
-          persistent: true,
-          contentType: "application/json",
-          ...(typeof message.properties.messageId === "string"
-            ? { messageId: message.properties.messageId }
-            : {}),
-          headers: {
-            ...message.properties.headers,
-            "x-openbsp-retry": retries + 1,
-          },
-        });
-        await channel.waitForConfirms();
-        channel.ack(message);
-        return;
-      }
-
-      await deadLetter(
-        channel,
-        message,
+      await settleFailure(
         result.reason,
-        topology,
+        result.status === undefined || result.status === 429 ||
+          result.status >= 500,
         result.status,
       );
-      state.deadLettered += 1;
-      state.lastFailureAt = new Date().toISOString();
-      logger.warn("Event sent to dead-letter queue", {
-        event_id: parsed.data.event_id,
-        event_type: parsed.data.event_type,
-        integration_key: parsed.data.integration_key,
-        attempts: result.attempts,
-        response_status: result.status,
-        reason: result.reason,
-      });
-    } catch (error) {
-      logger.error("Unexpected worker processing failure", {
-        error: error instanceof Error ? error.name : "unknown error",
-      });
+    } catch {
+      logger.error("Durable event settlement failed", fields);
       channel.nack(message, false, true);
     } finally {
-      state.inFlight = false;
+      logger.info("Integration event processing completed", {
+        ...fields,
+        scheduling_wait_ms: started - receivedAt,
+        raw_store_ms: rawStoreMs,
+        event_age_at_receipt_ms: event
+          ? Math.max(0, receivedAt - Date.parse(event.occurred_at))
+          : undefined,
+        total_event_age_ms: event
+          ? Math.max(0, Date.now() - Date.parse(event.occurred_at))
+          : undefined,
+        processing_ms: Date.now() - started,
+      });
+      state.inFlight--;
     }
   };
 }

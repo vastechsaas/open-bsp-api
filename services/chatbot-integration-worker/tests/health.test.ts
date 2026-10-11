@@ -12,6 +12,8 @@ test("health stays alive while readiness follows the RabbitMQ consumer", async (
   assert.equal((await fetch(`http://127.0.0.1:${port}/readyz`)).status, 503);
   state.connected = true;
   state.consuming = true;
+  state.lanes.messages.consuming = true;
+  state.lanes.statuses.consuming = true;
   assert.equal((await fetch(`http://127.0.0.1:${port}/readyz`)).status, 200);
   state.shuttingDown = true;
   assert.equal((await fetch(`http://127.0.0.1:${port}/readyz`)).status, 503);

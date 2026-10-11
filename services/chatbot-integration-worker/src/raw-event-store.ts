@@ -7,11 +7,13 @@ export function createRawEventStore({
   serviceRoleKey,
   queueName,
   fetchImpl = fetch,
+  signal,
 }: {
   supabaseUrl: string;
   serviceRoleKey: string;
   queueName: string;
   fetchImpl?: typeof fetch;
+  signal?: AbortSignal;
 }): StoreRawEvent {
   const endpoint = new URL(
     "/rest/v1/chatbot_integration_raw_events?on_conflict=payload_sha256",
@@ -23,6 +25,9 @@ export function createRawEventStore({
       .digest("hex");
     const response = await fetchImpl(endpoint, {
       method: "POST",
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(10_000)])
+        : AbortSignal.timeout(10_000),
       headers: {
         apikey: serviceRoleKey,
         authorization: `Bearer ${serviceRoleKey}`,

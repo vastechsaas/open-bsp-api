@@ -1,4 +1,3 @@
-import { once } from "node:events";
 import { type ChannelModel, type ConfirmChannel, connect } from "amqplib";
 import { loadConfig } from "./config.js";
 import { createForwarder } from "./forwarder.js";
@@ -6,123 +5,182 @@ import { startHealthServer } from "./health.js";
 import { createLogger } from "./logger.js";
 import { createRawEventStore } from "./raw-event-store.js";
 import { createWorkerState } from "./state.js";
-import { assertTopology } from "./topology.js";
-import { createMessageHandler } from "./worker.js";
-
-const reconnectDelayMs = 5_000;
-
-async function closeSession(
-  connection: ChannelModel | undefined,
-  channel: ConfirmChannel | undefined,
-  consumerTag: string | undefined,
-) {
-  if (channel && consumerTag) {
-    await channel.cancel(consumerTag).catch(() => undefined);
-  }
-  if (channel) await channel.close().catch(() => undefined);
-  if (connection) await connection.close().catch(() => undefined);
-}
-
-async function waitForInFlight(state: { inFlight: boolean }) {
-  const deadline = Date.now() + 15_000;
-  while (state.inFlight && Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-}
+import { assertTopology, laneQueue } from "./topology.js";
+import {
+  createIngressHandler,
+  createMessageHandler,
+  parseEvent,
+} from "./worker.js";
+import { createConfirmedPublisher } from "./publisher.js";
+import { eventReservation } from "./routing.js";
+import { Scheduler } from "./scheduler.js";
 
 async function main() {
   const config = loadConfig();
   const logger = createLogger(config.logLevel);
   const state = createWorkerState();
-  const storeRawEvent = createRawEventStore({
-    supabaseUrl: config.supabaseUrl,
-    serviceRoleKey: config.supabaseServiceRoleKey,
-    queueName: config.topology.queue,
-  });
-  const healthServer = await startHealthServer(state, config.port);
-  const forward = createForwarder({
-    functionsBaseUrl: config.functionsBaseUrl,
-    accounts: config.accounts,
-    logger,
-  });
-  let connection: ChannelModel | undefined;
-  let channel: ConfirmChannel | undefined;
-  let consumerTag: string | undefined;
-
-  const shutdown = async (signal: string) => {
-    if (state.shuttingDown) return;
+  const health = await startHealthServer(state, config.port);
+  let disconnect = () => {};
+  const shutdown = () => {
     state.shuttingDown = true;
     state.consuming = false;
-    logger.info("Worker shutting down", { signal });
-    if (channel && consumerTag) {
-      await channel.cancel(consumerTag).catch(() => undefined);
-      consumerTag = undefined;
-    }
-    await waitForInFlight(state);
-    await closeSession(connection, channel, undefined);
-    await new Promise<void>((resolve) => healthServer.close(() => resolve()));
+    disconnect();
   };
-
-  process.once("SIGTERM", () => void shutdown("SIGTERM"));
-  process.once("SIGINT", () => void shutdown("SIGINT"));
-
+  process.once("SIGTERM", shutdown);
+  process.once("SIGINT", shutdown);
   while (!state.shuttingDown) {
+    let connection: ChannelModel | undefined;
+    const channels: ConfirmChannel[] = [];
+    const consumers: Array<{ channel: ConfirmChannel; tag: string }> = [];
+    const schedulers = new Set<Scheduler>();
+    const abort = new AbortController();
+    let endSession = () => {};
     try {
-      connection = await connect(config.cloudAmqpUrl);
-      channel = await connection.createConfirmChannel();
-      await assertTopology(channel, config.topology);
-      const handleMessage = createMessageHandler({
-        channel,
-        forward,
+      const ended = new Promise<void>((resolve) => {
+        endSession = resolve;
+        disconnect = resolve;
+      });
+      connection = await connect(config.cloudAmqpUrl, {
+        timeout: 10_000,
+        heartbeat: 15,
+      });
+      connection.on("error", () => endSession());
+      connection.on("close", () => endSession());
+      const createChannel = async () => {
+        const channel = await connection!.createConfirmChannel();
+        channels.push(channel);
+        channel.on("error", () => endSession());
+        channel.on("close", () => endSession());
+        return channel;
+      };
+      const ingress = await createChannel();
+      const publishing = await createChannel();
+      const publish = createConfirmedPublisher(publishing);
+      await assertTopology(ingress, config.topology);
+      // Publication is synchronous up to sendToQueue, preserving ingress order;
+      // confirms may be pipelined without serializing a broker network RTT.
+      await ingress.prefetch(32);
+      const forward = createForwarder({
+        functionsBaseUrl: config.functionsBaseUrl,
+        accounts: config.accounts,
+        logger,
+        edgeRegion: config.edgeRegion,
+        signal: abort.signal,
+      });
+      const storeRawEvent = createRawEventStore({
+        supabaseUrl: config.supabaseUrl,
+        serviceRoleKey: config.supabaseServiceRoleKey,
+        queueName: config.topology.queue,
+        signal: abort.signal,
+      });
+      const serial = config.mode === "serial" ? new Scheduler(1) : undefined;
+      if (serial) schedulers.add(serial);
+      for (const lane of ["messages", "statuses"] as const) {
+        const channel = await createChannel();
+        const limit = lane === "messages"
+          ? config.messageConcurrency
+          : config.statusConcurrency;
+        await channel.prefetch(config.mode === "serial" ? 1 : limit * 4);
+        const scheduler = serial ?? new Scheduler(limit);
+        schedulers.add(scheduler);
+        const handle = createMessageHandler({
+          channel,
+          forward,
+          storeRawEvent,
+          publish,
+          logger,
+          state,
+          topology: config.topology,
+          acceptedEventTypes: config.acceptedEventTypes,
+          lane,
+        });
+        const consumer = await channel.consume(
+          laneQueue(config.topology, lane),
+          (message) => {
+            if (!message) {
+              endSession();
+              return;
+            }
+            const received = Date.now();
+            const parsed = parseEvent(message);
+            const reservation = config.mode === "serial"
+              ? { integration: "*", keys: [] }
+              : parsed?.success
+              ? eventReservation(parsed.data)
+              : { integration: "*", keys: [] };
+            let started = false;
+            state.lanes[lane].pending++;
+            void scheduler.enqueue(reservation, async () => {
+              started = true;
+              state.lanes[lane].pending--;
+              state.lanes[lane].active++;
+              try {
+                await handle(message, received);
+              } finally {
+                state.lanes[lane].active--;
+              }
+            }).catch(() => undefined).finally(() => {
+              if (!started) state.lanes[lane].pending--;
+            });
+          },
+          { noAck: false },
+        );
+        consumers.push({ channel, tag: consumer.consumerTag });
+        state.lanes[lane].consuming = true;
+      }
+      const route = createIngressHandler({
+        channel: ingress,
+        publish,
+        topology: config.topology,
         logger,
         state,
-        topology: config.topology,
-        acceptedEventTypes: config.acceptedEventTypes,
-        storeRawEvent,
       });
-      const consumer = await channel.consume(
-        config.topology.queue,
-        (message) => {
-          void handleMessage(message);
-        },
-        { noAck: false },
-      );
-      consumerTag = consumer.consumerTag;
+      const source = await ingress.consume(config.topology.queue, (message) => {
+        if (!message) {
+          endSession();
+          return;
+        }
+        void route(message).catch(() => endSession());
+      }, { noAck: false });
+      consumers.push({ channel: ingress, tag: source.consumerTag });
       state.connected = true;
       state.consuming = true;
-      logger.info("CloudAMQP consumer ready", {
-        queue: config.topology.queue,
-        prefetch: 1,
+      logger.info("CloudAMQP lane consumers ready", {
+        mode: config.mode,
+        message_concurrency: config.messageConcurrency,
+        status_concurrency: config.statusConcurrency,
+        edge_region: config.edgeRegion,
       });
-      await Promise.race([
-        once(connection, "close"),
-        once(connection, "error"),
-      ]);
-    } catch (error) {
-      logger.error("CloudAMQP session failed", {
-        error: error instanceof Error ? error.name : "unknown error",
-      });
+      await ended;
+    } catch {
+      logger.error("CloudAMQP session failed");
     } finally {
       state.connected = false;
       state.consuming = false;
-      consumerTag = undefined;
-      await closeSession(connection, channel, undefined);
-      connection = undefined;
-      channel = undefined;
-    }
-
-    if (!state.shuttingDown) {
-      await new Promise((resolve) => setTimeout(resolve, reconnectDelayMs));
+      for (const lane of Object.values(state.lanes)) lane.consuming = false;
+      await Promise.all(
+        consumers.map(({ channel, tag }) =>
+          channel.cancel(tag).catch(() => undefined)
+        ),
+      );
+      for (const scheduler of schedulers) scheduler.stop();
+      const deadline = Date.now() + 45_000;
+      while (state.inFlight && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      abort.abort();
+      await Promise.all(
+        channels.map((channel) => channel.close().catch(() => undefined)),
+      );
+      await connection?.close().catch(() => undefined);
+      if (!state.shuttingDown) {
+        await new Promise((resolve) => setTimeout(resolve, 5_000));
+      }
     }
   }
+  await new Promise<void>((resolve) => health.close(() => resolve()));
 }
-
-main().catch((error: unknown) => {
-  console.error(JSON.stringify({
-    timestamp: new Date().toISOString(),
-    level: "error",
-    message: "Worker failed to start",
-    error: error instanceof Error ? error.name : "unknown error",
-  }));
+main().catch(() => {
+  console.error("Worker startup failed");
   process.exitCode = 1;
 });

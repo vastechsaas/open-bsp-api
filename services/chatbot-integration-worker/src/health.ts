@@ -12,7 +12,8 @@ export function startHealthServer(
       return;
     }
     if (request.url === "/readyz") {
-      const ready = state.connected && state.consuming && !state.shuttingDown;
+      const ready = state.connected && state.consuming && !state.shuttingDown &&
+        Object.values(state.lanes).every((lane) => lane.consuming);
       response.writeHead(ready ? 200 : 503, {
         "Content-Type": "application/json",
       });
@@ -21,6 +22,9 @@ export function startHealthServer(
         connected: state.connected,
         consuming: state.consuming,
         in_flight: state.inFlight,
+        lanes: state.lanes,
+        routed: state.routed,
+        retried: state.retried,
         processed: state.processed,
         dead_lettered: state.deadLettered,
         last_success_at: state.lastSuccessAt,

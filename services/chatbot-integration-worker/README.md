@@ -66,10 +66,22 @@ RABBITMQ_DLQ_ROUTING_KEY=chatbot.event.dlq.v1
 WORKER_EVENT_TYPES=whatsapp_webhook,chatbot_reply,chatbot_handoff
 ```
 
-Keep all three event types on the default queue for V1. A future deployment can
-run separate worker instances with different queue/routing-key values and one
-event type each, but only after an ordering safeguard prevents replies from
-overtaking their customer messages.
+The ingress remains single-active-consumer and routes original bytes through
+confirmed publications into durable `.messages` and `.statuses` queues. Only
+strictly status-only sent/delivered/read webhooks use the status lane. Mixed and
+unknown webhooks stay in the message lane. No signed Meta body is rewritten.
+
+```text
+WORKER_MESSAGE_CONCURRENCY=4
+WORKER_STATUS_CONCURRENCY=2
+WORKER_MODE=parallel
+OPENBSP_EDGE_REGION=ap-northeast-1
+```
+
+Set the region only for the intended project (Main is Tokyo); omit it to retain
+automatic routing. Each customer is serialized within a lane. Multi-customer
+batches reserve all their keys atomically; unfamiliar events use a tenant
+barrier. No new producer contract or database migration is required.
 
 Publish a reviewed fixture:
 
@@ -95,16 +107,38 @@ payload independently of RabbitMQ and the worker.
 ## Operations
 
 - `GET /healthz` proves the process is alive.
-- `GET /readyz` returns 200 only while RabbitMQ consumption is active.
-- Delivery is one event at a time. Network errors, HTTP 429 and HTTP 5xx retry
-  twice after 1 and 5 seconds. Other failures move to the DLQ.
+- `GET /readyz` requires ingress and both lane consumers. It includes per-lane
+  active/pending counts and global in-flight/retry totals.
+- HTTP and raw storage have ten-second timeouts. Network errors, HTTP 429 and
+  HTTP 5xx retry durably after 5, 15, 30, 60 and 120 seconds, then move to the
+  DLQ. There are no sleeping HTTP retries holding a processing slot.
 - A message is acknowledged only after Edge Function success or confirmed DLQ
   publication.
-- On `SIGTERM`/`SIGINT`, the worker stops accepting new deliveries and closes
-  its RabbitMQ and HTTP resources.
+- On `SIGTERM`/`SIGINT`, consumption stops, unstarted reservations remain
+  unacknowledged, and active tasks drain for up to 45 seconds. Configure Docker
+  `stop_grace_period: 55s`; unfinished work is redelivered with its stable ID.
 - Logs contain correlation metadata only. Payloads, signatures and credentials
   are redacted.
 
-For DLQ recovery, correct the payload or configuration, republish the original
-`event` with the same `event_id` and WAMID to the main exchange, then remove the
-DLQ record.
+New DLQ records retain the original envelope bytes; failure details are AMQP
+headers. Legacy records may wrap them under `event`. Republish the original with
+the same event ID and WAMID after fixing the cause; never blindly replay
+customer events. Raw-event persistence is idempotent by payload hash.
+
+## Main rollout / rollback
+
+Use an isolated integration/number and unique ingress/routing/DLQ names for the
+canary. Deploy the compatible `whatsapp-webhook` handler before the new worker:
+authenticated `X-OpenBSP-Status-Only: 1` requests UPDATE existing messages only,
+and retry when the original is absent. Existing callers are unchanged.
+
+Back up the environment/Compose files with restrictive permissions and retain
+the old image. Do not overlap old and new live workers: a legacy consumer can
+otherwise receive ingress events ahead of the router. Stop the old worker, then
+start the new one against the same ingress. Never purge queues.
+
+Rollback uses this image with `WORKER_MODE=serial`, which drains ingress, both
+lanes and their retries with one global processing slot. Per-lane retry queues
+must be empty before restoring an older image that cannot consume these lanes.
+Keep the compatible handler while draining. A rollback does not modify
+histories, ownership, Node configuration or Meta webhooks.
