@@ -52,11 +52,12 @@ feature is disabled by default.
    schema-source function ACLs were reapplied because the diff omitted them.
 2. Deploy the compatible integration worker contract and Node API/worker.
 3. Deploy the UI.
-4. Only after all components are compatible, add `"support_messages":"settings"`
-   to the enrolled company entry in `OPENBSP_TENANT_ROUTES`. Preserve its
-   existing integration key and app ID. This requires the existing
-   explicit-takeover/lifecycle tenant configuration and AMQP publishing. Do not
-   enable the route on an old queue handler.
+4. Drain existing legacy handoff acknowledgments for the test tenant before
+   enrollment; never rewrite already queued events. After all components are
+   compatible, add `"support_messages":"settings"` to the enrolled company entry
+   in `OPENBSP_TENANT_ROUTES`. Preserve its existing integration key and app ID.
+   This requires the existing explicit-takeover/lifecycle tenant configuration
+   and AMQP publishing. Do not enable the route on an old queue handler.
 5. Verify a disposable tenant: default, existing override, outside hours,
    open/no agent, repeat request, duplicate delivery and takeover. Confirm one
    customer message per request in WhatsApp and Chat Center.
