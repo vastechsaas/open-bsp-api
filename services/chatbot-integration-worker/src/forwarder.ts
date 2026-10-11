@@ -1,6 +1,7 @@
 import type { AccountConfig, IntegrationEvent } from "./contracts.js";
 import type { Logger } from "./logger.js";
 import { eventLane } from "./routing.js";
+import { createHash } from "node:crypto";
 
 export type ForwardResult =
   | { outcome: "success"; status: number; attempts: number }
@@ -100,6 +101,7 @@ function errorReason(error: unknown) {
 export function createForwarder(options: ForwarderOptions) {
   const fetchImpl = options.fetchImpl ?? fetch;
   const timeoutMs = options.timeoutMs ?? 10_000;
+  const confirmedStatuses = new Map<string, number>();
 
   return async (event: IntegrationEvent): Promise<ForwardResult> => {
     const account = options.accounts[event.integration_key];
@@ -118,6 +120,28 @@ export function createForwarder(options: ForwarderOptions) {
         reason: request.error,
         attempts: 0,
       };
+    }
+
+    // Supplemental duplicate suppression only after a successful authenticated,
+    // signature-verified UPDATE. Raw envelopes are still durably stored. Exact
+    // payload/signature/tenant/credential equality is required; no answer or
+    // mutable ownership event is cached. Restart/expiry uses the normal guard.
+    const statusKey = event.event_type === "whatsapp_webhook" &&
+        eventLane(event) === "statuses"
+      ? createHash("sha256").update(JSON.stringify([
+        event.integration_key,
+        account,
+        event.payload,
+      ])).digest("hex")
+      : undefined;
+    if (statusKey && (confirmedStatuses.get(statusKey) ?? 0) > Date.now()) {
+      options.logger.info("Confirmed duplicate status acknowledged", {
+        event_id: event.event_id,
+        event_type: event.event_type,
+        integration_key: event.integration_key,
+        response_status: 200,
+      });
+      return { outcome: "success", status: 200, attempts: 0 };
     }
 
     // Retry scheduling belongs to durable RabbitMQ lanes, never this HTTP slot.
@@ -145,6 +169,13 @@ export function createForwarder(options: ForwarderOptions) {
       });
 
       if (response.ok) {
+        if (statusKey) {
+          confirmedStatuses.delete(statusKey);
+          confirmedStatuses.set(statusKey, Date.now() + 60_000);
+          if (confirmedStatuses.size > 4096) {
+            confirmedStatuses.delete(confirmedStatuses.keys().next().value!);
+          }
+        }
         return {
           outcome: "success",
           status: response.status,

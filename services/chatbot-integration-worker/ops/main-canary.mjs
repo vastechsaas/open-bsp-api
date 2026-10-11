@@ -304,6 +304,40 @@ if (mode === "bootstrap") {
     } finally {
       await connection.close();
     }
+  } else if (mode === "replay") {
+    // Repeat only already persisted synthetic envelopes to test shutdown and
+    // redelivery. No new event IDs, messages, or customer actions are created.
+    const rows = await api(
+      `chatbot_integration_raw_events?queue_name=eq.${ctx.queue}&select=raw_payload&limit=40`,
+    );
+    if (rows.length !== 40) {
+      throw new Error("Completed canary required for replay");
+    }
+    const connection = await amqp.connect(env.CLOUDAMQP_URL);
+    try {
+      const channel = await connection.createConfirmChannel();
+      let returned = false;
+      channel.on("return", () => {
+        returned = true;
+      });
+      const started = new Date().toISOString();
+      const ids = rows.map((row) => {
+        const event = JSON.parse(row.raw_payload);
+        channel.publish(
+          env.RABBITMQ_EXCHANGE || "openbsp.integration",
+          ctx.queue,
+          Buffer.from(row.raw_payload),
+          { persistent: true, mandatory: true, messageId: event.event_id },
+        );
+        return event.event_id;
+      });
+      await channel.waitForConfirms();
+      if (returned) throw new Error("Replay publication returned");
+      save("replay.json", { started, ids });
+      console.log(JSON.stringify({ replayed_existing_events: ids.length }));
+    } finally {
+      await connection.close();
+    }
   } else if (mode === "verify") {
     const samples = JSON.parse(
       readFileSync(`${directory}/samples.json`, "utf8"),
@@ -353,7 +387,10 @@ if (mode === "bootstrap") {
       });
     const completions = events.map((event) => {
       const success = logs.find((line) =>
-        line.message === "Edge Function request completed" &&
+        [
+          "Edge Function request completed",
+          "Confirmed duplicate status acknowledged",
+        ].includes(line.message) &&
         line.event_id === event.event_id && line.response_status >= 200 &&
         line.response_status < 300
       );
@@ -365,6 +402,26 @@ if (mode === "bootstrap") {
     });
     if (completions.length !== 140) {
       throw new Error("Canary raw-event count mismatch");
+    }
+    if (existsSync(`${directory}/replay.json`)) {
+      const replay = JSON.parse(
+        readFileSync(`${directory}/replay.json`, "utf8"),
+      );
+      for (const id of replay.ids) {
+        if (
+          !logs.some((line) =>
+            line.event_id === id &&
+            [
+              "Edge Function request completed",
+              "Confirmed duplicate status acknowledged",
+            ].includes(line.message) &&
+            line.timestamp >= replay.started && line.response_status >= 200 &&
+            line.response_status < 300
+          )
+        ) {
+          throw new Error("Replayed event missing after worker restart");
+        }
+      }
     }
     const percentile = (values) => {
       values.sort((a, b) => a - b);

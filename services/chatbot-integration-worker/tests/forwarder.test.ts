@@ -283,3 +283,50 @@ test("rejects unknown and mismatched account configuration without HTTP", async 
   assert.equal(mismatch.outcome, "permanent_failure");
   assert.equal(called, false);
 });
+
+test("only previously confirmed identical signed statuses skip duplicate HTTP", async () => {
+  const raw = JSON.stringify({
+    object: "whatsapp_business_account",
+    entry: [{
+      changes: [{
+        field: "messages",
+        value: {
+          metadata: { phone_number_id: account.phone_number_id },
+          statuses: [{
+            id: "wamid.test",
+            recipient_id: "923001234567",
+            status: "read",
+            timestamp: "1",
+          }],
+        },
+      }],
+    }],
+  });
+  const event = {
+    ...webhookEvent,
+    payload: { ...webhookEvent.payload, raw_body: raw },
+  };
+  let attempts = 0;
+  const forward = makeForwarder(() => {
+    attempts++;
+    return Promise.resolve(
+      new Response(null, { status: attempts === 1 ? 503 : 200 }),
+    );
+  });
+  await forward(event);
+  await forward(event);
+  const duplicate = await forward({ ...event, event_id: replyEvent.event_id });
+  assert.equal(duplicate.attempts, 0);
+  assert.equal(attempts, 2);
+  await forward({
+    ...event,
+    payload: { ...event.payload, x_hub_signature_256: "sha256=different" },
+  });
+  assert.equal(attempts, 3);
+  const freshWorker = makeForwarder(() => {
+    attempts++;
+    return Promise.resolve(new Response(null, { status: 200 }));
+  });
+  await freshWorker(event);
+  assert.equal(attempts, 4);
+});

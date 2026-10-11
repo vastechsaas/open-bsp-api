@@ -84,9 +84,13 @@ updates serialize only identical message/status fields; the existing database
 trigger atomically merges different status fields without erasing content. Known
 local reply writes delay status scheduling without holding a processing slot,
 for at most ten seconds. This is only a local optimization: the handler always
-checks the durable original, including after restart or timeout. Multi-customer
-batches reserve all their keys atomically; unfamiliar events use a tenant
-barrier. No new producer contract or database migration is required.
+checks the durable original, including after restart or timeout. After a
+successful verified status update, exact signed payload duplicates with the same
+tenant credentials may reuse its confirmation for sixty seconds. This bounded
+cache never handles messages/lifecycle work; every raw envelope is still stored
+and a restart or cache miss uses the normal authenticated handler.
+Multi-customer batches reserve all their keys atomically; unfamiliar events use
+a tenant barrier. No new producer contract or database migration is required.
 
 Publish a reviewed fixture:
 
