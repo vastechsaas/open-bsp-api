@@ -396,6 +396,17 @@ if (mode === "bootstrap") {
         }
       });
     const completions = events.map((event) => {
+      const expectedLane = event.event_type === "whatsapp_webhook" &&
+          JSON.parse(event.payload.raw_body).entry[0].changes[0].value.statuses
+        ? "statuses"
+        : "messages";
+      const processing = logs.find((line) =>
+        line.message === "Integration event processing completed" &&
+        line.event_id === event.event_id
+      );
+      if (!processing || processing.lane !== expectedLane) {
+        throw new Error("Canary event processed in wrong lane");
+      }
       const success = logs.find((line) =>
         [
           "Edge Function request completed",

@@ -17,6 +17,7 @@ import { Scheduler } from "./scheduler.js";
 import { settleWithin } from "./deadline.js";
 import type { Duplex } from "node:stream";
 import { ReplyDependencies } from "./dependencies.js";
+import { brokerConnection } from "./broker.js";
 
 async function main() {
   const config = loadConfig();
@@ -44,10 +45,8 @@ async function main() {
         endSession = resolve;
         disconnect = resolve;
       });
-      connection = await connect(config.cloudAmqpUrl, {
-        timeout: 10_000,
-        heartbeat: 15,
-      });
+      const broker = brokerConnection(config.cloudAmqpUrl);
+      connection = await connect(broker.url, broker.socket);
       connection.on("error", () => endSession());
       connection.on("close", () => endSession());
       const createChannel = async () => {
