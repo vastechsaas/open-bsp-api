@@ -26,3 +26,24 @@ The switch retains the last confirmed state during a save, disables repeated
 clicks, and shows a Retry action on a request failure. An initial loading/error
 state is not presented as a confirmed Away status. All new copy is translated
 into the application's existing supported locales.
+
+## Validation and release
+
+- Backend feature commit: `1246a4a` on `meta_vista_backend`; focused Main
+  cherry-pick: `5894ea4`.
+- Frontend feature commit: `ddf281d` on `meta_vista_frontend`; focused Main
+  cherry-pick: `8ebd9d8`. Unrelated staging features were not merged to Main.
+- Backend full validation passed, including 49 database test files and 1,039
+  assertions. The new supervisor presence regression contains 16 assertions.
+- Frontend full validation passed: 376 tests, generated-type synchronization,
+  TypeScript and production build. Main's focused nine tests and production
+  build also passed after cherry-picking.
+- Main's schema and data backups were completed before applying the migration,
+  under `.codex/backups/messages-availability-20261011/` on the deployment
+  workstation. Backup data is private and is not committed.
+- Main's migration application was confirmed in remote migration history.
+  Staging's Supabase Git integration reported success before the UI release.
+- A pre-existing formatting-only failure in `docs/shared-handoff-messages.md`
+  was corrected without changing its content or runtime behavior.
+- No live agent's availability or conversation was changed during validation.
+  Account-level interaction testing remains a post-release check.
