@@ -96,6 +96,9 @@ Released with explicit approval to staging and Main:
   unresolved legacy waiting-acknowledgment dispatches. No queue was purged.
 - Node HTTPS readiness and Main worker readiness passed. Worker readiness
   reported connected, consuming, parallel lanes ready and no pending work.
+- Vercel production deployments succeeded for both frontend environments.
+  The shared-message labels were verified on `socialconnect.vastech.biz` and
+  `vistagalaxy.vastech.biz` with cache-bypassed locale requests.
 - Main-focused release checks passed: 20 database assertions, 51 integration
   worker tests/build, 20 UI tests, generated DB type synchronization and the
   Main production UI build. The Main UI cherry-pick retained its existing
