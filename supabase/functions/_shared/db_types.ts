@@ -3167,6 +3167,31 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      authorize_previous_chat_context: {
+        Args: { p_conversation_id: string; p_organization_id: string }
+        Returns: {
+          assigned_agent_id: string | null
+          contact_address: string | null
+          created_at: string
+          extra: Json | null
+          group_address: string | null
+          id: string
+          name: string | null
+          organization_address: string
+          organization_id: string
+          routed_at: string | null
+          routing_queue_id: string | null
+          service: Database["public"]["Enums"]["service"]
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "conversations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       begin_node_conversation_operation: {
         Args: {
           p_action: string
@@ -4355,6 +4380,40 @@ export type Database = {
           webhook_status: string
           webhook_validated_at: string
         }[]
+      }
+      list_previous_conversation_messages: {
+        Args: {
+          p_before_id?: string
+          p_before_timestamp?: string
+          p_conversation_id: string
+          p_organization_id: string
+          p_page_size?: number
+          p_previous_conversation_id: string
+        }
+        Returns: {
+          agent_id: string | null
+          contact_address: string | null
+          content: Json
+          conversation_id: string
+          created_at: string
+          direction: Database["public"]["Enums"]["direction"]
+          external_id: string | null
+          group_address: string | null
+          id: string
+          organization_address: string
+          organization_id: string
+          service: Database["public"]["Enums"]["service"]
+          status: Json
+          thread_id: string | null
+          timestamp: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "messages"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       list_previous_conversations_page: {
         Args: {

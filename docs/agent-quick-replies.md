@@ -11,18 +11,21 @@ Pending invitations and AI identities do not gain management access. Direct
 table writes remain blocked; mutations use the existing RPCs. Deploy the
 generated function-body migration before the frontend permission update.
 
-No conversation-history permissions change accompanies this feature.
-`list_previous_conversations_page` runs as the caller, with existing database
-row access rules, and restricts results to the same organization, customer,
-business number and service as the accessible current conversation.
+Previous chats provides shared, read-only customer history regardless of which
+agent handled an earlier chat. `list_previous_conversations_page` and
+`list_previous_conversation_messages` validate the caller's accepted membership
+and access to the current conversation on every request. They return history
+only for that same organization, customer, business number and service.
 
-Agents can see active conversations assigned to themselves, or unassigned active
-conversations with no queue or a queue they belong to. Closed/spam conversations
-require assignment to that agent. An explicit message mention also grants
-conversation visibility. Another agent's assignment does not grant access merely
-because the customer is the same or the queue is shared.
+Ordinary inbox permissions remain unchanged: Agents see their assigned active
+chats and eligible unassigned chats, their assigned closed/spam chats, and
+explicitly mentioned conversations. The Previous chats panel is the scoped
+exception for reading earlier customer history; it does not add other agents'
+chats to the inbox or grant takeover, assignment, note-writing or sending
+rights.
 
-Previous-chat history is read-only, paginated and access-checked again before
-each message page. Owners/admins/supervisors retain their existing wider
-organization-level visibility. The panel does not bypass these rules or expose
-all conversations belonging to the customer.
+Lists use bounded server pagination and messages use timestamp plus ID cursors.
+Each page rechecks current-conversation access, so membership removal,
+reassignment or tenant archival can revoke history access. The internal context
+helper is not client-callable. Owners/admins/supervisors retain their existing
+wider organization-level visibility. No conversation or message records move.
