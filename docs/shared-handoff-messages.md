@@ -67,8 +67,43 @@ compatible queue handler and migration while managed events drain, and retain
 existing message/receipt records. Never purge queues or send a second
 acknowledgment to compensate for an ambiguous send.
 
-No Main/Oracle deployment or live DKR flow edit is part of the feature-branch
-implementation.
+No live DKR flow edit is required for this feature.
+
+## Release — 2026-10-11
+
+Released with explicit approval to staging and Main:
+
+- Backend staging: `7a10002`; Main implementation: `665a2ea`.
+- Frontend staging: `b43eb5c`; Main: `561939e`.
+- Node Main and Oracle API/worker: `39c8a99`.
+- Main integration worker: `openbsp-main-chatbot-worker:665a2ea`, built from
+  Main with the existing parallel lanes, regional routing and latency fixes.
+- Main migration `20261011150827_shared_handoff_messages.sql` applied and
+  `chatbot-handoff-webhook` deployed. Supabase Git integration reported success
+  for both Main and staging; direct staging CLI inspection is unavailable to
+  the current account (HTTP 403).
+- Main schema/data/role backups are stored privately under
+  `.codex/backups/shared-handoff-messages-20261011/` on the deployment workstation.
+  Oracle's Node database backup and previous configuration are under
+  `/opt/chatbots/node-engine/backups/shared-handoff-20261011/`; its restore
+  inventory was checked. The worker configuration is backed up under its
+  corresponding `backups/shared-handoff-20261011/` directory.
+- Previous images retained as `node-chatbot-engine:rollback-shared-handoff-20261011`
+  and `openbsp-main-chatbot-worker:rollback-shared-handoff-20261011`.
+- DKR (Node company 1) is enrolled with `support_messages: "settings"`. Other
+  tenant routes are unchanged. Node processing was briefly held at the mode
+  boundary; there were zero undelivered legacy handoff events and zero
+  unresolved legacy waiting-acknowledgment dispatches. No queue was purged.
+- Node HTTPS readiness and Main worker readiness passed. Worker readiness
+  reported connected, consuming, parallel lanes ready and no pending work.
+- Main-focused release checks passed: 20 database assertions, 51 integration
+  worker tests/build, 20 UI tests, generated DB type synchronization and the
+  Main production UI build. The Main UI cherry-pick retained its existing
+  inspector instead of importing staging-only field-diagnostic components.
+
+No customer messages, conversation actions, flow edits, publishing or
+reactivation were performed for release verification. A real WhatsApp handoff
+test is still required to verify the complete customer-facing path.
 
 ## Validation
 
