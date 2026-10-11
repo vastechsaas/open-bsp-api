@@ -125,6 +125,16 @@ old waiting behavior; no schema removal or history deletion is part of rollback.
   prerequisites (`b2504e1` and `f6af31b` from Main) before the two focused
   fixes. Staging checks pass 370 tests, generated-type synchronization and
   TypeScript.
+- Frontend Main is `d00f9ba`; staging is `70e2d1f`. Vercel confirmed successful
+  production deployments for Main (`open-bsp-ui`, deployment
+  `GvrwP3iUVMcbHGcjucwpCyUQ84Fz`) and staging (`meta-vista-ui`, deployment
+  `3aASUSN7fu95KbpecvfG1ranjxGr`). Previous chats uses the system theme,
+  translated controls/statuses and locale-aware dates. The sidebar/workspace
+  label is Settings; the Preferences subsection remains Preferences.
+- Main's initial CI failure was documentation formatting only, corrected by
+  `197ed37`. Backend CI and Supabase deployment checks then passed on Main and
+  staging. Node API HTTPS and PHP HTTPS both returned HTTP 200; PHP 8.2-FPM and
+  Nginx remain running. No PHP configuration was changed.
 - The CLI account cannot access staging directly. Staging deployment
   confirmation comes from its successful Supabase Git integration check; no
   direct staging database changes or backup were attempted after that
