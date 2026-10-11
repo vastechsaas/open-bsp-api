@@ -1163,7 +1163,9 @@ app.get(
       });
     }
     const { data: visible } = await c.get("supabase").from("conversations")
-      .select("id,assigned_agent_id,status,routing_queue_id,contact_address")
+      .select(
+        "id,assigned_agent_id,status,routing_queue_id,contact_address,organization_address",
+      )
       .eq("organization_id", organizationId).eq("id", conversationId)
       .maybeSingle();
     if (!visible || !c.get("user")) {
@@ -1171,39 +1173,54 @@ app.get(
         message: "Conversation is not accessible",
       });
     }
-    const { data: mapping } = await serviceClient().from(
+    let { data: mapping } = await serviceClient().from(
       "chatbot_node_conversations",
     ).select()
       .eq("organization_id", organizationId).eq(
         "conversation_id",
         conversationId,
       ).maybeSingle();
-    if (!mapping) return c.json({ enabled: false });
-    const confirmed = lifecycleFresh(mapping.last_synced_at);
-    // Render confirmed local state immediately; Node availability is not on
-    // the GET critical path. Mutating operations still verify Node ownership.
+    if (!mapping) {
+      const { data: bridge } = await serviceClient().from(
+        "chatbot_node_bridges",
+      )
+        .select("engine").eq("organization_id", organizationId)
+        .eq("organization_address", visible.organization_address!)
+        .maybeSingle();
+      return c.json({
+        enabled: false,
+        awaiting_mapping: bridge?.engine === "node",
+      });
+    }
+    const refresh = c.req.query("refresh") === "1";
+    const currentMapping = mapping;
+    // Routine reads render local state without waiting for Node. Explicit
+    // action preflight requests fresh confirmation before reserving an operation.
     if (
-      !mapping.last_synced_at ||
+      refresh || !mapping.last_synced_at ||
       Date.now() - Date.parse(mapping.last_synced_at) > 20_000
     ) {
-      EdgeRuntime.waitUntil((async () => {
+      const reconcile = async () => {
         try {
           const remote = await nodeBridgeRequest(
-            nodeBridgeConnection(organizationId, mapping.organization_address),
-            `bridge/conversations/${mapping.node_conversation_id}`,
+            nodeBridgeConnection(
+              organizationId,
+              currentMapping.organization_address,
+            ),
+            `bridge/conversations/${currentMapping.node_conversation_id}`,
           );
-          if (!remote.ok) return;
+          if (!remote.ok) throw new Error("Node lifecycle unavailable");
           const snapshot = (await remote.json()).data;
           if (
             !snapshot || !/^\d+$/.test(snapshot.revision) ||
             !snapshot.last_inbound_wamid
-          ) return;
+          ) throw new Error("Invalid Node lifecycle snapshot");
           const { error } = await serviceClient().rpc(
             "apply_node_conversation_lifecycle",
             {
               p_organization_id: organizationId,
-              p_address: mapping.organization_address,
-              p_node_conversation_id: mapping.node_conversation_id,
+              p_address: currentMapping.organization_address,
+              p_node_conversation_id: currentMapping.node_conversation_id,
               p_recipient: visible.contact_address!,
               p_revision: snapshot.revision,
               p_state: snapshot.state,
@@ -1212,20 +1229,46 @@ app.get(
               p_support_request: snapshot.support_request,
             },
           );
-          if (!error) {
-            await serviceClient().from("chatbot_node_conversations").update({
-              last_synced_at: new Date().toISOString(),
-            })
-              .eq("organization_id", organizationId).eq(
-                "conversation_id",
-                conversationId,
-              ).eq("ownership_revision", snapshot.revision);
+          if (error) throw new Error("Unable to synchronize lifecycle");
+          const { error: syncError } = await serviceClient().from(
+            "chatbot_node_conversations",
+          ).update({
+            last_synced_at: new Date().toISOString(),
+          })
+            .eq("organization_id", organizationId).eq(
+              "conversation_id",
+              conversationId,
+            ).eq("ownership_revision", snapshot.revision);
+          if (syncError) {
+            throw new Error("Unable to confirm lifecycle freshness");
           }
         } catch {
-          /* Last confirmed state remains visible, but stale actions stay disabled. */
+          if (refresh) {
+            throw new HTTPException(503, {
+              message:
+                "Conversation state is synchronizing. Please try again shortly.",
+            });
+          }
         }
-      })());
+      };
+      if (refresh) {
+        await reconcile();
+        const { data: updated, error } = await serviceClient().from(
+          "chatbot_node_conversations",
+        )
+          .select().eq("organization_id", organizationId).eq(
+            "conversation_id",
+            conversationId,
+          ).maybeSingle();
+        if (error || !updated) {
+          throw new HTTPException(503, {
+            message: "Unable to refresh conversation state",
+          });
+        }
+        mapping = updated;
+      } else EdgeRuntime.waitUntil(reconcile());
     }
+    const confirmed = lifecycleFresh(mapping.last_synced_at);
     const supportRequest =
       supportRequestSchema.safeParse(mapping.support_request).data;
     const takeoverSyncPending = !confirmed || !mapping.lifecycle_enabled;
