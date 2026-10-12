@@ -6,6 +6,9 @@ project_id = "open-bsp-api"
 [api]
 schemas = ["public", "storage", "billing"]
 
+[db.migrations]
+schema_paths = ["./schemas/*.sql", "./schemas/*/*.sql"]
+
 [functions.whatsapp-webhook]
 verify_jwt = false
 import_map = "./functions/deno.json"

@@ -3649,6 +3649,13 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_conversation_queue_counts: {
+        Args: { p_organization_id: string; p_routing_queue_id?: string }
+        Returns: {
+          count: number
+          key: string
+        }[]
+      }
       get_conversation_queues: {
         Args: { p_organization_id?: string }
         Returns: {
