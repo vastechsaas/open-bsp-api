@@ -130,4 +130,16 @@ backup, migrations and the browser checks above have actually succeeded.
   read-only roles, duplicate rejection, role/queue cleanup, stale token and last
   accepted Owner protection, Auth credential preservation and RPC grants. Its
   organization/membership/audit fixtures were rolled back.
-- Browser verification is recorded separately after the frontend deployment.
+- The staging Vercel deployment succeeded for frontend commit `ce6dbad`.
+- Signed-in Super Admin browser review passed on Staging Test Organization and
+  Hamza_WABA: Team Members navigation/listing, localized labels, the three
+  allowed creation roles, no-account/no-email disclaimer, read-only email,
+  role-change confirmation with Save disabled until confirmed, and an existing
+  Administrator row showing Read only with no edit/removal actions. Unsaved
+  forms were canceled; existing organization memberships were not altered.
+- Member-role read-only behavior and mutation effects are covered by local
+  database/UI tests; the live staging API smoke test exercised Administrator
+  restrictions. No Member row was present in existing staging data for a visual
+  check.
+- Main refs remain unchanged (`open-bsp-api` `2b6893e`, `open-bsp-ui`
+  `db5e22a`).
