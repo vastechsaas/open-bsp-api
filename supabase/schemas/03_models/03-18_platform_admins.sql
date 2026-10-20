@@ -161,6 +161,9 @@ check (
     'organization_agent.invite',
     'organization_agent.update',
     'organization_agent.remove',
+    'organization_member.invite',
+    'organization_member.update',
+    'organization_member.remove',
     'organization_automation.update',
     'organization_module_permissions.update',
     'organization_media_storage.quota_update',
@@ -182,6 +185,10 @@ check (
   or (
     target_type = 'organization_agent'
     and action_type like 'organization_agent.%'
+  )
+  or (
+    target_type = 'organization_member'
+    and action_type like 'organization_member.%'
   )
   or (
     target_type = 'organization_automation'

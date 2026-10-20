@@ -60,25 +60,38 @@ select throws_ok($$select * from public.get_support_inbox_visibility('12500000-0
 select is((select count(*) from public.get_support_inbox_visibility('12500000-0000-4000-8000-000000000001','{}')),0::bigint,'Empty batch valid');
 reset role;
 
+-- These are role-visibility fixtures, not membership mutations. Keep active
+-- conversations unchanged while setting up each role as the local test owner.
+-- Replication mode is restored before every authenticated assertion.
 -- All conversation roles use the same presentation rule; existing RLS stays intact.
+set local session_replication_role='replica';
 update public.agents set extra='{"role":"member"}' where id='12520000-0000-4000-8000-000000000001';
+set local session_replication_role='origin';
 set local role authenticated;
 select is((select count(*) from public.get_support_inbox_visibility('12500000-0000-4000-8000-000000000001',array(select id from public.conversations)) where visible),5::bigint,'Member eligibility');
 reset role;
+set local session_replication_role='replica';
 update public.agents set extra='{"role":"supervisor"}' where id='12520000-0000-4000-8000-000000000001';
+set local session_replication_role='origin';
 set local role authenticated;
 select is((select count(*) from public.get_support_inbox_visibility('12500000-0000-4000-8000-000000000001',array(select id from public.conversations)) where visible),5::bigint,'Supervisor eligibility');
 reset role;
+set local session_replication_role='replica';
 update public.agents set extra='{"role":"admin"}' where id='12520000-0000-4000-8000-000000000001';
+set local session_replication_role='origin';
 set local role authenticated;
 select is((select count(*) from public.get_support_inbox_visibility('12500000-0000-4000-8000-000000000001',array(select id from public.conversations)) where visible),5::bigint,'Admin eligibility');
 reset role;
+set local session_replication_role='replica';
 update public.agents set extra='{"role":"agent"}' where id='12520000-0000-4000-8000-000000000001';
+set local session_replication_role='origin';
 set local role authenticated;
 select is((select count(*) from public.get_support_inbox_visibility('12500000-0000-4000-8000-000000000001',array(select id from public.conversations)) where visible),5::bigint,'Assigned Agent eligibility and closed history');
 select is((select count(*) from public.get_conversation_queue_conversations('12500000-0000-4000-8000-000000000001','assigned')),4::bigint,'Agent assigned queue excludes bot-only');
 reset role;
+set local session_replication_role='replica';
 update public.agents set extra='{"role":"owner"}' where id='12520000-0000-4000-8000-000000000001';
+set local session_replication_role='origin';
 insert into public.platform_admins(user_id,active) values('12510000-0000-4000-8000-000000000001',true);
 set local role authenticated;
 select is((select count(*) from public.get_support_inbox_visibility('12500000-0000-4000-8000-000000000001',array(select id from public.conversations)) where visible),5::bigint,'Authorized platform admin follows same inbox rule');

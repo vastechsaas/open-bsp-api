@@ -12,7 +12,7 @@ insert into auth.users(id,email,aud,role,raw_app_meta_data,raw_user_meta_data) v
  ('73510000-0000-4000-8000-000000000004','counter-supervisor@example.test','authenticated','authenticated','{}','{}');
 insert into public.agents(id,organization_id,user_id,name,ai,extra) values
  ('73520000-0000-4000-8000-000000000001','73500000-0000-4000-8000-000000000001','73510000-0000-4000-8000-000000000001','Test user',false,'{"role":"owner"}'),
- ('73520000-0000-4000-8000-000000000002','73500000-0000-4000-8000-000000000001','73510000-0000-4000-8000-000000000002','Retained owner',false,'{"role":"owner"}'),
+ ('73520000-0000-4000-8000-000000000002','73500000-0000-4000-8000-000000000001','73510000-0000-4000-8000-000000000002','Other assigned Agent',false,'{"role":"agent"}'),
  ('73520000-0000-4000-8000-000000000003','73500000-0000-4000-8000-000000000001','73510000-0000-4000-8000-000000000003','Test agent',false,'{"role":"agent"}'),
  ('73520000-0000-4000-8000-000000000004','73500000-0000-4000-8000-000000000001','73510000-0000-4000-8000-000000000004','Test supervisor',false,'{"role":"supervisor"}');
 insert into public.organizations_addresses(organization_id,service,address,status,extra)

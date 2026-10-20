@@ -129,21 +129,20 @@ $$;
 -- Prevent deletion of the last owner in an organization
 create function public.prevent_last_owner_deletion() returns trigger
 language plpgsql
+security definer
 set search_path to ''
 as $$
 declare
   owner_count int;
 begin
   -- Skip check if org is being deleted (cascade delete)
-  if not exists (
-    select 1 from public.organizations
-    where id = old.organization_id
-    for update skip locked
-  ) then
-    return old;
+  perform public.lock_organization_team(old.organization_id);
+  if not exists (select 1 from public.organizations where id=old.organization_id) then
+    return case when tg_op = 'DELETE' then old else new end;
   end if;
 
-  if old.extra->>'role' = 'owner' then
+  if old.extra->>'role' = 'owner'
+    and coalesce(old.extra->'invitation'->>'status','accepted')='accepted' then
     select count(*) into owner_count
     from public.agents
     where organization_id = old.organization_id
@@ -159,7 +158,7 @@ begin
     end if;
   end if;
 
-  return old;
+  return case when tg_op = 'DELETE' then old else new end;
 end;
 $$;
 
