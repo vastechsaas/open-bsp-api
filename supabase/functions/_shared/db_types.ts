@@ -3142,6 +3142,10 @@ export type Database = {
           status: string
         }[]
       }
+      assert_member_has_no_active_work: {
+        Args: { p_member_id: string; p_organization_id: string }
+        Returns: undefined
+      }
       assign_conversation_to_me: {
         Args: { p_conversation_id: string }
         Returns: {
@@ -3377,6 +3381,32 @@ export type Database = {
           p_name: string
           p_organization_id: string
           p_request_id: string
+        }
+        Returns: {
+          ai: boolean
+          created_at: string
+          extra: Json | null
+          id: string
+          name: string
+          organization_id: string
+          picture: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agents"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_platform_organization_member_invitation: {
+        Args: {
+          p_email: string
+          p_name: string
+          p_organization_id: string
+          p_request_id: string
+          p_role: Database["public"]["Enums"]["role"]
         }
         Returns: {
           ai: boolean
@@ -4281,6 +4311,29 @@ export type Database = {
           total_count: number
         }[]
       }
+      list_platform_organization_members_page: {
+        Args: {
+          p_organization_id: string
+          p_page?: number
+          p_page_size?: number
+          p_search?: string
+        }
+        Returns: {
+          created_at: string
+          email: string
+          id: string
+          invitation_status: string
+          name: string
+          organization_id: string
+          picture: string
+          queue_ids: string[]
+          queue_names: string[]
+          role: Database["public"]["Enums"]["role"]
+          total_count: number
+          updated_at: string
+          user_id: string
+        }[]
+      }
       list_platform_organization_provisioning_page: {
         Args: {
           p_page?: number
@@ -4513,6 +4566,10 @@ export type Database = {
           total_count: number
         }[]
       }
+      lock_organization_team: {
+        Args: { p_organization_id: string }
+        Returns: undefined
+      }
       mark_all_user_notifications_read: {
         Args: { p_organization_id: string }
         Returns: number
@@ -4573,6 +4630,21 @@ export type Database = {
       }
       merge_update_jsonb: {
         Args: { object: Json; path: string[]; target: Json }
+        Returns: Json
+      }
+      mutate_platform_organization_member: {
+        Args: {
+          p_action: string
+          p_email: string
+          p_expected_updated_at: string
+          p_legacy: boolean
+          p_member_id: string
+          p_name: string
+          p_organization_id: string
+          p_queue_ids: string[]
+          p_request_id: string
+          p_role: Database["public"]["Enums"]["role"]
+        }
         Returns: Json
       }
       normalize_quick_reply_shortcut: {
@@ -4800,6 +4872,14 @@ export type Database = {
       }
       remove_platform_organization_agent: {
         Args: { p_agent_id: string; p_request_id: string }
+        Returns: boolean
+      }
+      remove_platform_organization_member: {
+        Args: {
+          p_expected_updated_at: string
+          p_member_id: string
+          p_request_id: string
+        }
         Returns: boolean
       }
       replace_routing_queue_members: {
@@ -5154,6 +5234,33 @@ export type Database = {
           usage_percent: number
           used_bytes: number
         }[]
+      }
+      update_platform_organization_member: {
+        Args: {
+          p_expected_updated_at: string
+          p_member_id: string
+          p_name: string
+          p_request_id: string
+          p_role: Database["public"]["Enums"]["role"]
+          p_routing_queue_ids: string[]
+        }
+        Returns: {
+          ai: boolean
+          created_at: string
+          extra: Json | null
+          id: string
+          name: string
+          organization_id: string
+          picture: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "agents"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       update_platform_routing_queue: {
         Args: {
