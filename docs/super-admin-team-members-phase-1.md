@@ -123,5 +123,11 @@ backup, migrations and the browser checks above have actually succeeded.
   `acifbsuxmpdtlhbsvhlj`. Schema and data backups are outside Git under
   `C:/Users/Hurera Mujeeb/.codex/backups/staging-team-members-20261021/`.
 - The staging dry run contains only the four feature migrations listed above.
-- Remote rollout and browser verification are recorded separately after
-  execution.
+- All four feature migrations were applied to staging after backup. No unrelated
+  pending migrations were present.
+- `scripts/verify-team-members-staging.sql` passed against staging: pending
+  creation, existing-account linking without acceptance, stable retries,
+  read-only roles, duplicate rejection, role/queue cleanup, stale token and last
+  accepted Owner protection, Auth credential preservation and RPC grants. Its
+  organization/membership/audit fixtures were rolled back.
+- Browser verification is recorded separately after the frontend deployment.
