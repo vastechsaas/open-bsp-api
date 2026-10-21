@@ -43,6 +43,9 @@ Deno.serve(async (request) => {
     const service = createUnsecureClient();
     let actor = "00000000-0000-0000-0000-000000000000";
     if (payload.action !== "preview") {
+      if (!request.headers.get("Authorization")?.startsWith("Bearer ")) {
+        return json({ code: "ONBOARDING_UNAUTHENTICATED" }, 401);
+      }
       const client = createClient(request);
       const { data: { user }, error } = await client.auth.getUser();
       if (error || !user) {
