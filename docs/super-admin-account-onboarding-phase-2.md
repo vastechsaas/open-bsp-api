@@ -172,3 +172,9 @@ unless deletion is separately approved.
   an account changing during completion. Focused setup/auth tests passed after
   those guards were added. SMTP delivery and recipient browser tests remain
   pending, not passed.
+- Vercel `meta-vista-ui` confirmed staging deployment success for
+  `563eca135d5bf7c8996616f58224dfd5168d4bf9`. Browser review on staging verified
+  the default invitation mode, direct password/confirmation/acknowledgment
+  fields, pending-only mode and existing Administrator read-only presentation.
+  No account form was submitted and no credentials were entered or changed
+  during this review.
