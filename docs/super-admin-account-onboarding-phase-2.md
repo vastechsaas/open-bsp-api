@@ -161,3 +161,14 @@ unless deletion is separately approved.
 - Protected staging callback is configured; email delivery is explicitly
   disabled pending company SMTP, template and redirect configuration. Main is
   unchanged.
+- Backend commits `e14fb63` / `d03443e` were fast-forwarded to
+  `meta_vista_backend`; both migrations and `platform-user-onboarding` were
+  explicitly deployed to staging. The rollback-only staging smoke passed private
+  RPC/table access, pending reservation, stable retry and role-change
+  revocation. The deployed endpoint returns HTTP 401 with a safe code for a
+  missing session.
+- UI commits `9d2aa4a` / `563eca1` were fast-forwarded to `meta_vista_frontend`.
+  Additional guards cover legacy Auth fragments, trailing-slash setup routes and
+  an account changing during completion. Focused setup/auth tests passed after
+  those guards were added. SMTP delivery and recipient browser tests remain
+  pending, not passed.
