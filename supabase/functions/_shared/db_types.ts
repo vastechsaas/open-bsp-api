@@ -2756,6 +2756,124 @@ export type Database = {
           },
         ]
       }
+      platform_user_onboarding: {
+        Row: {
+          administrator_id: string
+          context_expires_at: string | null
+          context_hash: string | null
+          created_at: string
+          delivery_accepted_at: string | null
+          delivery_request_id: string | null
+          email: string
+          failure_code: string | null
+          generation: number
+          id: string
+          intended_user_id: string
+          lease_id: string | null
+          lease_until: string | null
+          member_id: string
+          mode: string
+          name: string
+          organization_id: string
+          request_id: string
+          role: Database["public"]["Enums"]["role"]
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          administrator_id: string
+          context_expires_at?: string | null
+          context_hash?: string | null
+          created_at?: string
+          delivery_accepted_at?: string | null
+          delivery_request_id?: string | null
+          email: string
+          failure_code?: string | null
+          generation?: number
+          id?: string
+          intended_user_id?: string
+          lease_id?: string | null
+          lease_until?: string | null
+          member_id: string
+          mode: string
+          name: string
+          organization_id: string
+          request_id: string
+          role: Database["public"]["Enums"]["role"]
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          administrator_id?: string
+          context_expires_at?: string | null
+          context_hash?: string | null
+          created_at?: string
+          delivery_accepted_at?: string | null
+          delivery_request_id?: string | null
+          email?: string
+          failure_code?: string | null
+          generation?: number
+          id?: string
+          intended_user_id?: string
+          lease_id?: string | null
+          lease_until?: string | null
+          member_id?: string
+          mode?: string
+          name?: string
+          organization_id?: string
+          request_id?: string
+          role?: Database["public"]["Enums"]["role"]
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_user_onboarding_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_user_onboarding_events: {
+        Row: {
+          actor_user_id: string
+          code: string | null
+          created_at: string
+          event: string
+          id: number
+          member_state: Json
+          operation_id: string
+        }
+        Insert: {
+          actor_user_id: string
+          code?: string | null
+          created_at?: string
+          event: string
+          id?: never
+          member_state: Json
+          operation_id: string
+        }
+        Update: {
+          actor_user_id?: string
+          code?: string | null
+          created_at?: string
+          event?: string
+          id?: never
+          member_state?: Json
+          operation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_user_onboarding_events_operation_id_fkey"
+            columns: ["operation_id"]
+            isOneToOne: false
+            referencedRelation: "platform_user_onboarding"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quick_replies: {
         Row: {
           content: string
@@ -4302,6 +4420,17 @@ export type Database = {
           used_bytes: number
         }[]
       }
+      list_platform_member_onboarding: {
+        Args: { p_member_ids: string[]; p_organization_id: string }
+        Returns: {
+          failure_code: string
+          invitation_sent_at: string
+          member_id: string
+          mode: string
+          operation_id: string
+          status: string
+        }[]
+      }
       list_platform_organization_agents_page: {
         Args: {
           p_organization_id: string
@@ -4694,6 +4823,10 @@ export type Database = {
       org_update_by_admin_rules: {
         Args: { p_id: string; p_name: string }
         Returns: boolean
+      }
+      platform_onboarding_command: {
+        Args: { p_actor: string; p_command: string; p_payload: Json }
+        Returns: Json
       }
       platform_whatsapp_health_state: {
         Args: {

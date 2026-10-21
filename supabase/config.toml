@@ -3,6 +3,11 @@
 
 project_id = "open-bsp-api"
 
+[functions.platform-user-onboarding]
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/platform-user-onboarding/index.ts"
+
 [api]
 schemas = ["public", "storage", "billing"]
 
