@@ -120,6 +120,24 @@ secrets, Meta permissions, callbacks or real message delivery are configured.
 
 ## Remaining boundaries / rollback
 
+### Opt-in signature comparison diagnostics
+
+Set `INSTAGRAM_WEBHOOK_SIGNATURE_DIAGNOSTICS=true` only while diagnosing a
+staging signature mismatch. Rejected requests additionally log whether their
+exact original bytes match the corresponding `INSTAGRAM_APP_SECRET` signature.
+Only match booleans are logged, never either HMAC value, secret or payload. This
+does not accept the OAuth key as a fallback, process an unverified event, or
+compare credentials belonging to other apps. Missing/misaligned OAuth key lists
+report an unavailable comparison. Disable the setting after diagnosis.
+
+Historical request bodies were not logged and cannot be reconstructed from the
+existing diagnostics; this comparison requires a new delivery.
+
+Validation: all 25 focused Instagram test steps passed, as did quick and full
+backend validation (54 database files / 1,196 assertions). Tests cover disabled
+diagnostics, exact-byte comparison, no authentication fallback, no sensitive log
+values and multi-app key isolation. No migration is required.
+
 - Live Meta configuration and end-to-end verification require the test
   app/account.
 - Account tokens remain in the pre-existing backend account JSON store; changing

@@ -11,6 +11,7 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
     INSTAGRAM_APP_ID: "test-app",
     INSTAGRAM_APP_SECRET: "test-app-secret",
     INSTAGRAM_WEBHOOK_APP_SECRET: "test-webhook-app-secret",
+    INSTAGRAM_WEBHOOK_SIGNATURE_DIAGNOSTICS: "false",
     INSTAGRAM_VERIFY_TOKEN: "test-verify",
   };
   const oldEnv = new Map(
@@ -237,9 +238,16 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
     const webhookWithConfig = async (
       ids: string,
       signingSecrets: string | undefined,
+      diagnostics = false,
+      loginSecrets = env.INSTAGRAM_APP_SECRET,
     ): Promise<Handler> => {
       let handler: Handler | undefined;
       Deno.env.set("INSTAGRAM_APP_ID", ids);
+      Deno.env.set("INSTAGRAM_APP_SECRET", loginSecrets);
+      Deno.env.set(
+        "INSTAGRAM_WEBHOOK_SIGNATURE_DIAGNOSTICS",
+        String(diagnostics),
+      );
       if (signingSecrets === undefined) {
         Deno.env.delete("INSTAGRAM_WEBHOOK_APP_SECRET");
       } else Deno.env.set("INSTAGRAM_WEBHOOK_APP_SECRET", signingSecrets);
@@ -254,6 +262,11 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
       } finally {
         Deno.serve = originalServe;
         Deno.env.set("INSTAGRAM_APP_ID", env.INSTAGRAM_APP_ID);
+        Deno.env.set("INSTAGRAM_APP_SECRET", env.INSTAGRAM_APP_SECRET);
+        Deno.env.set(
+          "INSTAGRAM_WEBHOOK_SIGNATURE_DIAGNOSTICS",
+          env.INSTAGRAM_WEBHOOK_SIGNATURE_DIAGNOSTICS,
+        );
         Deno.env.set(
           "INSTAGRAM_WEBHOOK_APP_SECRET",
           env.INSTAGRAM_WEBHOOK_APP_SECRET,
@@ -471,6 +484,7 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
           assertEquals(details.signing_secret_has_wrapping_quotes, true);
           assertEquals(details.signing_secret_is_32_char_hex, false);
           assertEquals(details.signature_is_sha256_hex, true);
+          assertEquals(details.signature_matches_oauth_secret, undefined);
           const serialized = JSON.stringify(warnings);
           assertEquals(
             serialized.includes(env.INSTAGRAM_WEBHOOK_APP_SECRET),
@@ -479,6 +493,104 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
           assertEquals(serialized.includes(env.INSTAGRAM_APP_SECRET), false);
           assertEquals(serialized.includes(signature.slice(7)), false);
           assertEquals(serialized.includes("ig-incoming-1"), false);
+        } finally {
+          console.warn = originalWarn;
+        }
+      },
+    );
+    await t.step(
+      "opt-in comparison uses exact bytes without accepting the diagnostic key or logging data",
+      async () => {
+        const diagnostic = await webhookWithConfig(
+          env.INSTAGRAM_APP_ID,
+          env.INSTAGRAM_WEBHOOK_APP_SECRET,
+          true,
+        );
+        const originalWarn = console.warn;
+        const warnings: unknown[][] = [];
+        console.warn = (...args: unknown[]) => warnings.push(args);
+        try {
+          reset();
+          const request = await webhookRequest(
+            true,
+            env.INSTAGRAM_APP_SECRET,
+            undefined,
+            { text: "private diagnostic message سلام", utf8Bom: true },
+          );
+          const signature = request.headers.get("X-Hub-Signature-256")!;
+          await diagnostic(request);
+          assertEquals(calls.length, 0);
+          const details = warnings[0][2] as Record<string, unknown>;
+          assertEquals(details.signature_matches_configured_secret, false);
+          assertEquals(details.oauth_secret_available, true);
+          assertEquals(details.signature_matches_oauth_secret, true);
+          const serialized = JSON.stringify(warnings);
+          for (
+            const sensitive of [
+              env.INSTAGRAM_APP_SECRET,
+              env.INSTAGRAM_WEBHOOK_APP_SECRET,
+              signature.slice(7),
+              "private diagnostic message",
+              "ig-incoming-1",
+            ]
+          ) assertEquals(serialized.includes(sensitive), false);
+          warnings.length = 0;
+          await diagnostic(await webhookRequest(true, "unrelated-secret"));
+          assertEquals(calls.length, 0);
+          assertEquals(
+            (warnings[0][2] as Record<string, unknown>)
+              .signature_matches_oauth_secret,
+            false,
+          );
+        } finally {
+          console.warn = originalWarn;
+        }
+      },
+    );
+    await t.step(
+      "diagnostic comparisons never try a different app or a misaligned OAuth key list",
+      async () => {
+        const multi = await webhookWithConfig(
+          "test-app|second-app",
+          `${env.INSTAGRAM_WEBHOOK_APP_SECRET}|second-signing-secret`,
+          true,
+          `${env.INSTAGRAM_APP_SECRET}|second-login-secret`,
+        );
+        const misaligned = await webhookWithConfig(
+          "test-app|second-app",
+          `${env.INSTAGRAM_WEBHOOK_APP_SECRET}|second-signing-secret`,
+          true,
+        );
+        const originalWarn = console.warn;
+        const warnings: unknown[][] = [];
+        console.warn = (...args: unknown[]) => warnings.push(args);
+        try {
+          reset();
+          await multi(
+            await webhookRequest(true, env.INSTAGRAM_APP_SECRET, "second-app"),
+          );
+          assertEquals(
+            (warnings[0][2] as Record<string, unknown>)
+              .signature_matches_oauth_secret,
+            false,
+          );
+          warnings.length = 0;
+          await multi(
+            await webhookRequest(true, "second-login-secret", "second-app"),
+          );
+          assertEquals(
+            (warnings[0][2] as Record<string, unknown>)
+              .signature_matches_oauth_secret,
+            true,
+          );
+          warnings.length = 0;
+          await misaligned(
+            await webhookRequest(true, env.INSTAGRAM_APP_SECRET, "second-app"),
+          );
+          const details = warnings[0][2] as Record<string, unknown>;
+          assertEquals(details.oauth_secret_available, false);
+          assertEquals(details.signature_matches_oauth_secret, null);
+          assertEquals(calls.length, 0);
         } finally {
           console.warn = originalWarn;
         }

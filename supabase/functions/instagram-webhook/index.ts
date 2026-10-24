@@ -32,8 +32,11 @@ const APP_ID = Deno.env.get("INSTAGRAM_APP_ID");
 // differ from the Instagram login secret. Preserve existing single-secret
 // deployments only when the dedicated setting is absent (not explicitly empty).
 const DEDICATED_WEBHOOK_SECRET = Deno.env.get("INSTAGRAM_WEBHOOK_APP_SECRET");
+const LOGIN_APP_SECRET = Deno.env.get("INSTAGRAM_APP_SECRET");
 const WEBHOOK_APP_SECRET = DEDICATED_WEBHOOK_SECRET ??
-  Deno.env.get("INSTAGRAM_APP_SECRET");
+  LOGIN_APP_SECRET;
+const SIGNATURE_DIAGNOSTICS_ENABLED =
+  Deno.env.get("INSTAGRAM_WEBHOOK_SIGNATURE_DIAGNOSTICS") === "true";
 
 // 24 hours. Profile is refreshed when older than this; tunable via constant.
 const PROFILE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -245,6 +248,35 @@ async function validateWebhookSignature(
     if (!isValid) {
       const configuredSecret = secrets[idIndex];
       const trimmedSecret = configuredSecret.trim();
+      let comparison: Record<string, boolean | null> | undefined;
+      if (SIGNATURE_DIAGNOSTICS_ENABLED) {
+        // Compare the same untouched bytes against this app's OAuth key in
+        // memory only. This is diagnostic evidence, NEVER an acceptance fallback.
+        // A missing/misaligned key list must not test another app's credentials.
+        const loginSecrets = LOGIN_APP_SECRET?.split("|");
+        const loginSecret = loginSecrets?.length === ids.length
+          ? loginSecrets[idIndex]
+          : undefined;
+        let matchesLoginSecret: boolean | null = null;
+        if (loginSecret) {
+          const loginKey = await crypto.subtle.importKey(
+            "raw",
+            encoder.encode(loginSecret),
+            { name: "HMAC", hash: "SHA-256" },
+            false,
+            ["sign"],
+          );
+          const loginHmac = await crypto.subtle.sign("HMAC", loginKey, body);
+          const loginSignature = Array.from(new Uint8Array(loginHmac))
+            .map((b) => b.toString(16).padStart(2, "0")).join("");
+          matchesLoginSecret = signatureValue === loginSignature;
+        }
+        comparison = {
+          signature_matches_configured_secret: false,
+          oauth_secret_available: !!loginSecret,
+          signature_matches_oauth_secret: matchesLoginSecret,
+        };
+      }
       // Structural diagnostics only: never log the secret, either signature,
       // or message content. These distinguish config formatting from a key
       // mismatch without exposing credentials or customer data.
@@ -262,6 +294,7 @@ async function validateWebhookSignature(
         body_bytes: body.byteLength,
         body_has_utf8_bom: body[0] === 0xef && body[1] === 0xbb &&
           body[2] === 0xbf,
+        ...comparison,
       });
     }
 
