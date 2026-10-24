@@ -5,6 +5,7 @@ import { decodeBase64Url } from "@std/encoding/base64url";
 import type {
   createClient,
   InstagramOrganizationAddressExtra,
+  OrganizationAddressRow,
 } from "../_shared/supabase.ts";
 
 const API_VERSION = "v25.0";
@@ -34,6 +35,26 @@ export const SCOPES = [
 const REFRESH_WINDOW_MS = 10 * 24 * 60 * 60 * 1000; // 10 days
 
 type Client = ReturnType<typeof createClient>;
+
+// Onboarding is public/token-based. Never return the OAuth token to that page.
+export function publicInstagramAccount(account: OrganizationAddressRow) {
+  const extra: InstagramOrganizationAddressExtra = { ...account.extra };
+  delete extra.access_token;
+  return { ...account, extra };
+}
+
+async function requireActiveOrganization(
+  client: Client,
+  organization_id: string,
+) {
+  const { data, error } = await client.rpc("is_organization_active", {
+    p_organization_id: organization_id,
+  });
+  if (error) throw error;
+  if (!data) {
+    throw new HTTPException(403, { message: "Organization is not active" });
+  }
+}
 
 /**
  * Resolves the Instagram app credentials, mirroring whatsapp-management: a
@@ -122,7 +143,10 @@ async function exchangeCodeForShortLivedToken(
   if (!access_token || user_id === undefined) {
     throw new HTTPException(502, {
       message: "Unexpected short-lived token exchange response",
-      cause: raw,
+      cause: {
+        missing_access_token: !access_token,
+        missing_user_id: user_id === undefined,
+      },
     });
   }
 
@@ -308,6 +332,8 @@ export async function performInstagramLogin(
     });
   }
 
+  await requireActiveOrganization(client, payload.organization_id);
+
   const { app_id, app_secret } = resolveAppCredentials(payload.application_id);
 
   // Attached to every step log so concurrent onboardings can be told apart in
@@ -360,7 +386,7 @@ export async function performInstagramLogin(
       address: ig_user_id,
       organization_id: payload.organization_id,
       status: "connected",
-      extra,
+      extra: { ...extra, needs_reauth: null },
     })
     .select()
     .single();
@@ -441,6 +467,7 @@ export async function refreshTokens(client: Client) {
           },
         })
         .eq("organization_id", row.organization_id)
+        .eq("service", "instagram")
         .eq("address", row.address)
         .throwOnError();
 
@@ -460,6 +487,7 @@ export async function refreshTokens(client: Client) {
         .from("organizations_addresses")
         .update({ extra: { needs_reauth: new Date(now).toISOString() } })
         .eq("organization_id", row.organization_id)
+        .eq("service", "instagram")
         .eq("address", row.address);
 
       await client
@@ -495,6 +523,8 @@ export async function disconnect(
 ) {
   const { organization_id, ig_user_id } = payload;
 
+  await requireActiveOrganization(client, organization_id);
+
   const { data: row } = await client
     .from("organizations_addresses")
     .select("extra, service")
@@ -523,6 +553,7 @@ export async function disconnect(
     .from("organizations_addresses")
     .update({ status: "disconnected" })
     .eq("organization_id", organization_id)
+    .eq("service", "instagram")
     .eq("address", ig_user_id)
     .select()
     .single()

@@ -604,7 +604,7 @@ Configure the Instagram app
 8. Click **Business login settings**
 9. Set the following fields:
    - OAuth redirect URIs: `{PUBLIC_URL}/oauth/instagram` and
-     `{PUBLIC_URL}/onboard-instagram/callback`
+     `{PUBLIC_URL}/onboard/instagram/callback`
    - Deauthorize callback URL:
      `https://{SUPABASE_PROJECT_ID}.supabase.co/functions/v1/instagram-management/deauthorize`
    - Data deletion request URL:

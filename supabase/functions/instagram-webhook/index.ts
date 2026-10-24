@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import * as log from "../_shared/logger.ts";
+import { flagNeedsReauth } from "../_shared/instagram.ts";
 import {
   type ContactAddressInsert,
   createUnsecureClient,
@@ -62,9 +63,20 @@ async function buildOrgAddressMap(
     .throwOnError();
 
   const map = new Map<string, OrganizationAddressRow>();
+  const organizationIds = [...new Set(data.map((row) => row.organization_id))];
+  if (organizationIds.length === 0) return map;
+  const { data: activeOrganizations } = await client
+    .from("organization_lifecycle")
+    .select("organization_id")
+    .in("organization_id", organizationIds)
+    .eq("status", "active")
+    .throwOnError();
+  const activeIds = new Set(
+    activeOrganizations.map((row) => row.organization_id),
+  );
 
   for (const row of data) {
-    if (!map.has(row.address)) {
+    if (activeIds.has(row.organization_id) && !map.has(row.address)) {
       map.set(row.address, row);
     }
   }
@@ -312,16 +324,16 @@ async function downloadMediaItem({
 
 /**
  * Fetches the IG contact's profile fields via Graph API (Instagram API with
- * Instagram Login). Returns undefined on failure; the caller still records a
- * `name_fetched_at` so the TTL guard can suppress retries.
+ * Instagram Login). An invalid token is reported separately from an absent
+ * profile, so inbound messages still land while the owner is asked to reconnect.
  */
 async function fetchProfile(
   igsid: string,
   accessToken: string,
-): Promise<IgProfile | undefined> {
+): Promise<{ profile?: IgProfile; tokenDead?: boolean }> {
   if (!accessToken) {
     log.warn(`No Instagram access token, cannot fetch profile for ${igsid}`);
-    return undefined;
+    return {};
   }
 
   try {
@@ -334,15 +346,22 @@ async function fetchProfile(
       log.warn(
         `Failed to fetch IG profile for ${igsid}: ${response.status} — ${errorBody}`,
       );
-      return undefined;
+      let code: number | undefined;
+      try {
+        code = (JSON.parse(errorBody) as { error?: { code?: number } })
+          .error?.code;
+      } catch {
+        // A non-JSON error is not proof of a revoked token.
+      }
+      return { tokenDead: code === 190 };
     }
 
-    return (await response.json()) as IgProfile;
+    return { profile: (await response.json()) as IgProfile };
   } catch (error) {
     log.warn(`Error fetching IG profile for ${igsid}`, {
       error: error instanceof Error ? error.message : String(error),
     });
-    return undefined;
+    return {};
   }
 }
 
@@ -625,15 +644,32 @@ async function processMessage(request: Request): Promise<Response> {
 
   // Fire all Graph fetches in parallel — no awaits inside the event loop.
   const fetchedProfiles = await Promise.all(
-    fetchTasks.map(async (c) => ({
-      key: `${c.organization_id}|${c.igsid}` as ContactKey,
-      contact: c,
-      profile: await fetchProfile(
+    fetchTasks.map(async (c) => {
+      const { profile, tokenDead } = await fetchProfile(
         c.igsid,
         c.orgAddress.extra?.access_token ?? "",
-      ),
-    })),
+      );
+      return { contact: c, profile, tokenDead };
+    }),
   );
+
+  const deadTokenAddresses = new Map<string, ContactNeed>();
+  for (const { contact, tokenDead } of fetchedProfiles) {
+    if (tokenDead) {
+      deadTokenAddresses.set(
+        `${contact.organization_id}|${contact.orgAddress.address}`,
+        contact,
+      );
+    }
+  }
+  for (const contact of deadTokenAddresses.values()) {
+    await flagNeedsReauth(
+      client,
+      contact.organization_id,
+      contact.orgAddress.address,
+      contact.orgAddress.extra?.access_token ?? "",
+    );
+  }
 
   // Build contacts_addresses upserts. Each fetch task produces one row; the
   // row is also written when the fetch failed (with only `name_fetched_at`)
