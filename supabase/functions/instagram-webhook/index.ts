@@ -28,7 +28,11 @@ import {
 const API_VERSION = "v25.0";
 const VERIFY_TOKEN = Deno.env.get("INSTAGRAM_VERIFY_TOKEN");
 const APP_ID = Deno.env.get("INSTAGRAM_APP_ID");
-const APP_SECRET = Deno.env.get("INSTAGRAM_APP_SECRET");
+// Meta signs messaging webhooks with the hosting Meta app's secret, which can
+// differ from the Instagram login secret. Preserve existing single-secret
+// deployments only when the dedicated setting is absent (not explicitly empty).
+const WEBHOOK_APP_SECRET = Deno.env.get("INSTAGRAM_WEBHOOK_APP_SECRET") ??
+  Deno.env.get("INSTAGRAM_APP_SECRET");
 
 // 24 hours. Profile is refreshed when older than this; tunable via constant.
 const PROFILE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -169,27 +173,26 @@ function verifyToken(request: Request): Response {
  * Validates the Instagram webhook signature to ensure the request comes from
  * Meta. Mirrors whatsapp-webhook's validation, including the multi-app
  * INSTAGRAM_APP_ID|secret1|secret2 splitting and `app_id` query-param routing.
- * Instagram Login is its own Meta app (separate from the WhatsApp app in
- * META_APP_*), so it has its own id/secret; multiple IG apps may still be
- * configured.
+ * Dedicated signing secrets follow the same order as INSTAGRAM_APP_ID for
+ * multi-app callbacks. OAuth credentials and WhatsApp settings are not changed.
  */
 async function validateWebhookSignature(
   request: Request,
   body: string,
 ): Promise<boolean> {
-  if (!APP_ID || !APP_SECRET) {
+  if (!APP_ID || !WEBHOOK_APP_SECRET) {
     log.warn(
-      "INSTAGRAM_APP_ID or INSTAGRAM_APP_SECRET environment variable not set",
+      "Instagram app ID or webhook signing secret is not configured",
     );
     return false;
   }
 
   const ids = APP_ID.split("|");
-  const secrets = APP_SECRET.split("|");
+  const secrets = WEBHOOK_APP_SECRET.split("|");
 
   if (ids.length !== secrets.length) {
     log.warn(
-      "INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET environment variables must have the same number of elements, separated by '|'",
+      "INSTAGRAM_APP_ID and webhook signing secrets must have the same number of elements, separated by '|'",
     );
     return false;
   }
@@ -240,10 +243,7 @@ async function validateWebhookSignature(
     const isValid = signatureValue === expectedSignature;
 
     if (!isValid) {
-      log.warn("Invalid webhook signature", {
-        expected: expectedSignature,
-        received: signatureValue,
-      });
+      log.warn("Invalid webhook signature");
     }
 
     return isValid;

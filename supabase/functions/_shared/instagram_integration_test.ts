@@ -10,6 +10,7 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
     SUPABASE_SERVICE_ROLE_KEY: "test-service",
     INSTAGRAM_APP_ID: "test-app",
     INSTAGRAM_APP_SECRET: "test-app-secret",
+    INSTAGRAM_WEBHOOK_APP_SECRET: "test-webhook-app-secret",
     INSTAGRAM_VERIFY_TOKEN: "test-verify",
   };
   const oldEnv = new Map(
@@ -187,7 +188,11 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
       calls.filter((call) =>
         call.method === "PATCH" && call.url.pathname.endsWith("/messages")
       );
-    const webhookRequest = async (valid = true) => {
+    const webhookRequest = async (
+      valid = true,
+      signingSecret = env.INSTAGRAM_WEBHOOK_APP_SECRET,
+      appId?: string,
+    ) => {
       const body = JSON.stringify({
         object: "instagram",
         entry: [{
@@ -202,7 +207,7 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
       });
       const key = await crypto.subtle.importKey(
         "raw",
-        new TextEncoder().encode(env.INSTAGRAM_APP_SECRET),
+        new TextEncoder().encode(signingSecret),
         { name: "HMAC", hash: "SHA-256" },
         false,
         ["sign"],
@@ -213,7 +218,9 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
         ),
       )
         .map((byte) => byte.toString(16).padStart(2, "0")).join("");
-      return new Request("https://edge.invalid/instagram-webhook", {
+      const url = new URL("https://edge.invalid/instagram-webhook");
+      if (appId) url.searchParams.set("app_id", appId);
+      return new Request(url, {
         method: "POST",
         headers: {
           "X-Hub-Signature-256": `sha256=${valid ? signature : "invalid"}`,
@@ -221,6 +228,39 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
         body,
       });
     };
+    let webhookTestModule = 0;
+    const webhookWithConfig = async (
+      ids: string,
+      signingSecrets: string | undefined,
+    ): Promise<Handler> => {
+      let handler: Handler | undefined;
+      Deno.env.set("INSTAGRAM_APP_ID", ids);
+      if (signingSecrets === undefined) {
+        Deno.env.delete("INSTAGRAM_WEBHOOK_APP_SECRET");
+      } else Deno.env.set("INSTAGRAM_WEBHOOK_APP_SECRET", signingSecrets);
+      Deno.serve = ((captured: Handler) => {
+        handler = captured;
+        return {};
+      }) as typeof Deno.serve;
+      try {
+        await import(
+          `../instagram-webhook/index.ts?signing-test=${++webhookTestModule}`
+        );
+      } finally {
+        Deno.serve = originalServe;
+        Deno.env.set("INSTAGRAM_APP_ID", env.INSTAGRAM_APP_ID);
+        Deno.env.set(
+          "INSTAGRAM_WEBHOOK_APP_SECRET",
+          env.INSTAGRAM_WEBHOOK_APP_SECRET,
+        );
+      }
+      if (!handler) throw new Error("Webhook handler was not registered");
+      return handler;
+    };
+    const inboundWrites = () =>
+      calls.filter((call) =>
+        call.method === "POST" && call.url.pathname.endsWith("/messages")
+      );
 
     await t.step(
       "unauthorized dispatch and archived organizations cannot send",
@@ -357,6 +397,90 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
       },
     );
     await t.step(
+      "dedicated webhook secret accepts inbound messages; OAuth secret does not",
+      async () => {
+        reset();
+        await webhook(await webhookRequest());
+        assertEquals(inboundWrites().length, 1);
+        reset();
+        await webhook(await webhookRequest(true, env.INSTAGRAM_APP_SECRET));
+        assertEquals(calls.length, 0);
+      },
+    );
+    await t.step("tampered payloads remain rejected", async () => {
+      reset();
+      const signed = await webhookRequest();
+      const body = (await signed.text()).replace('"Hi"', '"Tampered"');
+      await webhook(
+        new Request(signed.url, {
+          method: "POST",
+          headers: signed.headers,
+          body,
+        }),
+      );
+      assertEquals(calls.length, 0);
+    });
+    await t.step(
+      "legacy single-secret deployments remain compatible",
+      async () => {
+        reset();
+        const legacy = await webhookWithConfig(env.INSTAGRAM_APP_ID, undefined);
+        await legacy(await webhookRequest(true, env.INSTAGRAM_APP_SECRET));
+        assertEquals(inboundWrites().length, 1);
+      },
+    );
+    await t.step(
+      "an explicitly empty signing secret fails closed",
+      async () => {
+        reset();
+        const disabled = await webhookWithConfig(env.INSTAGRAM_APP_ID, "");
+        await disabled(await webhookRequest(true, env.INSTAGRAM_APP_SECRET));
+        assertEquals(calls.length, 0);
+      },
+    );
+    await t.step(
+      "multi-app callbacks use only their corresponding webhook signing secret",
+      async () => {
+        const multi = await webhookWithConfig(
+          "test-app|second-app",
+          `${env.INSTAGRAM_WEBHOOK_APP_SECRET}|second-signing-secret`,
+        );
+        reset();
+        await multi(await webhookRequest());
+        assertEquals(inboundWrites().length, 1);
+        reset();
+        await multi(
+          await webhookRequest(true, "second-signing-secret", "second-app"),
+        );
+        assertEquals(inboundWrites().length, 1);
+        reset();
+        await multi(
+          await webhookRequest(
+            true,
+            env.INSTAGRAM_WEBHOOK_APP_SECRET,
+            "second-app",
+          ),
+        );
+        assertEquals(calls.length, 0);
+        await multi(
+          await webhookRequest(true, "second-signing-secret", "absent"),
+        );
+        assertEquals(calls.length, 0);
+      },
+    );
+    await t.step(
+      "mismatched app and signing-secret lists fail closed",
+      async () => {
+        reset();
+        const invalid = await webhookWithConfig(
+          "test-app|second-app",
+          env.INSTAGRAM_WEBHOOK_APP_SECRET,
+        );
+        await invalid(await webhookRequest());
+        assertEquals(calls.length, 0);
+      },
+    );
+    await t.step(
       "a revoked profile token still allows inbound messages to land",
       async () => {
         reset();
@@ -463,6 +587,14 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
         const account = await response.json();
         assertEquals(account.extra.access_token, undefined);
         assertEquals(account.extra.needs_reauth, null);
+        const exchange = calls.find((call) =>
+          call.url.hostname === "graph.instagram.com" &&
+          call.url.pathname.endsWith("/access_token")
+        )!;
+        assertEquals(
+          exchange.url.searchParams.get("client_secret"),
+          env.INSTAGRAM_APP_SECRET,
+        );
         const saved = calls.find((call) =>
           call.method === "POST" &&
           call.url.pathname.endsWith("/organizations_addresses")

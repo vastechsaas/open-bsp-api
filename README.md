@@ -574,6 +574,11 @@ yet.
 - **INSTAGRAM_APP_ID**
 - **INSTAGRAM_APP_SECRET**
 - **INSTAGRAM_VERIFY_TOKEN**
+- **INSTAGRAM_WEBHOOK_APP_SECRET**: The hosting Meta app's **App settings >
+  Basic > App secret**, used only to verify incoming messaging webhooks. Keep
+  the Instagram login secret above unchanged. Legacy deployments fall back to
+  `INSTAGRAM_APP_SECRET` only when this dedicated setting is absent. For
+  multiple apps, pipe-separated signing secrets follow `INSTAGRAM_APP_ID` order.
 
 <details>
 <summary>
