@@ -103,9 +103,15 @@ secrets, Meta permissions, callbacks or real message delivery are configured.
   longer log expected/received signature values.
 - Focused check: from `supabase/functions`, run
   `deno test --allow-env --allow-net --allow-read _shared/instagram_integration_test.ts`.
-  All 21 steps passed, including dedicated-secret precedence, OAuth-key
-  rejection, tampered bodies, legacy fallback, empty configuration and multi-app
-  isolation.
+  All 23 steps passed, including dedicated-secret precedence, OAuth-key
+  rejection, tampered bodies, legacy fallback, empty configuration, multi-app
+  isolation, exact UTF-8 byte verification (including a BOM), and safe
+  diagnostic logging.
+- Verification uses the original request bytes before decoding JSON. Failure
+  diagnostics record only secret source/length/format flags, signature format,
+  payload byte count and BOM presence, never secret/signature values or message
+  content. These diagnostics do not prove the cause of a specific live failure
+  until a new real or Meta test event is received.
 - Quick and full backend validation passed; the full database suite passed 54
   files / 1,196 assertions. No migration or generated-type change is needed.
 - After staging deployment, send a new real DM and check `Persisted messages`

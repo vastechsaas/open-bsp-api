@@ -192,8 +192,9 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
       valid = true,
       signingSecret = env.INSTAGRAM_WEBHOOK_APP_SECRET,
       appId?: string,
+      options: { text?: string; utf8Bom?: boolean } = {},
     ) => {
-      const body = JSON.stringify({
+      const payload = JSON.stringify({
         object: "instagram",
         entry: [{
           id: "business",
@@ -201,10 +202,14 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
             sender: { id: "customer" },
             recipient: { id: "business" },
             timestamp: 1_700_000_000_000,
-            message: { mid: "ig-incoming-1", text: "Hi" },
+            message: { mid: "ig-incoming-1", text: options.text ?? "Hi" },
           }],
         }],
       });
+      const encoded = new TextEncoder().encode(payload);
+      const body = new Uint8Array(encoded.length + (options.utf8Bom ? 3 : 0));
+      if (options.utf8Bom) body.set([0xef, 0xbb, 0xbf]);
+      body.set(encoded, options.utf8Bom ? 3 : 0);
       const key = await crypto.subtle.importKey(
         "raw",
         new TextEncoder().encode(signingSecret),
@@ -214,7 +219,7 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
       );
       const signature = Array.from(
         new Uint8Array(
-          await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body)),
+          await crypto.subtle.sign("HMAC", key, body),
         ),
       )
         .map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -420,6 +425,65 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
       );
       assertEquals(calls.length, 0);
     });
+    await t.step(
+      "raw UTF-8 bytes are verified before decoding a BOM",
+      async () => {
+        reset();
+        await webhook(
+          await webhookRequest(
+            true,
+            env.INSTAGRAM_WEBHOOK_APP_SECRET,
+            undefined,
+            {
+              text: "سلام 👋",
+              utf8Bom: true,
+            },
+          ),
+        );
+        const writes = inboundWrites();
+        assertEquals(writes.length, 1);
+        const messages = writes[0].body as unknown as Array<{
+          content: { text: string };
+        }>;
+        assertEquals(messages[0].content.text, "سلام 👋");
+      },
+    );
+    await t.step(
+      "signature diagnostics reveal format only, never credentials",
+      async () => {
+        reset();
+        const malformedSecret = ` "${env.INSTAGRAM_WEBHOOK_APP_SECRET}" `;
+        const malformed = await webhookWithConfig(
+          env.INSTAGRAM_APP_ID,
+          malformedSecret,
+        );
+        const originalWarn = console.warn;
+        const warnings: unknown[][] = [];
+        console.warn = (...args: unknown[]) => warnings.push(args);
+        try {
+          const request = await webhookRequest();
+          const signature = request.headers.get("X-Hub-Signature-256")!;
+          await malformed(request);
+          assertEquals(calls.length, 0);
+          const details = warnings[0][2] as Record<string, unknown>;
+          assertEquals(details.signing_secret_source, "dedicated");
+          assertEquals(details.signing_secret_has_outer_whitespace, true);
+          assertEquals(details.signing_secret_has_wrapping_quotes, true);
+          assertEquals(details.signing_secret_is_32_char_hex, false);
+          assertEquals(details.signature_is_sha256_hex, true);
+          const serialized = JSON.stringify(warnings);
+          assertEquals(
+            serialized.includes(env.INSTAGRAM_WEBHOOK_APP_SECRET),
+            false,
+          );
+          assertEquals(serialized.includes(env.INSTAGRAM_APP_SECRET), false);
+          assertEquals(serialized.includes(signature.slice(7)), false);
+          assertEquals(serialized.includes("ig-incoming-1"), false);
+        } finally {
+          console.warn = originalWarn;
+        }
+      },
+    );
     await t.step(
       "legacy single-secret deployments remain compatible",
       async () => {
