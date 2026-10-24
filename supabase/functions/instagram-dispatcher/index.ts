@@ -19,7 +19,11 @@ import { commitDispatchedMessage } from "../_shared/dispatch.ts";
 import { Json } from "../_shared/db_types.ts";
 
 const API_VERSION = "v25.0";
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+// Database dispatch uses the configured internal credential, not the Meta token
+// or necessarily the Supabase service role. Preserve upstream-only deployments
+// when the custom setting is absent; an explicitly empty setting fails closed.
+const DISPATCH_TOKEN = Deno.env.get("EDGE_FUNCTIONS_TOKEN") ??
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
 class InstagramError extends Error {
   constructor(
@@ -209,9 +213,8 @@ async function postPayloadToInstagramEndpoint({
 
 Deno.serve(async (req) => {
   const authHeader = req.headers.get("Authorization");
-  const token = authHeader?.replace("Bearer ", "");
 
-  if (token !== SERVICE_ROLE_KEY) {
+  if (!DISPATCH_TOKEN || authHeader !== `Bearer ${DISPATCH_TOKEN}`) {
     return new Response("Unauthorized", { status: 401 });
   }
 

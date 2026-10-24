@@ -118,6 +118,35 @@ secrets, Meta permissions, callbacks or real message delivery are configured.
   plus stored conversation/message rows. Previously rejected webhooks were
   acknowledged with HTTP 200 and are not automatically replayed by this fix.
 
+### Internal dispatcher authentication hotfix — 25 October 2026
+
+Staging received a real Instagram DM, but the two stored outbound replies
+remained pending. Database-triggered and scheduled calls reached the Instagram
+dispatcher and returned HTTP 401 before contacting Meta. Fingerprint comparison
+confirmed Vault's `edge_functions_token` matches `EDGE_FUNCTIONS_TOKEN`, not
+`SUPABASE_SERVICE_ROLE_KEY`. The customized WhatsApp dispatcher already uses
+that internal dispatch contract; upstream Instagram code had not been adapted.
+
+The Instagram dispatcher now prefers `EDGE_FUNCTIONS_TOKEN`. It uses
+`SUPABASE_SERVICE_ROLE_KEY` only when the custom setting is absent, preserving
+upstream-only deployments. An empty setting or missing credentials fails closed.
+When the custom token is configured, service-role and Meta account tokens are
+not accepted as alternatives. The separate Supabase client still uses its
+service-role credential for database access.
+
+Authorization tests cover custom-token sends, incorrect/missing/malformed
+headers, upstream compatibility, explicitly empty configuration, missing both
+credentials and archived-tenant suppression. No shared Vault credential,
+WhatsApp/PHP code, migration, database type or Oracle deployment is changed.
+Deploy only `instagram-dispatcher` to staging. Existing pending replies may be
+sent by the scheduled retry; do not insert replacement messages to test this.
+
+The unrelated WhatsApp profile-sync HTTP 409 is an incomplete test WhatsApp
+integration with no account token, not the Instagram dispatch failure.
+
+Validation: all 29 focused Instagram steps, quick validation and full backend
+validation passed, including 54 database files / 1,196 assertions.
+
 ## Remaining boundaries / rollback
 
 ### Opt-in signature comparison diagnostics
