@@ -28,6 +28,12 @@ establish a working connection. No remote configuration was changed.
 - Configure the Instagram app's own `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`
   and `INSTAGRAM_VERIFY_TOKEN` as backend secrets. Do not reuse/replace
   `META_APP_*` or WhatsApp verification settings.
+- Configure `INSTAGRAM_WEBHOOK_APP_SECRET` separately from the hosting Meta
+  app's **App settings > Basic**. The webhook uses this for signature checks;
+  OAuth keeps using `INSTAGRAM_APP_SECRET`. Existing single-secret deployments
+  remain compatible only when the dedicated setting is absent. An explicitly
+  empty setting or mismatched multi-app lists rejects ingestion. Signature
+  failures never persist a message; HTTP 200 alone is not delivery evidence.
 - The optional Release workflow now forwards these three secrets when present;
   GitHub/Supabase automated deployment does not create missing secret values.
 - Use one isolated staging organization and an Instagram professional test
@@ -89,6 +95,22 @@ secrets, Meta permissions, callbacks or real message delivery are configured.
 - UI tests/build results are recorded in the UI feature commit/delivery summary.
 - Dependency manifests and lockfiles are unchanged. Existing npm audit findings
   were not addressed through an unrelated dependency upgrade.
+
+### Webhook signing hotfix — 24 October 2026
+
+- Added separate `INSTAGRAM_WEBHOOK_APP_SECRET` selection without changing
+  working OAuth credentials or WhatsApp configuration. Signature failures no
+  longer log expected/received signature values.
+- Focused check: from `supabase/functions`, run
+  `deno test --allow-env --allow-net --allow-read _shared/instagram_integration_test.ts`.
+  All 21 steps passed, including dedicated-secret precedence, OAuth-key
+  rejection, tampered bodies, legacy fallback, empty configuration and multi-app
+  isolation.
+- Quick and full backend validation passed; the full database suite passed 54
+  files / 1,196 assertions. No migration or generated-type change is needed.
+- After staging deployment, send a new real DM and check `Persisted messages`
+  plus stored conversation/message rows. Previously rejected webhooks were
+  acknowledged with HTTP 200 and are not automatically replayed by this fix.
 
 ## Remaining boundaries / rollback
 
