@@ -8,6 +8,7 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
     SUPABASE_URL: "https://instagram-test.invalid",
     SUPABASE_ANON_KEY: "test-anon",
     SUPABASE_SERVICE_ROLE_KEY: "test-service",
+    EDGE_FUNCTIONS_TOKEN: "test-internal-dispatch",
     INSTAGRAM_APP_ID: "test-app",
     INSTAGRAM_APP_SECRET: "test-app-secret",
     INSTAGRAM_WEBHOOK_APP_SECRET: "test-webhook-app-secret",
@@ -171,7 +172,10 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
       status: {},
       ...overrides,
     });
-    const dispatchRequest = (record: unknown, token = "test-service") =>
+    const dispatchRequest = (
+      record: unknown,
+      token = env.EDGE_FUNCTIONS_TOKEN,
+    ) =>
       new Request("https://edge.invalid/instagram-dispatcher", {
         method: "POST",
         headers: {
@@ -180,6 +184,40 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
         },
         body: JSON.stringify({ record }),
       });
+    let dispatchTestModule = 0;
+    const dispatchWithConfig = async (
+      internalToken: string | undefined,
+      serviceRoleToken: string | undefined,
+    ): Promise<Handler> => {
+      let handler: Handler | undefined;
+      for (
+        const [name, value] of [
+          ["EDGE_FUNCTIONS_TOKEN", internalToken],
+          ["SUPABASE_SERVICE_ROLE_KEY", serviceRoleToken],
+        ] as const
+      ) {
+        if (value === undefined) Deno.env.delete(name);
+        else Deno.env.set(name, value);
+      }
+      Deno.serve = ((captured: Handler) => {
+        handler = captured;
+        return {};
+      }) as typeof Deno.serve;
+      try {
+        await import(
+          `../instagram-dispatcher/index.ts?dispatch-test=${++dispatchTestModule}`
+        );
+      } finally {
+        Deno.serve = originalServe;
+        Deno.env.set("EDGE_FUNCTIONS_TOKEN", env.EDGE_FUNCTIONS_TOKEN);
+        Deno.env.set(
+          "SUPABASE_SERVICE_ROLE_KEY",
+          env.SUPABASE_SERVICE_ROLE_KEY,
+        );
+      }
+      if (!handler) throw new Error("Dispatcher handler was not registered");
+      return handler;
+    };
     const flags = () =>
       calls.filter((call) =>
         call.method === "PATCH" &&
@@ -280,6 +318,101 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
         call.method === "POST" && call.url.pathname.endsWith("/messages")
       );
 
+    await t.step(
+      "custom dispatch credential rejects service-role, Meta, missing and malformed credentials before any I/O",
+      async () => {
+        reset();
+        for (
+          const token of [
+            env.SUPABASE_SERVICE_ROLE_KEY,
+            row.extra.access_token,
+            "wrong",
+          ]
+        ) {
+          assertEquals(
+            (await dispatch(dispatchRequest(message(), token))).status,
+            401,
+          );
+        }
+        for (
+          const authorization of [
+            undefined,
+            env.EDGE_FUNCTIONS_TOKEN,
+            "Bearer ",
+            `Basic ${env.EDGE_FUNCTIONS_TOKEN}`,
+          ]
+        ) {
+          assertEquals(
+            (await dispatch(
+              new Request("https://edge.invalid/instagram-dispatcher", {
+                method: "POST",
+                headers: authorization === undefined ? {} : { authorization },
+                body: "not-json",
+              }),
+            )).status,
+            401,
+          );
+        }
+        assertEquals(calls.length, 0);
+      },
+    );
+    await t.step(
+      "upstream dispatch credential is used only when the custom setting is absent",
+      async () => {
+        const legacy = await dispatchWithConfig(
+          undefined,
+          env.SUPABASE_SERVICE_ROLE_KEY,
+        );
+        reset();
+        assertEquals((await legacy(dispatchRequest(message()))).status, 401);
+        assertEquals(calls.length, 0);
+        assertEquals(
+          (await legacy(
+            dispatchRequest(message(), env.SUPABASE_SERVICE_ROLE_KEY),
+          )).status,
+          200,
+        );
+        assertEquals(messageWrites()[0].body?.external_id, "ig-sent-1");
+      },
+    );
+    await t.step(
+      "an explicitly empty dispatch credential never falls back to service role",
+      async () => {
+        const disabled = await dispatchWithConfig(
+          "",
+          env.SUPABASE_SERVICE_ROLE_KEY,
+        );
+        reset();
+        assertEquals(
+          (await disabled(
+            dispatchRequest(message(), env.SUPABASE_SERVICE_ROLE_KEY),
+          )).status,
+          401,
+        );
+        assertEquals(
+          (await disabled(dispatchRequest(message(), ""))).status,
+          401,
+        );
+        assertEquals(calls.length, 0);
+      },
+    );
+    await t.step(
+      "missing dispatch credentials fail closed even without an authorization header",
+      async () => {
+        const disabled = await dispatchWithConfig(undefined, undefined);
+        reset();
+        assertEquals(
+          (await disabled(
+            new Request("https://edge.invalid/instagram-dispatcher", {
+              method: "POST",
+              body: "not-json",
+            }),
+          )).status,
+          401,
+        );
+        assertEquals(calls.length, 0);
+      },
+    );
     await t.step(
       "unauthorized dispatch and archived organizations cannot send",
       async () => {
