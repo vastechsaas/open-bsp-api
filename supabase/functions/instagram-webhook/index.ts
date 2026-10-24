@@ -31,7 +31,8 @@ const APP_ID = Deno.env.get("INSTAGRAM_APP_ID");
 // Meta signs messaging webhooks with the hosting Meta app's secret, which can
 // differ from the Instagram login secret. Preserve existing single-secret
 // deployments only when the dedicated setting is absent (not explicitly empty).
-const WEBHOOK_APP_SECRET = Deno.env.get("INSTAGRAM_WEBHOOK_APP_SECRET") ??
+const DEDICATED_WEBHOOK_SECRET = Deno.env.get("INSTAGRAM_WEBHOOK_APP_SECRET");
+const WEBHOOK_APP_SECRET = DEDICATED_WEBHOOK_SECRET ??
   Deno.env.get("INSTAGRAM_APP_SECRET");
 
 // 24 hours. Profile is refreshed when older than this; tunable via constant.
@@ -178,7 +179,7 @@ function verifyToken(request: Request): Response {
  */
 async function validateWebhookSignature(
   request: Request,
-  body: string,
+  body: Uint8Array<ArrayBuffer>,
 ): Promise<boolean> {
   if (!APP_ID || !WEBHOOK_APP_SECRET) {
     log.warn(
@@ -225,7 +226,6 @@ async function validateWebhookSignature(
   try {
     const encoder = new TextEncoder();
     const key = encoder.encode(secrets[idIndex]);
-    const data = encoder.encode(body);
 
     const cryptoKey = await crypto.subtle.importKey(
       "raw",
@@ -235,7 +235,7 @@ async function validateWebhookSignature(
       ["sign"],
     );
 
-    const hmac = await crypto.subtle.sign("HMAC", cryptoKey, data);
+    const hmac = await crypto.subtle.sign("HMAC", cryptoKey, body);
     const expectedSignature = Array.from(new Uint8Array(hmac))
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
@@ -243,7 +243,26 @@ async function validateWebhookSignature(
     const isValid = signatureValue === expectedSignature;
 
     if (!isValid) {
-      log.warn("Invalid webhook signature");
+      const configuredSecret = secrets[idIndex];
+      const trimmedSecret = configuredSecret.trim();
+      // Structural diagnostics only: never log the secret, either signature,
+      // or message content. These distinguish config formatting from a key
+      // mismatch without exposing credentials or customer data.
+      log.warn("Invalid webhook signature", {
+        signing_secret_source: DEDICATED_WEBHOOK_SECRET === undefined
+          ? "legacy"
+          : "dedicated",
+        signing_secret_bytes: key.byteLength,
+        signing_secret_has_outer_whitespace: trimmedSecret !== configuredSecret,
+        signing_secret_has_wrapping_quotes:
+          (trimmedSecret.startsWith('"') && trimmedSecret.endsWith('"')) ||
+          (trimmedSecret.startsWith("'") && trimmedSecret.endsWith("'")),
+        signing_secret_is_32_char_hex: /^[a-f0-9]{32}$/i.test(configuredSecret),
+        signature_is_sha256_hex: /^sha256=[a-f0-9]{64}$/i.test(signature),
+        body_bytes: body.byteLength,
+        body_has_utf8_bom: body[0] === 0xef && body[1] === 0xbb &&
+          body[2] === 0xbf,
+      });
     }
 
     return isValid;
@@ -547,7 +566,9 @@ function instagramMessageToContent(
 }
 
 async function processMessage(request: Request): Promise<Response> {
-  const body = await request.text();
+  // Verify the exact bytes Meta signed before decoding/parsing the payload.
+  // request.text() can normalize an encoding marker, changing the HMAC input.
+  const body = new Uint8Array(await request.arrayBuffer());
 
   // Validate that the request comes from Meta
   const isValidSignature = await validateWebhookSignature(request, body);
@@ -560,7 +581,9 @@ async function processMessage(request: Request): Promise<Response> {
 
   const client = createUnsecureClient();
 
-  const payload = JSON.parse(body) as InstagramWebhookPayload;
+  const payload = JSON.parse(
+    new TextDecoder().decode(body),
+  ) as InstagramWebhookPayload;
 
   if (payload.object !== "instagram") {
     return new Response("Unexpected object", { status: 400 });
