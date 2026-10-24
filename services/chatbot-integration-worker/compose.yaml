@@ -1,0 +1,17 @@
+services:
+  chatbot-worker:
+    build:
+      context: .
+    image: openbsp-chatbot-worker:latest
+    container_name: openbsp-chatbot-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8080:8080"
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

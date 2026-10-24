@@ -1,0 +1,19 @@
+services:
+  voice-transcoder:
+    build:
+      context: .
+    image: openbsp-voice-transcoder:latest
+    container_name: openbsp-voice-transcoder
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8090:8090"
+    # Preserve the existing standalone container's networking during adoption.
+    network_mode: bridge
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

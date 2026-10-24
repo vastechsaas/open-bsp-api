@@ -45,7 +45,7 @@ npm test
 npm run lint
 npm run build
 docker build -t openbsp-chatbot-worker .
-docker run --env-file .env -p 8080:8080 openbsp-chatbot-worker
+docker compose up -d --no-build --pull never --wait --wait-timeout 60
 ```
 
 Copy `.env.example` to `.env` and supply real secrets outside source control.
@@ -53,6 +53,13 @@ Copy `.env.example` to `.env` and supply real secrets outside source control.
 queue message into `chatbot_integration_raw_events` before processing.
 `OPENBSP_ACCOUNT_CONFIG_JSON` maps the public `integration_key` to its expected
 Phone Number ID, Meta App ID, chatbot identity and tenant API key.
+
+`compose.yaml` keeps the health port private at `127.0.0.1:8080`, configures
+automatic restart and bounds log retention. Run Compose commands from this
+directory, with `sudo` when required by the host. See the
+[shared deployment guide](../../docs/node-service-deployments.md) for routine
+operations and safe voice-service adoption; do not restart the worker when
+changing only the voice service.
 
 The queue topology is configurable while retaining safe ordered defaults:
 
