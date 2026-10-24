@@ -51,3 +51,13 @@ jobs:
           META_APP_ID: ${{ secrets.META_APP_ID }}
           META_APP_SECRET: ${{ secrets.META_APP_SECRET }}
           WHATSAPP_VERIFY_TOKEN: ${{ secrets.WHATSAPP_VERIFY_TOKEN }}
+
+      # Optional Instagram configuration; never replace the WhatsApp settings.
+      - run: |
+          if [ -n "$INSTAGRAM_APP_ID" ]; then supabase secrets set INSTAGRAM_APP_ID="$INSTAGRAM_APP_ID"; fi
+          if [ -n "$INSTAGRAM_APP_SECRET" ]; then supabase secrets set INSTAGRAM_APP_SECRET="$INSTAGRAM_APP_SECRET"; fi
+          if [ -n "$INSTAGRAM_VERIFY_TOKEN" ]; then supabase secrets set INSTAGRAM_VERIFY_TOKEN="$INSTAGRAM_VERIFY_TOKEN"; fi
+        env:
+          INSTAGRAM_APP_ID: ${{ secrets.INSTAGRAM_APP_ID }}
+          INSTAGRAM_APP_SECRET: ${{ secrets.INSTAGRAM_APP_SECRET }}
+          INSTAGRAM_VERIFY_TOKEN: ${{ secrets.INSTAGRAM_VERIFY_TOKEN }}

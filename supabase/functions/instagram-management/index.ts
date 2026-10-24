@@ -18,6 +18,7 @@ import {
   type InstagramLoginPayload,
   parseSignedRequest,
   performInstagramLogin,
+  publicInstagramAccount,
   refreshTokens,
 } from "./login.ts";
 import { type User } from "@supabase/supabase-js";
@@ -140,19 +141,28 @@ function requireRoles(roles: OrganizationRole[]) {
     // Clone the request to read the body without consuming the stream.
     const body = await c.req.raw.clone().json();
     const organization_id = body.organization_id;
+    if (typeof organization_id !== "string" || !organization_id) {
+      throw new HTTPException(400, { message: "Missing organization_id" });
+    }
 
     const user = c.get("user");
 
     if (user) {
       const { error: agentError, data: agent } = await client
         .from("agents")
-        .select("organization_id")
+        .select("organization_id, extra")
         .eq("user_id", user.id)
         .eq("organization_id", organization_id)
+        .eq("ai", false)
         .in("extra->>role", roles)
         .maybeSingle();
 
-      if (agentError || !agent) {
+      const invitation = (agent?.extra as {
+        invitation?: { status?: string };
+      } | null)?.invitation;
+      if (
+        agentError || !agent || (invitation && invitation.status !== "accepted")
+      ) {
         throw new HTTPException(403, {
           message:
             `User ${user.id} not authorized for organization ${organization_id}. Allowed roles: ${
@@ -206,7 +216,9 @@ app.post(
   requireRoles(["owner"]),
   async (c) => {
     const payload = await c.req.json<InstagramLoginPayload>();
-    log.info("Instagram login payload", payload);
+    log.info("Instagram login requested", {
+      organization_id: payload.organization_id,
+    });
 
     // Users may not modify organizations_addresses directly; use the unsecure
     // client now that the role check has passed.
@@ -220,7 +232,7 @@ app.post(
         address: address.address,
       });
 
-      return c.json(address);
+      return c.json(publicInstagramAccount(address));
     } catch (error) {
       if (error instanceof HTTPException) {
         log.error(error.message, error);
@@ -259,7 +271,7 @@ app.delete(
 
     const address = await disconnect(client, payload);
 
-    return c.json(address);
+    return c.json(publicInstagramAccount(address));
   },
 );
 
@@ -307,7 +319,7 @@ app.post("/instagram-management/onboard", async (c) => {
     throw new HTTPException(400, { message: "Missing 'token' body param" });
   }
 
-  log.info("Public Instagram onboard payload", body);
+  log.info("Public Instagram onboarding requested");
 
   const client = createUnsecureClient();
 
@@ -380,7 +392,7 @@ app.post("/instagram-management/onboard", async (c) => {
       address: address.address,
     });
 
-    return c.json(address);
+    return c.json(publicInstagramAccount(address));
   } catch (error) {
     if (error instanceof HTTPException) {
       log.error(error.message, error);
