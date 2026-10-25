@@ -24,6 +24,8 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
   const calls: Call[] = [];
   const org = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   let active = true;
+  let available = true;
+  let disableDuringExchange = false;
   let graphCode: number | undefined;
   let profileCode: number | undefined;
   let nonJsonProfileError = false;
@@ -70,6 +72,9 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
       if (url.hostname === "instagram-test.invalid") {
         if (url.pathname.endsWith("/rpc/is_organization_active")) {
           return json(active);
+        }
+        if (url.pathname.endsWith("/rpc/is_integration_available")) {
+          return json(available);
         }
         if (url.pathname.endsWith("/api_keys")) {
           return json({ organization_id: org, role: apiKeyRole });
@@ -124,6 +129,7 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
         }
       }
       if (url.hostname === "api.instagram.com") {
+        if (disableDuringExchange) available = false;
         return json({ access_token: "short-secret", user_id: "business" });
       }
       if (url.hostname === "graph.instagram.com") {
@@ -155,6 +161,8 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
     const reset = () => {
       calls.length = 0;
       active = true;
+      available = true;
+      disableDuringExchange = false;
       graphCode = undefined;
       profileCode = undefined;
       nonJsonProfileError = false;
@@ -846,6 +854,70 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
           redirect_uri: "https://ui.invalid/oauth/instagram",
         }),
       });
+    await t.step(
+      "disabled integration blocks authenticated and public callbacks before external work",
+      async () => {
+        for (const jwt of [true, false]) {
+          reset();
+          available = false;
+          const request = signup();
+          if (jwt) request.headers.set("Authorization", "Bearer eyJtest");
+          assertEquals((await management(request)).status, 403);
+          assertEquals(
+            calls.some((call) => call.url.hostname.endsWith("instagram.com")),
+            false,
+          );
+        }
+        reset();
+        available = false;
+        const response = await management(
+          new Request("https://edge.invalid/instagram-management/onboard", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              token: "onboard-token",
+              code: "test-code",
+              redirect_uri: "https://ui.invalid/onboard/instagram/callback",
+            }),
+          }),
+        );
+        assertEquals(response.status, 403);
+        assertEquals(
+          calls.some((call) => call.url.hostname.endsWith("instagram.com")),
+          false,
+        );
+        assertEquals(
+          calls.some((call) =>
+            call.method === "PATCH" &&
+            call.url.pathname.endsWith("/onboarding_tokens")
+          ),
+          false,
+        );
+        assertEquals(
+          (await management(
+            new Request(
+              "https://edge.invalid/instagram-management/onboard?token=onboard-token",
+            ),
+          )).status,
+          403,
+        );
+      },
+    );
+    await t.step(
+      "already accepted registration may finish after disabling",
+      async () => {
+        reset();
+        disableDuringExchange = true;
+        assertEquals((await management(signup())).status, 200);
+        assertEquals(available, false);
+        assertEquals(
+          calls.filter((call) =>
+            call.url.pathname.endsWith("/rpc/is_integration_available")
+          ).length,
+          1,
+        );
+      },
+    );
     await t.step("API-key organization binding is retained", async () => {
       reset();
       assertEquals(

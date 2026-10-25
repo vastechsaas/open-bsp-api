@@ -18,6 +18,7 @@ with check (
   organization_id in (
     select public.get_authorized_orgs('owner')
   )
+  and public.is_integration_available(organization_id, service::text)
 );
 
 create policy "owners can delete onboarding tokens"

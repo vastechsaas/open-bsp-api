@@ -1,4 +1,5 @@
 import * as log from "../_shared/logger.ts";
+import { requireIntegrationAvailable } from "../_shared/integration_availability.ts";
 import { HTTPException } from "jsr:@hono/hono/http-exception";
 import { ContentfulStatusCode } from "jsr:@hono/hono/utils/http-status";
 import { decodeBase64Url } from "@std/encoding/base64url";
@@ -333,6 +334,11 @@ export async function performInstagramLogin(
   }
 
   await requireActiveOrganization(client, payload.organization_id);
+  await requireIntegrationAvailable(
+    client,
+    payload.organization_id,
+    "instagram",
+  );
 
   const { app_id, app_secret } = resolveAppCredentials(payload.application_id);
 
