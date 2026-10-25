@@ -96,7 +96,7 @@ begin
     select 1 from public.organization_lifecycle where organization_id = p_organization_id and status = 'active'
   ) then raise exception 'organization is archived' using errcode = '42501'; end if;
   if exists (select 1 from public.chatbot_node_operations where organization_id = p_organization_id
-    and organization_address = p_address and status not in ('succeeded', 'failed')) then
+    and organization_address = p_address and action <> 'account-sync' and status not in ('succeeded', 'failed')) then
     raise exception 'number has an unresolved bridge operation' using errcode = '23514';
   end if;
   if p_action = 'activate' then

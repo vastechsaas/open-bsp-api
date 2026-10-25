@@ -132,7 +132,7 @@ begin
     and m.direction = 'outgoing' and not a.ai and m.status ? 'pending' and not m.status ?| array['sent','delivered','read','failed']) then
     raise exception 'Wait for pending human messages to finish sending.' using errcode = '23514'; end if;
   if exists(select 1 from public.chatbot_node_operations where organization_id = p_organization_id
-    and organization_address = mapping.organization_address and status not in ('succeeded','failed')
+    and organization_address = mapping.organization_address and action <> 'account-sync' and status not in ('succeeded','failed')
     and (conversation_id is null or conversation_id = target.id)) then
     raise exception 'conversation has an unresolved bridge operation' using errcode = '23514'; end if;
   if operation.request_id is not null then

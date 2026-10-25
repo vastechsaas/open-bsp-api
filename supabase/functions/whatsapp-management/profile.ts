@@ -226,9 +226,7 @@ export async function syncWhatsAppProfile(
   const { data, error } = await client
     .from("organizations_addresses")
     .update({
-      status: "connected",
       extra: {
-        ...extra,
         phone_number: meta.phone.display_phone_number
           ? normalizePhoneNumber(meta.phone.display_phone_number)
           : extra.phone_number,

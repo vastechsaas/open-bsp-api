@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createUnsecureClient } from "../_shared/supabase.ts";
 import { processNodeBridgeOperation } from "../_shared/chatbot/node_bridge_processor.ts";
 import { boundedWork } from "../_shared/chatbot/bounded_work.ts";
+import { reconcileWhatsAppAccounts } from "../_shared/chatbot/whatsapp_account_sync.ts";
 
 Deno.serve(async (request) => {
   const serviceKey = Deno.env.get("EDGE_FUNCTIONS_TOKEN") ||
@@ -15,7 +16,8 @@ Deno.serve(async (request) => {
   if (Deno.env.get("NODE_CHATBOT_BRIDGE_ENABLED") !== "true") {
     return Response.json({ disabled: true });
   }
-  const { data, error } = await createUnsecureClient().from(
+  await reconcileWhatsAppAccounts();
+  let query = createUnsecureClient().from(
     "chatbot_node_operations",
   ).select("request_id")
     .in("status", ["pending", "in_flight", "reconciling", "retry_wait"])
@@ -23,6 +25,10 @@ Deno.serve(async (request) => {
       `next_attempt_at.is.null,next_attempt_at.lte.${new Date().toISOString()}`,
     )
     .order("created_at").limit(10);
+  if (Deno.env.get("NODE_WHATSAPP_ACCOUNT_SYNC_ENABLED") !== "true") {
+    query = query.neq("action", "account-sync");
+  }
+  const { data, error } = await query;
   if (error) {
     return Response.json({ message: "Unable to load bridge work" }, {
       status: 503,
