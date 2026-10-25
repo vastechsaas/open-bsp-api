@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { requireIntegrationAvailable } from "../_shared/integration_availability.ts";
 import { Context, Hono } from "@hono/hono";
 import { cors } from "jsr:@hono/hono/cors";
 import { HTTPException } from "jsr:@hono/hono/http-exception";
@@ -299,6 +300,7 @@ app.get("/instagram-management/onboard", async (c) => {
     return c.json({ valid: false });
   }
 
+  await requireIntegrationAvailable(client, data.organization_id, "instagram");
   return c.json({
     valid: true,
     organization_name: data.organizations?.name,

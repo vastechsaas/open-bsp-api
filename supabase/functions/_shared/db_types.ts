@@ -1803,6 +1803,24 @@ export type Database = {
           },
         ]
       }
+      integration_catalogue: {
+        Row: {
+          default_enabled: boolean
+          id: string
+          name: string
+        }
+        Insert: {
+          default_enabled?: boolean
+          id: string
+          name: string
+        }
+        Update: {
+          default_enabled?: boolean
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       logs: {
         Row: {
           category: string
@@ -2155,6 +2173,65 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "organization_automation_settings_organization_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_integration_availability: {
+        Row: {
+          enabled: boolean
+          integration_id: string
+          organization_id: string
+        }
+        Insert: {
+          enabled: boolean
+          integration_id: string
+          organization_id: string
+        }
+        Update: {
+          enabled?: boolean
+          integration_id?: string
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_integration_availability_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integration_catalogue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_integration_availability_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organization_integration_settings"
+            referencedColumns: ["organization_id"]
+          },
+        ]
+      }
+      organization_integration_settings: {
+        Row: {
+          organization_id: string
+          revision: number
+          updated_at: string
+        }
+        Insert: {
+          organization_id: string
+          revision?: number
+          updated_at?: string
+        }
+        Update: {
+          organization_id?: string
+          revision?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_integration_settings_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: true
             referencedRelation: "organizations"
@@ -3923,6 +4000,10 @@ export type Database = {
           unassigned_conversations: number
         }[]
       }
+      get_effective_integration_availability: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
       get_effective_module_permissions: {
         Args: { p_module: string; p_organization_id: string }
         Returns: Json
@@ -3989,6 +4070,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      get_platform_integration_availability: {
+        Args: { p_organization_id: string }
+        Returns: Json
       }
       get_platform_module_permissions: {
         Args: { p_module: string; p_organization_id: string }
@@ -4191,6 +4276,10 @@ export type Database = {
       }
       is_counted_agent_seat: {
         Args: { p_ai: boolean; p_extra: Json }
+        Returns: boolean
+      }
+      is_integration_available: {
+        Args: { p_integration_id: string; p_organization_id: string }
         Returns: boolean
       }
       is_node_managed_number: {
@@ -5376,6 +5465,15 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      update_platform_integration_availability: {
+        Args: {
+          p_expected_revision: number
+          p_integrations: Json
+          p_organization_id: string
+          p_request_id: string
+        }
+        Returns: Json
       }
       update_platform_module_permissions: {
         Args: {

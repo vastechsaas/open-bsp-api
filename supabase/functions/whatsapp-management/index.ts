@@ -3,6 +3,7 @@ import { Context, Hono } from "@hono/hono";
 import { cors } from "jsr:@hono/hono/cors";
 import { HTTPException } from "jsr:@hono/hono/http-exception";
 import * as log from "../_shared/logger.ts";
+import { requireIntegrationAvailable } from "../_shared/integration_availability.ts";
 import { Json } from "../_shared/db_types.ts";
 import {
   ApiKeyRow,
@@ -742,6 +743,7 @@ app.post(
     }
 
     const client = createUnsecureClient();
+    await requireIntegrationAvailable(client, organization_id, "whatsapp");
     return c.json(
       await syncWhatsAppProfile(
         client,
@@ -758,6 +760,11 @@ app.patch(
   async (c) => {
     const form = await c.req.formData();
     const client = createUnsecureClient();
+    await requireIntegrationAvailable(
+      client,
+      String(form.get("organization_id") || ""),
+      "whatsapp",
+    );
     return c.json(await updateWhatsAppProfile(client, form));
   },
 );
@@ -766,7 +773,9 @@ app.patch(
 
 app.post("/whatsapp-management/signup", requireRoles(["owner"]), async (c) => {
   const payload = await c.req.json<SignupPayload>();
-  log.info("Embedded signup payload", payload);
+  log.info("Embedded signup requested", {
+    organization_id: payload.organization_id,
+  });
 
   // Once the user has been authorized, use the unsecure client to
   // avoid row-level security.
@@ -853,6 +862,7 @@ app.get("/whatsapp-management/onboard", async (c) => {
     return c.json({ valid: false });
   }
 
+  await requireIntegrationAvailable(client, data.organization_id, "whatsapp");
   return c.json({
     valid: true,
     organization_name: data.organizations?.name,
@@ -874,7 +884,7 @@ app.post("/whatsapp-management/onboard", async (c) => {
     throw new HTTPException(400, { message: "Missing 'token' body param" });
   }
 
-  log.info("Public onboard payload", body);
+  log.info("Public WhatsApp onboarding requested");
 
   const client = createUnsecureClient();
 

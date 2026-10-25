@@ -1,4 +1,5 @@
 import * as log from "../_shared/logger.ts";
+import { requireIntegrationAvailable } from "../_shared/integration_availability.ts";
 import { Json } from "../_shared/db_types.ts";
 import { HTTPException } from "jsr:@hono/hono/http-exception";
 import type {
@@ -225,6 +226,12 @@ export async function performEmbeddedSignup(
       message: "Missing 'phone_number_id' body param!",
     });
   }
+
+  await requireIntegrationAvailable(
+    client,
+    payload.organization_id,
+    "whatsapp",
+  );
 
   if (!APP_ID || !APP_SECRET) {
     throw new HTTPException(401, {

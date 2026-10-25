@@ -1,5 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { z } from "zod";
+import { HTTPException } from "jsr:@hono/hono/http-exception";
+import { requireIntegrationAvailable } from "../_shared/integration_availability.ts";
 import * as log from "../_shared/logger.ts";
 import {
   createClient,
@@ -122,6 +124,13 @@ Deno.serve(async (request) => {
       return jsonResponse({ message: "WhatsApp integration not found" }, 404);
     }
 
+    if (payload.action === "refresh_account") {
+      await requireIntegrationAvailable(
+        service,
+        payload.organization_id,
+        "whatsapp",
+      );
+    }
     const checkedAt = new Date().toISOString();
     let result: SafeResult;
     try {
@@ -239,6 +248,12 @@ Deno.serve(async (request) => {
     if (auditError) throw auditError;
     return jsonResponse(result, result.success ? 200 : 502);
   } catch (error) {
+    if (error instanceof HTTPException) {
+      return jsonResponse(
+        { message: error.message, cause: error.cause },
+        error.status,
+      );
+    }
     if (error instanceof z.ZodError || error instanceof SyntaxError) {
       return jsonResponse({ message: "Invalid WABA health request" }, 400);
     }
