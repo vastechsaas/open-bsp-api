@@ -68,6 +68,24 @@ reconcile the test mapping and retain its safe suspended state, then restore the
 prior isolated image if necessary. Never restore native processing as a
 fallback. Keep the additive schema on rollback.
 
+## Approved Main promotion
+
+After staging approval, promote only SCRUM-128 commits onto the latest Main
+branches. Do not merge unrelated staging features or replace Main-only changes.
+Back up Main's public/billing schema and data and the production Node database;
+retain the previous Node image and Compose configuration.
+
+Keep `NODE_WHATSAPP_ACCOUNT_SYNC_ENABLED=false` in Main until its generated
+migrations and compatible backend/API/worker deployments are confirmed. Deploy
+the Node migration before replacing API/worker. Verify health and authenticated
+account-sync capability before enabling the worker. Keep existing tenant
+credentials, connection-map entries, Meta subscriptions and queue configuration.
+
+Enabling reconciliation honors the current account status, including an
+intentional disconnection. It does not reconnect an account, reactivate its
+selected chatbot or change its engine selection. Verify the latest source and
+acknowledged revisions match before reporting synchronization complete.
+
 Scheduled expiry alerts, automatic Meta token generation and a new token
 settings screen are outside this slice. The integration queue worker contract is
 unchanged.
