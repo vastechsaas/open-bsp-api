@@ -14,9 +14,17 @@ export function nodeBridgeConnection(organizationId: string, address: string) {
   if (Deno.env.get("NODE_CHATBOT_BRIDGE_ENABLED") !== "true") {
     throw new Error("Node bridge is disabled");
   }
-  const connections = z.record(z.string(), connectionSchema).parse(
-    JSON.parse(Deno.env.get("NODE_CHATBOT_CONNECTIONS") ?? "{}"),
-  );
+  // Additive isolated-rollout entries never overwrite an existing tenant route.
+  const accountConnections =
+    Deno.env.get("NODE_WHATSAPP_ACCOUNT_SYNC_ENABLED") === "true"
+      ? JSON.parse(
+        Deno.env.get("NODE_WHATSAPP_ACCOUNT_SYNC_CONNECTIONS") ?? "{}",
+      )
+      : {};
+  const connections = z.record(z.string(), connectionSchema).parse({
+    ...accountConnections,
+    ...JSON.parse(Deno.env.get("NODE_CHATBOT_CONNECTIONS") ?? "{}"),
+  });
   const connection = connections[`${organizationId}:${address}`];
   if (!connection) {
     throw new Error("Node connection is not configured for this tenant/number");

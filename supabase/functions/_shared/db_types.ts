@@ -1165,6 +1165,12 @@ export type Database = {
       }
       chatbot_node_bridges: {
         Row: {
+          account_ack_revision: number
+          account_checked_at: string | null
+          account_last_error: string | null
+          account_revision: number
+          account_sync_status: string
+          account_synced_at: string | null
           definition_hash: string | null
           engine: string
           flow_id: string | null
@@ -1180,6 +1186,12 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          account_ack_revision?: number
+          account_checked_at?: string | null
+          account_last_error?: string | null
+          account_revision?: number
+          account_sync_status?: string
+          account_synced_at?: string | null
           definition_hash?: string | null
           engine?: string
           flow_id?: string | null
@@ -1195,6 +1207,12 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          account_ack_revision?: number
+          account_checked_at?: string | null
+          account_last_error?: string | null
+          account_revision?: number
+          account_sync_status?: string
+          account_synced_at?: string | null
           definition_hash?: string | null
           engine?: string
           flow_id?: string | null
@@ -3297,6 +3315,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      complete_whatsapp_account_sync: {
+        Args: { p_request_id: string; p_revision: string }
+        Returns: boolean
+      }
       contact_address_update_rules: {
         Args: {
           p_address: string
@@ -3551,6 +3573,14 @@ export type Database = {
           p_payload?: Json
           p_recipient_agent_id: string
           p_source_event_key: string
+        }
+        Returns: string
+      }
+      enqueue_whatsapp_account_sync: {
+        Args: {
+          p_address: string
+          p_force?: boolean
+          p_organization_id: string
         }
         Returns: string
       }
@@ -4743,6 +4773,14 @@ export type Database = {
           outcome: string
         }[]
       }
+      record_node_account_auth_failure: {
+        Args: {
+          p_address: string
+          p_organization_id: string
+          p_revision: string
+        }
+        Returns: boolean
+      }
       record_node_chatbot_handoff: {
         Args: {
           p_agent_id?: string
@@ -4826,6 +4864,10 @@ export type Database = {
         }
         Returns: string
       }
+      resolve_whatsapp_account_sync: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
       restore_organization: {
         Args: {
           p_organization_id: string
@@ -4837,6 +4879,10 @@ export type Database = {
           restored_at: string
           status: string
         }[]
+      }
+      retry_whatsapp_account_sync: {
+        Args: { p_address: string; p_organization_id: string }
+        Returns: string
       }
       role_rank: {
         Args: { role: Database["public"]["Enums"]["role"] }
@@ -5279,6 +5325,10 @@ export type Database = {
       validate_routing_queue_agent_ids: {
         Args: { p_agent_ids: string[]; p_organization_id: string }
         Returns: string[]
+      }
+      whatsapp_account_sync_status: {
+        Args: { p_address: string; p_organization_id: string }
+        Returns: Json
       }
     }
     Enums: {

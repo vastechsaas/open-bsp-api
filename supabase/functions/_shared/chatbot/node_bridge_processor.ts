@@ -5,6 +5,7 @@ import {
   nodeBridgeRequest as remoteRequest,
 } from "./node_bridge_client.ts";
 import { conversationOperationError } from "./conversation_lifecycle.ts";
+import { processWhatsAppAccountSync } from "./whatsapp_account_sync.ts";
 
 export async function processNodeBridgeOperation(
   requestId: string,
@@ -21,6 +22,10 @@ export async function processNodeBridgeOperation(
     "chatbot_node_operations",
   ).select().eq("request_id", requestId).single();
   if (error || !operation) throw new Error("Unable to load bridge operation");
+  if (operation.action === "account-sync") {
+    await processWhatsAppAccountSync(requestId, signal);
+    return operation;
+  }
   const conversationScoped = operation.conversation_id !== null;
   if (["succeeded", "failed"].includes(operation.status)) return operation;
   if (
