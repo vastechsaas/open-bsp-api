@@ -347,7 +347,6 @@ app.post("/instagram-management/onboard", async (c) => {
 
   if (reason || !tokenData) {
     log.warn("Onboard token rejected", {
-      token: body.token,
       reason,
       organization_id: tokenData?.organization_id,
     });
@@ -358,7 +357,6 @@ app.post("/instagram-management/onboard", async (c) => {
   }
 
   log.info("Onboard token validated", {
-    token: body.token,
     organization_id: tokenData.organization_id,
   });
 
@@ -387,7 +385,6 @@ app.post("/instagram-management/onboard", async (c) => {
       .eq("status", "active");
 
     log.info("Onboard completed", {
-      token: body.token,
       organization_id: tokenData.organization_id,
       address: address.address,
     });
