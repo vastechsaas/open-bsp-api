@@ -145,6 +145,9 @@ begin
   for update;
 
   if found then
+    if existing_provisioning.setup_version = 2 then
+      raise exception 'ONBOARDING_VERSION_REQUIRED' using errcode = '22023';
+    end if;
     if existing_provisioning.request_payload <> canonical_payload then
       raise exception using
         errcode = '22023',
@@ -380,6 +383,7 @@ create function public.list_platform_organization_provisioning_page(
   completed_at timestamp with time zone,
   created_at timestamp with time zone,
   updated_at timestamp with time zone,
+  setup_version integer,
   total_count bigint
 )
 language plpgsql
@@ -422,6 +426,7 @@ begin
     filtered.completed_at,
     filtered.created_at,
     filtered.updated_at,
+    filtered.setup_version,
     count(*) over ()
   from filtered
   order by filtered.updated_at desc, filtered.id desc

@@ -3,6 +3,8 @@ import { z } from "zod";
 import * as log from "../_shared/logger.ts";
 import { createClient, createUnsecureClient } from "../_shared/supabase.ts";
 import { organizationProvisioningPayloadSchema } from "./payload.ts";
+import { handleOrganizationSetup } from "./setup.ts";
+import { SafeFailure } from "../platform-user-onboarding/core.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -46,9 +48,22 @@ Deno.serve(async (request) => {
       return json({ message: "Platform administrator access required" }, 403);
     }
 
-    const payload = organizationProvisioningPayloadSchema.parse(
-      await request.json(),
-    );
+    const body = await request.text();
+    if (body.length > 65536) {
+      return json({ message: "Invalid organization onboarding request" }, 400);
+    }
+    const raw = JSON.parse(body);
+    if (raw?.version === 2) {
+      return json(
+        await handleOrganizationSetup(
+          raw,
+          client,
+          createUnsecureClient(),
+          user.id,
+        ),
+      );
+    }
+    const payload = organizationProvisioningPayloadSchema.parse(raw);
     const { data: provisioning, error: provisioningError } = await client.rpc(
       "provision_platform_organization",
       {
@@ -108,6 +123,9 @@ Deno.serve(async (request) => {
 
     return json(completed, 201);
   } catch (error) {
+    if (error instanceof SafeFailure) {
+      return json({ code: error.code }, error.status);
+    }
     if (provisioningId) {
       await client.rpc("finish_platform_organization_provisioning", {
         p_provisioning_id: provisioningId,
@@ -130,7 +148,7 @@ Deno.serve(async (request) => {
       return json({ message: databaseError.message }, 400);
     }
 
-    log.error("Organization provisioning failed", error);
+    log.error("Organization provisioning failed");
     return json({ message: "Organization provisioning failed" }, 500);
   }
 });

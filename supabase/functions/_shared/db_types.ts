@@ -2413,6 +2413,7 @@ export type Database = {
           platform_admin_user_id: string
           request_id: string
           request_payload: Json
+          setup_version: number
           status: string
           updated_at: string
         }
@@ -2428,6 +2429,7 @@ export type Database = {
           platform_admin_user_id: string
           request_id: string
           request_payload: Json
+          setup_version?: number
           status?: string
           updated_at?: string
         }
@@ -2443,6 +2445,7 @@ export type Database = {
           platform_admin_user_id?: string
           request_id?: string
           request_payload?: Json
+          setup_version?: number
           status?: string
           updated_at?: string
         }
@@ -2501,6 +2504,56 @@ export type Database = {
           },
           {
             foreignKeyName: "organization_provisioning_events_provisioning_fkey"
+            columns: ["provisioning_id"]
+            isOneToOne: false
+            referencedRelation: "organization_provisioning"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_provisioning_people: {
+        Row: {
+          client_key: string
+          email: string
+          expected_updated_at: string
+          failure_code: string | null
+          member_id: string
+          mode: string
+          name: string
+          ordinal: number
+          provisioning_id: string
+          request_id: string
+          role: Database["public"]["Enums"]["role"]
+        }
+        Insert: {
+          client_key: string
+          email: string
+          expected_updated_at: string
+          failure_code?: string | null
+          member_id: string
+          mode: string
+          name: string
+          ordinal: number
+          provisioning_id: string
+          request_id?: string
+          role: Database["public"]["Enums"]["role"]
+        }
+        Update: {
+          client_key?: string
+          email?: string
+          expected_updated_at?: string
+          failure_code?: string | null
+          member_id?: string
+          mode?: string
+          name?: string
+          ordinal?: number
+          provisioning_id?: string
+          request_id?: string
+          role?: Database["public"]["Enums"]["role"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_provisioning_people_provisioning_id_fkey"
             columns: ["provisioning_id"]
             isOneToOne: false
             referencedRelation: "organization_provisioning"
@@ -3363,6 +3416,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      begin_platform_organization_setup: {
+        Args: { p_payload: Json; p_request_id: string }
+        Returns: Json
+      }
       business_hours_schedule_open: {
         Args: { p_at: string; p_schedule: Json }
         Returns: boolean
@@ -3758,6 +3815,7 @@ export type Database = {
           platform_admin_user_id: string
           request_id: string
           request_payload: Json
+          setup_version: number
           status: string
           updated_at: string
         }
@@ -3996,6 +4054,7 @@ export type Database = {
           platform_admin_user_id: string
           request_id: string
           request_payload: Json
+          setup_version: number
           status: string
           updated_at: string
         }
@@ -4005,6 +4064,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      get_platform_organization_setup: {
+        Args: { p_provisioning_id: string }
+        Returns: Json
       }
       get_platform_overview: {
         Args: never
@@ -4511,6 +4574,7 @@ export type Database = {
           owner_email: string
           owner_name: string
           request_id: string
+          setup_version: number
           status: string
           total_count: number
           updated_at: string
@@ -4892,6 +4956,7 @@ export type Database = {
           platform_admin_user_id: string
           request_id: string
           request_payload: Json
+          setup_version: number
           status: string
           updated_at: string
         }
@@ -5020,6 +5085,14 @@ export type Database = {
           p_scope?: string
         }
         Returns: string
+      }
+      record_platform_provisioning_person_result: {
+        Args: {
+          p_failure_code?: string
+          p_member_id: string
+          p_provisioning_id: string
+        }
+        Returns: Json
       }
       record_platform_report_export: {
         Args: {
