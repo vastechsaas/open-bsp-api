@@ -73,6 +73,16 @@ dry run, and verify only the new migration is pending. Never apply this slice to
 Main without subsequent approval. No Node/Oracle/queue-worker deployment is
 needed.
 
+## Selective Main promotion
+
+The approved Main promotion includes SCRUM-129 only, preserving Main-specific
+Instagram and account-setup changes. Back up Main (`buvjopvpkgvzhykwsxnk`) and
+verify the migration dry run before deploying the management functions and UI.
+The existing migration `20261025192803_integration_availability.sql` predates
+Main's already-applied account-setup migration; use `--include-all` only after
+confirming that this is the sole pending migration. Do not include unrelated
+staging migrations or Chatbot Builder availability changes.
+
 Rollback UI/function images together. Availability changes are reversible
 through the audited settings RPC; leave the additive tables in place. Turning
 management off is not a remote account disconnect and must not be advertised as
