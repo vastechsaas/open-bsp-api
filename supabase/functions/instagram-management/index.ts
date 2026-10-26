@@ -476,9 +476,11 @@ app.post("/instagram-management/data-deletion", async (c) => {
 
   // Meta requires a JSON response with a status URL and a confirmation code.
   const confirmation_code = crypto.randomUUID();
-  const origin = new URL(c.req.url).origin;
+  // The gateway strips /functions/v1 before forwarding to Hono. Build the
+  // externally reachable status URL from the configured public project URL.
+  const projectUrl = Deno.env.get("SUPABASE_URL")!.replace(/\/$/, "");
   const url =
-    `${origin}/instagram-management/data-deletion/status?code=${confirmation_code}`;
+    `${projectUrl}/functions/v1/instagram-management/data-deletion/status?code=${confirmation_code}`;
 
   return c.json({ url, confirmation_code });
 });

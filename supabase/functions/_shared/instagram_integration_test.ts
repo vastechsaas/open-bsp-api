@@ -101,6 +101,9 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
           });
         }
         if (url.pathname.endsWith("/organizations_addresses")) {
+          if (request.method === "DELETE") {
+            return new Response(null, { status: 204 });
+          }
           if (request.method === "GET") {
             return url.searchParams.get("select") === "extra->>access_token"
               ? json({ access_token: row.extra.access_token })
@@ -933,6 +936,68 @@ Deno.test("Instagram selective integration preserves the staging contract", asyn
         const account = await response.json();
         assertEquals(account.address, "business");
         assertEquals(account.extra.access_token, undefined);
+      },
+    );
+    await t.step(
+      "deletion receipt uses the public function URL, not the internal gateway origin",
+      async () => {
+        reset();
+        const base64url = (bytes: Uint8Array) =>
+          btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll(
+            "/",
+            "_",
+          ).replace(/=+$/, "");
+        const payload = base64url(
+          new TextEncoder().encode(
+            JSON.stringify({
+              user_id: "deletion-test",
+              algorithm: "HMAC-SHA256",
+            }),
+          ),
+        );
+        const key = await crypto.subtle.importKey(
+          "raw",
+          new TextEncoder().encode(env.INSTAGRAM_APP_SECRET),
+          { name: "HMAC", hash: "SHA-256" },
+          false,
+          ["sign"],
+        );
+        const signature = base64url(
+          new Uint8Array(
+            await crypto.subtle.sign(
+              "HMAC",
+              key,
+              new TextEncoder().encode(payload),
+            ),
+          ),
+        );
+        const response = await management(
+          new Request(
+            "https://edge.invalid/instagram-management/data-deletion",
+            {
+              method: "POST",
+              headers: { "content-type": "application/x-www-form-urlencoded" },
+              body: new URLSearchParams({
+                signed_request: `${signature}.${payload}`,
+              }),
+            },
+          ),
+        );
+        assertEquals(response.status, 200);
+        const receipt = await response.json();
+        const url = new URL(receipt.url);
+        assertEquals(url.origin, env.SUPABASE_URL);
+        assertEquals(
+          url.pathname,
+          "/functions/v1/instagram-management/data-deletion/status",
+        );
+        assertEquals(url.searchParams.get("code"), receipt.confirmation_code);
+        const deletion = calls.find((call) => call.method === "DELETE")!;
+        assertEquals(deletion.url.searchParams.get("service"), "eq.instagram");
+        assertEquals(
+          deletion.url.searchParams.get("address"),
+          "eq.deletion-test",
+        );
       },
     );
   } finally {
