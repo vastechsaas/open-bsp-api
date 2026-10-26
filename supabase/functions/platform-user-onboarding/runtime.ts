@@ -127,8 +127,10 @@ export function accountSetupDependencies(
 export function assertAccountSetupConfigured(action: string) {
   if (
     !["preview", "status", "complete"].includes(action) &&
-    Deno.env.get("PLATFORM_ONBOARDING_CALLBACK_URL") !==
-      "https://vistagalaxy.vastech.biz/onboard/set-password"
+    ![
+      "https://vistagalaxy.vastech.biz/onboard/set-password",
+      "https://socialconnect.vastech.biz/onboard/set-password",
+    ].includes(Deno.env.get("PLATFORM_ONBOARDING_CALLBACK_URL") ?? "")
   ) {
     throw new SafeFailure("ONBOARDING_NOT_CONFIGURED", 503);
   }
