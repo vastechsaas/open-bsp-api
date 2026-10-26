@@ -73,7 +73,7 @@ select ok(not has_table_privilege('authenticated','public.organization_module_pe
 select ok(not has_table_privilege('authenticated','public.organization_module_permissions','truncate'),'Tenant clients cannot truncate permissions');
 select ok(not has_table_privilege('anon','public.organization_module_settings','truncate'),'Anonymous clients cannot truncate permission revisions');
 select is(public.get_effective_module_permissions('12600000-0000-4000-8000-000000000002','chatbot_builder'),
-  '{"can_view":false,"can_manage":false,"revision":0}'::jsonb,'Outsiders receive no tenant permission metadata');
+  '{"enabled":false,"can_view":false,"can_manage":false,"revision":0}'::jsonb,'Outsiders receive no tenant permission metadata');
 select ok(not has_function_privilege('authenticated','public.resolve_chatbot_webhook_credential(uuid,uuid)','execute'),
   'Builder users cannot resolve protected credential values directly');
 select ok(not has_function_privilege('authenticated','public.publish_chatbot_flow_draft(uuid,uuid,uuid,timestamp with time zone,jsonb,uuid)','execute'),

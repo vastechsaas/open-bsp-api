@@ -1,6 +1,7 @@
 create table public.organization_module_settings (
   organization_id uuid not null references public.organizations(id) on delete cascade,
   module text not null check (module = 'chatbot_builder'),
+  enabled boolean not null default true,
   revision bigint not null default 0 check (revision >= 0),
   updated_at timestamptz not null default now(),
   primary key (organization_id, module)

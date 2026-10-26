@@ -2418,18 +2418,21 @@ export type Database = {
       }
       organization_module_settings: {
         Row: {
+          enabled: boolean
           module: string
           organization_id: string
           revision: number
           updated_at: string
         }
         Insert: {
+          enabled?: boolean
           module: string
           organization_id: string
           revision?: number
           updated_at?: string
         }
         Update: {
+          enabled?: boolean
           module?: string
           organization_id?: string
           revision?: number
@@ -5477,6 +5480,7 @@ export type Database = {
       }
       update_platform_module_permissions: {
         Args: {
+          p_enabled?: boolean
           p_expected_revision: number
           p_module: string
           p_organization_id: string
