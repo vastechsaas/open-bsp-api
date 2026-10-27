@@ -33,6 +33,8 @@ const result = spawnSync(process.execPath, [
   "db",
   "diff",
   "--use-migra",
+  "--schema",
+  "public,storage,billing",
   "--file",
   migrationName,
 ], {

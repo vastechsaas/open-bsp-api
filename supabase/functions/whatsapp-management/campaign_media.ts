@@ -1,7 +1,12 @@
 import { HTTPException } from "jsr:@hono/hono/http-exception";
 import type { ContentfulStatusCode } from "jsr:@hono/hono/utils/http-status";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "../_shared/supabase.ts";
+import type { Database, Json } from "../_shared/supabase.ts";
+import { canonicalCarousel, imageCarousel } from "../_shared/carousel.ts";
+import { parseTemplateDraftInput } from "../_shared/template_validation.ts";
+import type { TemplateDraftInput } from "../_shared/types/whatsapp_template_types.ts";
+import { loadCarouselImages } from "./carousel_media.ts";
+import { WhatsAppError } from "../_shared/whatsapp.ts";
 import {
   META_GRAPH_API_VERSION,
   validateTemplateMediaSample,
@@ -198,7 +203,7 @@ export async function startCampaignWithMediaValidation(
   campaignId: string,
 ) {
   const { data: campaign, error } = await client.from("campaigns")
-    .select("organization_address, template, header_media")
+    .select("organization_address, template, header_media, carousel_media")
     .eq("organization_id", organizationId)
     .eq("id", campaignId)
     .maybeSingle();
@@ -210,6 +215,19 @@ export async function startCampaignWithMediaValidation(
   const components = Array.isArray(template.components)
     ? template.components
     : [];
+  if (imageCarousel(template)) {
+    const definition = parseTemplateDraftInput(
+      canonicalCarousel(template as unknown as TemplateDraftInput),
+      { requireComplete: true },
+    );
+    // Preflight is deliberately before queueing. Worker obtains fresh send handles from retained bytes.
+    await loadCarouselImages(
+      client,
+      organizationId,
+      campaign.carousel_media,
+      imageCarousel(definition)!.cards.length,
+    );
+  }
   const mediaHeader = components.find((value) => {
     const component = value as Record<string, unknown>;
     return component.type === "HEADER" &&
@@ -241,4 +259,51 @@ export async function startCampaignWithMediaValidation(
     });
   }
   return { queued_count: data };
+}
+
+/** Cached per campaign batch by the caller; never trust client-supplied Meta media IDs. */
+export async function prepareCampaignCarouselMedia(
+  client: SupabaseClient<Database>,
+  organizationId: string,
+  organizationAddress: string,
+  template: Json,
+  media: Json,
+): Promise<Json> {
+  const carousel = imageCarousel(template as { components?: unknown });
+  if (!carousel) return [];
+  parseTemplateDraftInput(
+    canonicalCarousel(template as unknown as TemplateDraftInput),
+    { requireComplete: true },
+  );
+  const images = await loadCarouselImages(
+    client,
+    organizationId,
+    media,
+    carousel.cards.length,
+  );
+  const prepared = [];
+  for (const [index, { asset, file }] of images.entries()) {
+    let uploaded: CampaignHeaderMedia;
+    try {
+      uploaded = await uploadCampaignMedia(
+        client,
+        organizationId,
+        organizationAddress,
+        "IMAGE",
+        file,
+      );
+    } catch (error) {
+      if (error instanceof HTTPException) {
+        throw new WhatsAppError(`Card ${index + 1}: image preparation failed`, {
+          ...(error.cause && typeof error.cause === "object"
+            ? error.cause
+            : {}),
+          status: error.status,
+        });
+      }
+      throw error;
+    }
+    prepared.push({ ...asset, card_index: index, media_id: uploaded.media_id });
+  }
+  return prepared as unknown as Json;
 }

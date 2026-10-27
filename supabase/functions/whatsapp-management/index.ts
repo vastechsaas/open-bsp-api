@@ -43,6 +43,7 @@ import {
   uploadCampaignMedia,
 } from "./campaign_media.ts";
 import type { MediaHeaderFormat } from "../_shared/types/whatsapp_template_types.ts";
+import { uploadCarouselImage } from "./carousel_media.ts";
 
 type TemplatePayload = {
   organization_id: string;
@@ -51,6 +52,7 @@ type TemplatePayload = {
 };
 
 type TemplateDraftPayload = {
+  media_assets?: unknown;
   organization_id: string;
   organization_address: string;
   draft_id?: string;
@@ -73,6 +75,7 @@ type TemplateRecordMutationPayload = {
 };
 
 type ParsedTemplateMutation = TemplateRecordMutationPayload & {
+  media_assets?: unknown;
   draft_id?: string;
   media_file?: File;
 };
@@ -305,6 +308,7 @@ async function parseTemplateMutation(
   const draftId = form.get("draft_id");
   const templateValue = form.get("template");
   const fileValue = form.get("file");
+  const assetsValue = form.get("media_assets");
 
   if (typeof organizationId !== "string" || !organizationId) {
     throw new HTTPException(400, { message: "Missing organization_id" });
@@ -324,6 +328,9 @@ async function parseTemplateMutation(
     organization_id: organizationId,
     draft_id: typeof draftId === "string" && draftId ? draftId : undefined,
     template,
+    media_assets: typeof assetsValue === "string"
+      ? JSON.parse(assetsValue)
+      : undefined,
     media_file: fileValue instanceof File && fileValue.size > 0
       ? fileValue
       : undefined,
@@ -569,6 +576,7 @@ app.post(
         payload.organization_address,
         await getCurrentAgentId(c, payload.organization_id),
         parseDraftInput(payload.template),
+        payload.media_assets,
       ),
       201,
     );
@@ -596,6 +604,7 @@ app.patch(
         payload.draft_id,
         payload.organization_address,
         parseDraftInput(payload.template),
+        payload.media_assets,
       ),
     );
   },
@@ -636,12 +645,43 @@ app.post(
         payload.draft_id,
         parseDraftInput(payload.template, true),
         payload.media_file,
+        payload.media_assets,
       ),
     );
   },
 );
 
 // Campaign media routes
+
+app.post(
+  "/whatsapp-management/carousel-media",
+  requireRoles(["member", "admin", "owner"]),
+  async (c) => {
+    const form = await c.req.formData();
+    const resource = form.get("resource");
+    const file = form.get("file");
+    if (
+      (resource !== "template" && resource !== "campaign") ||
+      !(file instanceof File)
+    ) {
+      throw new HTTPException(400, {
+        message: "Carousel draft and image file are required",
+      });
+    }
+    // Template draft writes remain owner/admin only (also enforced by its RLS).
+    return c.json(
+      await uploadCarouselImage(
+        c.get("supabase"),
+        String(form.get("organization_id") || ""),
+        resource,
+        String(form.get("draft_id") || ""),
+        String(form.get("card_id") || ""),
+        file,
+      ),
+      201,
+    );
+  },
+);
 
 app.post(
   "/whatsapp-management/campaign-media",

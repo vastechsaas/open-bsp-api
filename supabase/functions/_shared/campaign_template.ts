@@ -1,6 +1,12 @@
 import type { Json } from "./db_types.ts";
 import type { EndpointMessage } from "./types/whatsapp_endpoint_types.ts";
-import type { Template } from "./types/whatsapp_template_types.ts";
+import type {
+  Template,
+  TemplateCarousel,
+} from "./types/whatsapp_template_types.ts";
+import { parseTemplateDraftInput } from "./template_validation.ts";
+import { canonicalCarousel } from "./carousel.ts";
+import type { TemplateDraftInput } from "./types/whatsapp_template_types.ts";
 
 type JsonRecord = Record<string, Json | undefined>;
 
@@ -52,6 +58,7 @@ export function buildCampaignTemplatePayload({
   template,
   mapping,
   headerMedia,
+  carouselMedia,
   delivery,
   to,
   recipient,
@@ -59,6 +66,7 @@ export function buildCampaignTemplatePayload({
   template: Json;
   mapping: Json;
   headerMedia?: Json;
+  carouselMedia?: Json;
   delivery: CampaignTemplateDelivery;
   to?: string;
   recipient?: string;
@@ -78,6 +86,85 @@ export function buildCampaignTemplatePayload({
   }
 
   const components: NonNullable<Template["components"]> = [];
+
+  if (
+    Array.isArray(rawComponents) &&
+    rawComponents.some((part) => asRecord(part).type === "CAROUSEL")
+  ) {
+    const definition = parseTemplateDraftInput(
+      canonicalCarousel(template as unknown as TemplateDraftInput),
+      { requireComplete: true },
+    );
+    const carousel = definition.components.find((part) =>
+      part.type === "CAROUSEL"
+    )!;
+    const images = Array.isArray(carouselMedia)
+      ? carouselMedia.map(asRecord)
+      : [];
+    if (images.length !== carousel.cards.length) {
+      throw new Error("Every carousel card requires an image");
+    }
+    const cards: TemplateCarousel["cards"] = carousel.cards.map(
+      (card, cardIndex) => {
+        const image = images.find((asset) => asset.card_index === cardIndex);
+        if (!image || typeof image.media_id !== "string" || !image.media_id) {
+          throw new Error(`Card ${cardIndex + 1}: image is missing`);
+        }
+        const parts: TemplateCarousel["cards"][number]["components"] = [
+          {
+            type: "header",
+            parameters: [{ type: "image", image: { id: image.media_id } }],
+          },
+        ];
+        const body = card.components.find((part) => part.type === "BODY")!;
+        const parameters = placeholderIndexes(body.text).map((index) => {
+          const key = `carousel.${cardIndex}.body.${index}`;
+          if (typeof mappingRecord[key] !== "string") {
+            throw new Error(`Campaign template variable ${key} is not mapped`);
+          }
+          return {
+            type: "text" as const,
+            text: mappedValue(mappingRecord[key] as string, delivery),
+          };
+        });
+        const resolvedBody = body.text.replace(
+          /\{\{\s*([0-9]+)\s*\}\}/g,
+          (_, index) =>
+            parameters[placeholderIndexes(body.text).indexOf(Number(index))]
+              .text,
+        );
+        if (resolvedBody.length > 160) {
+          throw new Error(
+            `Card ${cardIndex + 1}: personalized text exceeds 160 characters`,
+          );
+        }
+        if (parameters.length) parts.push({ type: "body", parameters });
+        const button = card.components.find((part) =>
+          part.type === "BUTTONS"
+        )!.buttons[0];
+        if (button.type === "URL" && button.url.endsWith("{{1}}")) {
+          const key = `carousel.${cardIndex}.button.0.1`;
+          if (typeof mappingRecord[key] !== "string") {
+            throw new Error(`Campaign template variable ${key} is not mapped`);
+          }
+          const text = mappedValue(mappingRecord[key] as string, delivery);
+          const url = new URL(button.url.replace("{{1}}", text));
+          if (
+            url.protocol !== "https:" ||
+            !url.href.startsWith(button.url.slice(0, -5))
+          ) throw new Error(`Card ${cardIndex + 1}: URL variable is invalid`);
+          parts.push({
+            type: "button",
+            sub_type: "url",
+            index: "0",
+            parameters: [{ type: "text", text }],
+          });
+        }
+        return { card_index: cardIndex, components: parts };
+      },
+    );
+    components.push({ type: "carousel", cards });
+  }
 
   const media = asRecord(headerMedia ?? null);
   if (Array.isArray(rawComponents)) {

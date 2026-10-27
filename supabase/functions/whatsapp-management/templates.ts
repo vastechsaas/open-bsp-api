@@ -10,6 +10,12 @@ import { HTTPException } from "jsr:@hono/hono/http-exception";
 import { ContentfulStatusCode } from "jsr:@hono/hono/utils/http-status";
 import type { WhatsAppOrganizationAddressExtra } from "../_shared/types/extra_types.ts";
 import {
+  imageCarousel,
+  parseCarouselAssets,
+  parseCarouselDraftAssets,
+} from "../_shared/carousel.ts";
+import { loadCarouselImages } from "./carousel_media.ts";
+import {
   getTemplateMediaHeaderFormat,
   META_GRAPH_API_VERSION,
   resolveMetaApplicationId,
@@ -182,7 +188,30 @@ export async function listTemplates(
   url.searchParams.set("fields", fields);
   url.searchParams.set("limit", "100");
 
-  return await fetchMetaTemplatesPage(url.toString(), access_token);
+  const result = await fetchMetaTemplatesPage(url.toString(), access_token);
+  if (result.data.some((template) => imageCarousel(template))) {
+    const { data: local, error } = await client.from("message_templates")
+      .select("external_id, media_assets")
+      .eq("organization_id", organization_id).eq(
+        "organization_address",
+        organization_address,
+      )
+      .in("external_id", result.data.map((template) => template.id));
+    if (error) {
+      throw new HTTPException(500, {
+        message: "Could not load retained carousel images",
+      });
+    }
+    result.data = result.data.map((template) => ({
+      ...template,
+      media_assets: (local?.find((row) =>
+        row.external_id === template.id
+      )?.media_assets || []) as unknown as NonNullable<
+        TemplateData["media_assets"]
+      >,
+    }));
+  }
+  return result;
 }
 
 async function listAllTemplates(
@@ -256,17 +285,47 @@ async function submitTemplateToMeta(
   organization_address: string,
   template: TemplateDraftInput,
   mediaFile?: File,
+  carouselImages?: File[],
 ): Promise<{ id: string; status: string; category: string }> {
   const credentials = await getBusinessCredentials(
     client,
     organization_id,
     organization_address,
   );
-  const metaTemplate = await prepareTemplateForMeta(
+  let metaTemplate = await prepareTemplateForMeta(
     template,
     mediaFile,
     credentials,
   );
+  const carousel = imageCarousel(metaTemplate);
+  if (carousel) {
+    if (carouselImages?.length !== carousel.cards.length) {
+      throw new HTTPException(400, {
+        message: "Every carousel card requires an image",
+      });
+    }
+    const cards: NonNullable<ReturnType<typeof imageCarousel>>["cards"] = [];
+    for (const [index, card] of carousel.cards.entries()) {
+      const handle = await uploadMetaResumableMedia(
+        resolveMetaApplicationId(credentials.extra),
+        credentials.access_token,
+        carouselImages[index],
+      );
+      cards.push({
+        components: card.components.map((part) =>
+          part.type === "HEADER" && part.format !== "TEXT"
+            ? { ...part, example: { header_handle: [handle] } }
+            : part
+        ),
+      });
+    }
+    metaTemplate = {
+      ...metaTemplate,
+      components: metaTemplate.components.map((part) =>
+        part.type === "CAROUSEL" ? { type: "CAROUSEL", cards } : part
+      ),
+    };
+  }
 
   const response = await fetch(
     `https://graph.facebook.com/${API_VERSION}/${credentials.waba_id}/message_templates`,
@@ -315,6 +374,38 @@ export async function editTemplate(
   template: TemplateData,
   mediaFile?: File,
 ): Promise<{ success: boolean }> {
+  if (imageCarousel(template)) {
+    throw new HTTPException(409, {
+      message:
+        "Carousel templates are read-only. Duplicate as draft to make changes.",
+    });
+  }
+  const { data: stored, error: storedError } = await client.from(
+    "message_templates",
+  ).select("components")
+    .eq("organization_id", organization_id).eq(
+      "organization_address",
+      organization_address,
+    ).eq("external_id", template.id).maybeSingle();
+  if (storedError) {
+    throw new HTTPException(400, {
+      message: "Could not verify the current template format",
+    });
+  }
+  // Legacy callers cannot disguise an approved carousel as a standard template.
+  const current = stored ||
+    await fetchTemplate(
+      client,
+      organization_id,
+      organization_address,
+      template,
+    );
+  if (imageCarousel(current)) {
+    throw new HTTPException(409, {
+      message:
+        "Carousel templates are read-only. Duplicate as draft to make changes.",
+    });
+  }
   const credentials = await getBusinessCredentials(
     client,
     organization_id,
@@ -410,6 +501,15 @@ export async function editTemplateRecord(
   mediaFile?: File,
 ) {
   const record = await loadTemplateRecord(client, organizationId, templateId);
+
+  if (
+    imageCarousel({ components: record.components }) || imageCarousel(template)
+  ) {
+    throw new HTTPException(409, {
+      message:
+        "Carousel templates are read-only. Duplicate as draft to make changes.",
+    });
+  }
 
   if (
     !record.external_id ||
@@ -578,6 +678,7 @@ export async function createTemplateDraft(
   organizationAddress: string,
   createdBy: string | null,
   template: TemplateDraftInput,
+  mediaAssets?: unknown,
 ) {
   const canonicalTemplate = stripTemplateMediaHandles(template);
   const { data, error } = await client
@@ -591,6 +692,10 @@ export async function createTemplateDraft(
       category: template.category.toLowerCase(),
       components: canonicalTemplate.components as unknown as Json,
       status: "draft",
+      media_assets: parseCarouselDraftAssets(
+        mediaAssets,
+        organizationId,
+      ) as unknown as Json,
     })
     .select()
     .single();
@@ -611,6 +716,7 @@ export async function updateTemplateDraft(
   draftId: string,
   organizationAddress: string,
   template: TemplateDraftInput,
+  mediaAssets?: unknown,
 ) {
   const canonicalTemplate = stripTemplateMediaHandles(template);
   const { data, error } = await client
@@ -621,6 +727,14 @@ export async function updateTemplateDraft(
       language: template.language,
       category: template.category.toLowerCase(),
       components: canonicalTemplate.components as unknown as Json,
+      ...(mediaAssets !== undefined
+        ? {
+          media_assets: parseCarouselDraftAssets(
+            mediaAssets,
+            organizationId,
+          ) as unknown as Json,
+        }
+        : {}),
     })
     .eq("organization_id", organizationId)
     .eq("id", draftId)
@@ -674,10 +788,11 @@ export async function submitTemplateDraft(
   draftId: string,
   template: TemplateDraftInput,
   mediaFile?: File,
+  mediaAssets?: unknown,
 ) {
   const { data: draft, error: draftError } = await client
     .from("message_templates")
-    .select("id, organization_address, status")
+    .select("id, organization_address, status, media_assets")
     .eq("organization_id", organizationId)
     .eq("id", draftId)
     .eq("status", "draft")
@@ -693,12 +808,25 @@ export async function submitTemplateDraft(
     throw new HTTPException(404, { message: "Template draft not found" });
   }
 
+  const carousel = imageCarousel(template);
+  const assets = carousel
+    ? parseCarouselAssets(mediaAssets ?? draft.media_assets, organizationId)
+    : [];
+  const images = carousel
+    ? await loadCarouselImages(
+      client,
+      organizationId,
+      assets,
+      carousel.cards.length,
+    )
+    : [];
   const metaTemplate = await submitTemplateToMeta(
     client,
     organizationId,
     draft.organization_address,
     template,
     mediaFile,
+    images.map(({ file }) => file),
   );
   const now = new Date().toISOString();
   const status = metaTemplate.status.toLowerCase();
@@ -711,6 +839,7 @@ export async function submitTemplateDraft(
       language: template.language,
       category: metaTemplate.category.toLowerCase(),
       components: canonicalTemplate.components as unknown as Json,
+      media_assets: assets as unknown as Json,
       external_id: metaTemplate.id,
       status,
       rejection_reason: null,
@@ -775,7 +904,8 @@ export async function syncTemplates(
       language: template.language,
       category: template.category.toLowerCase(),
       status: template.status.toLowerCase(),
-      components: template.components as unknown as Json,
+      components: stripTemplateMediaHandles(template)
+        .components as unknown as Json,
       rejection_reason: template.rejected_reason || null,
       synced_at: syncedAt,
     }));

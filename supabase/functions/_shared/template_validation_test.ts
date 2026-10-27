@@ -179,12 +179,12 @@ Deno.test("template submission rejects unsupported components", () => {
           category: "UTILITY",
           components: [
             { type: "BODY", text: "Your order is ready." },
-            { type: "CAROUSEL", cards: [] },
+            { type: "LOCATION" },
           ],
         },
         { requireComplete: true },
       ),
-    "unsupported template component: CAROUSEL",
+    "unsupported template component: LOCATION",
   );
 });
 

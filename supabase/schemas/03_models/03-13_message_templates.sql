@@ -9,6 +9,7 @@ create table public.message_templates (
   category text not null,
   status text default 'draft'::text not null,
   components jsonb default '[]'::jsonb not null,
+  media_assets jsonb default '[]'::jsonb not null,
   rejection_reason text,
   submitted_at timestamp with time zone,
   synced_at timestamp with time zone,

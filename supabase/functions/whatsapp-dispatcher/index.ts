@@ -280,6 +280,11 @@ function outgoingMessageToEndpointMessage({
       };
     }
     case "template": {
+      if (content.data.components?.some((part) => part.type === "carousel")) {
+        throw new Error(
+          "Carousel templates can only be sent through Campaigns",
+        );
+      }
       return {
         ...baseMessage,
         type: "template",
