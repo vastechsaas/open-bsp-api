@@ -2,6 +2,7 @@ import type {
   TemplateComponent,
   TemplateDraftInput,
 } from "./types/whatsapp_template_types.ts";
+import { canonicalCarousel } from "./carousel.ts";
 
 const TEMPLATE_CATEGORIES = new Set([
   "AUTHENTICATION",
@@ -162,6 +163,49 @@ function validateComponent(component: unknown): TemplateComponent {
       }
       return component as TemplateComponent;
 
+    case "CAROUSEL": {
+      if (
+        !Array.isArray(component.cards) || component.cards.length < 2 ||
+        component.cards.length > 10
+      ) {
+        throw new Error("Carousel requires 2 to 10 cards");
+      }
+      component.cards.forEach((card, index) => {
+        const fail = (message: string): never => {
+          throw new Error(`Card ${index + 1}: ${message}`);
+        };
+        if (
+          !isRecord(card) || !Array.isArray(card.components) ||
+          card.components.length !== 3
+        ) fail("requires an image, text and one website button");
+        const rawParts = (card as { components: unknown[] }).components;
+        if (
+          rawParts.some((part) =>
+            !isRecord(part) ||
+            !["HEADER", "BODY", "BUTTONS"].includes(String(part.type))
+          )
+        ) fail("unsupported carousel component");
+        const parts = rawParts.map(validateComponent);
+        const header = parts.find((part) => part.type === "HEADER");
+        const body = parts.find((part) => part.type === "BODY");
+        const buttons = parts.find((part) => part.type === "BUTTONS");
+        if (header?.format !== "IMAGE") {
+          fail("an image is required; this carousel format is not supported");
+        }
+        if (!body || body.text.length > 160) {
+          fail("card text must contain 1 to 160 characters");
+        }
+        if (
+          !buttons || buttons.buttons.length !== 1 ||
+          buttons.buttons[0].type !== "URL"
+        ) fail("one website button is required");
+        if (new Set(parts.map((part) => part.type)).size !== 3) {
+          fail("components must not be repeated");
+        }
+      });
+      return component as TemplateComponent;
+    }
+
     default:
       throw new Error(`unsupported template component: ${component.type}`);
   }
@@ -195,6 +239,29 @@ export function parseTemplateDraftInput(
     throw new Error("template components must be an array");
   }
 
+  const carousel = value.components.find((part) =>
+    isRecord(part) && part.type === "CAROUSEL"
+  );
+  if (carousel && category !== "MARKETING") {
+    throw new Error("Image carousels require the Marketing category");
+  }
+  if (
+    carousel &&
+    (!isRecord(carousel) || !Array.isArray(carousel.cards) ||
+      carousel.cards.length > 10)
+  ) throw new Error("Carousel cards are invalid");
+  if (
+    isRecord(carousel) && Array.isArray(carousel.cards) &&
+    carousel.cards.some((card) =>
+      !isRecord(card) || !Array.isArray(card.components) ||
+      card.components.some((part) =>
+        !isRecord(part) ||
+        !["HEADER", "BODY", "BUTTONS"].includes(String(part.type)) ||
+        (part.type === "HEADER" && part.format !== "IMAGE")
+      )
+    )
+  ) throw new Error("Unsupported image carousel card structure");
+
   if (!options.requireComplete) {
     return {
       name,
@@ -206,6 +273,13 @@ export function parseTemplateDraftInput(
 
   const components = value.components.map(validateComponent);
   const componentTypes = components.map((component) => component.type);
+  if (
+    carousel &&
+    (components.length !== 2 ||
+      componentTypes.some((type) => type !== "BODY" && type !== "CAROUSEL"))
+  ) {
+    throw new Error("Image carousels support an introduction and cards only");
+  }
 
   if (componentTypes.filter((type) => type === "BODY").length !== 1) {
     throw new Error("template requires exactly one body component");
@@ -232,10 +306,10 @@ export function parseTemplateDraftInput(
     throw new Error("authentication templates cannot use CTA buttons");
   }
 
-  return {
+  return canonicalCarousel({
     name,
     language,
     category: category as TemplateDraftInput["category"],
     components,
-  };
+  });
 }

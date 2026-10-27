@@ -183,6 +183,18 @@ export function stripTemplateMediaHandles<T extends TemplateDraftInput>(
   return {
     ...template,
     components: template.components.map((component) => {
+      if (component.type === "CAROUSEL") {
+        return {
+          ...component,
+          cards: component.cards.map((card) => ({
+            components: card.components.map((part) =>
+              part.type === "HEADER" && part.format !== "TEXT"
+                ? { type: "HEADER" as const, format: part.format }
+                : part
+            ),
+          })),
+        };
+      }
       if (
         component.type !== "HEADER" ||
         !["IMAGE", "VIDEO", "DOCUMENT"].includes(component.format)

@@ -8,6 +8,7 @@ create table public.campaigns (
   template jsonb not null,
   template_variable_mapping jsonb default '{}'::jsonb not null,
   header_media jsonb,
+  carousel_media jsonb default '[]'::jsonb not null,
   audience_type public.campaign_audience_type not null,
   status text default 'draft'::text not null,
   queued_count integer default 0 not null,

@@ -791,6 +791,7 @@ export type Database = {
         Row: {
           accepted_count: number
           audience_type: Database["public"]["Enums"]["campaign_audience_type"]
+          carousel_media: Json
           created_at: string
           created_by: string | null
           failed_count: number
@@ -810,6 +811,7 @@ export type Database = {
         Insert: {
           accepted_count?: number
           audience_type: Database["public"]["Enums"]["campaign_audience_type"]
+          carousel_media?: Json
           created_at?: string
           created_by?: string | null
           failed_count?: number
@@ -829,6 +831,7 @@ export type Database = {
         Update: {
           accepted_count?: number
           audience_type?: Database["public"]["Enums"]["campaign_audience_type"]
+          carousel_media?: Json
           created_at?: string
           created_by?: string | null
           failed_count?: number
@@ -1917,6 +1920,7 @@ export type Database = {
           external_id: string | null
           id: string
           language: string
+          media_assets: Json
           name: string
           organization_address: string
           organization_id: string
@@ -1934,6 +1938,7 @@ export type Database = {
           external_id?: string | null
           id?: string
           language: string
+          media_assets?: Json
           name: string
           organization_address: string
           organization_id: string
@@ -1951,6 +1956,7 @@ export type Database = {
           external_id?: string | null
           id?: string
           language?: string
+          media_assets?: Json
           name?: string
           organization_address?: string
           organization_id?: string
@@ -3513,11 +3519,16 @@ export type Database = {
         }
         Returns: Json
       }
+      carousel_campaign_ready: {
+        Args: { p_mapping: Json; p_media: Json; p_template: Json }
+        Returns: boolean
+      }
       claim_campaign_deliveries: {
         Args: { p_limit?: number }
         Returns: {
           attempts: number
           campaign_id: string
+          carousel_media: Json
           contact_address: string
           contact_name: string
           delivery_id: string
@@ -4315,6 +4326,7 @@ export type Database = {
           accepted_count: number
           audience_count: number
           audience_type: Database["public"]["Enums"]["campaign_audience_type"]
+          carousel_media: Json
           created_at: string
           created_by: string
           failed_count: number
@@ -4468,6 +4480,7 @@ export type Database = {
           external_id: string
           id: string
           language: string
+          media_assets: Json
           name: string
           organization_address: string
           organization_id: string
@@ -5728,6 +5741,14 @@ export type Database = {
       upsert_whatsapp_contact_addresses: {
         Args: { p_addresses: Json }
         Returns: undefined
+      }
+      valid_carousel_assets: {
+        Args: {
+          p_allow_empty?: boolean
+          p_assets: Json
+          p_organization_id: string
+        }
+        Returns: boolean
       }
       validate_business_hours_schedule: {
         Args: { p_schedule: Json }

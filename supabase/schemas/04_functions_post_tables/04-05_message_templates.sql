@@ -3,6 +3,19 @@ language plpgsql
 set search_path to ''
 as $$
 begin
+  if not public.valid_carousel_assets(new.media_assets, new.organization_id, new.status = 'draft') then
+    raise exception 'Carousel image reference is invalid or belongs to another organization' using errcode = '23514';
+  end if;
+  if tg_op = 'UPDATE' and old.status <> 'draft'
+    and old.components @> '[{"type":"CAROUSEL"}]'::jsonb
+    and (new.components is distinct from old.components or new.media_assets is distinct from old.media_assets
+      or new.name is distinct from old.name or new.language is distinct from old.language
+      or new.category is distinct from old.category or new.external_id is distinct from old.external_id
+      or new.organization_address is distinct from old.organization_address)
+    and current_user <> 'service_role' and current_user <> 'postgres'
+  then
+    raise exception 'Carousel templates are read-only. Duplicate as draft to make changes.' using errcode = '23514';
+  end if;
   if not exists (
     select 1
     from public.organizations_addresses
@@ -29,7 +42,7 @@ end;
 $$;
 
 create trigger enforce_message_template_rules
-before insert or update of organization_id, organization_address, created_by
+before insert or update of organization_id, organization_address, created_by, components, media_assets, name, language, category, external_id
 on public.message_templates
 for each row
 execute function public.enforce_message_template_rules();
@@ -53,6 +66,7 @@ create function public.list_message_templates_page(
   category text,
   status text,
   components jsonb,
+  media_assets jsonb,
   rejection_reason text,
   submitted_at timestamp with time zone,
   synced_at timestamp with time zone,
@@ -129,6 +143,7 @@ begin
     template.category,
     template.status,
     template.components,
+    template.media_assets,
     template.rejection_reason,
     template.submitted_at,
     template.synced_at,

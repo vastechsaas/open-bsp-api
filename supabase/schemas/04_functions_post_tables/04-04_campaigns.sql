@@ -3,6 +3,14 @@ language plpgsql
 set search_path to ''
 as $$
 begin
+  if not public.valid_carousel_assets(new.carousel_media, new.organization_id) then
+    raise exception 'Carousel image reference is invalid or belongs to another organization' using errcode = '23514';
+  end if;
+  if tg_op = 'UPDATE' and old.status <> 'draft'
+    and (new.template is distinct from old.template or new.carousel_media is distinct from old.carousel_media
+      or new.template_variable_mapping is distinct from old.template_variable_mapping) then
+    raise exception 'Queued campaign content is immutable' using errcode = '23514';
+  end if;
   if not exists (
     select 1
     from public.organizations_addresses
@@ -29,7 +37,7 @@ end;
 $$;
 
 create trigger enforce_campaign_draft_rules
-before insert or update of organization_id, organization_address, created_by
+before insert or update of organization_id, organization_address, created_by, template, carousel_media, template_variable_mapping
 on public.campaigns
 for each row
 execute function public.enforce_campaign_draft_rules();
@@ -243,6 +251,7 @@ create function public.list_campaigns_page(
   template jsonb,
   template_variable_mapping jsonb,
   header_media jsonb,
+  carousel_media jsonb,
   audience_type public.campaign_audience_type,
   status text,
   queued_count integer,
@@ -348,6 +357,7 @@ begin
       case
         when counted.template->>'status' = 'APPROVED'
           and counted.campaign_audience_count > 0
+          and public.carousel_campaign_ready(counted.template, counted.carousel_media, counted.template_variable_mapping)
           and not exists (
             select 1
             from jsonb_array_elements(
@@ -431,6 +441,7 @@ begin
     classified.template,
     classified.template_variable_mapping,
     classified.header_media,
+    classified.carousel_media,
     classified.audience_type,
     classified.status,
     classified.queued_count,
@@ -517,6 +528,15 @@ begin
     raise exception using
       errcode = '23514',
       message = 'campaign template is not approved';
+  end if;
+
+  if not public.carousel_campaign_ready(campaign.template, campaign.carousel_media, campaign.template_variable_mapping) then
+    raise exception 'Carousel cards, retained images or variable mappings are incomplete or unsupported' using errcode = '23514';
+  end if;
+  if exists (select 1 from jsonb_array_elements(campaign.carousel_media) a
+    where not exists (select 1 from storage.objects o where o.bucket_id = 'media'
+      and o.name = replace(a->>'storage_uri', 'internal://media/', ''))) then
+    raise exception 'A retained carousel image is missing. Upload it again.' using errcode = '23514';
   end if;
 
   if exists (
@@ -747,6 +767,7 @@ create function public.claim_campaign_deliveries(
   template jsonb,
   template_variable_mapping jsonb,
   header_media jsonb,
+  carousel_media jsonb,
   attempts integer
 )
 language plpgsql
@@ -814,7 +835,8 @@ begin
       c.organization_address,
       c.template,
       c.template_variable_mapping,
-      c.header_media
+      c.header_media,
+      c.carousel_media
   )
   select
     d.id,
@@ -827,6 +849,7 @@ begin
     c.template,
     c.template_variable_mapping,
     c.header_media,
+    c.carousel_media,
     d.attempts
   from claimed d
   cross join campaign_update c
@@ -834,7 +857,7 @@ begin
 end;
 $$;
 
-revoke execute on function public.claim_campaign_deliveries(integer) from public;
+revoke execute on function public.claim_campaign_deliveries(integer) from public, anon, authenticated;
 grant execute on function public.claim_campaign_deliveries(integer)
 to service_role;
 

@@ -1,6 +1,7 @@
 import * as log from "../_shared/logger.ts";
 import { buildCampaignTemplatePayload } from "../_shared/campaign_template.ts";
-import { createUnsecureClient } from "../_shared/supabase.ts";
+import { createUnsecureClient, type Json } from "../_shared/supabase.ts";
+import { prepareCampaignCarouselMedia } from "../whatsapp-management/campaign_media.ts";
 import {
   getWhatsAppErrorDetails,
   postPayloadToWhatsAppEndpoint,
@@ -56,8 +57,22 @@ Deno.serve(async (req) => {
     queued: 0,
   };
 
+  const carouselMedia = new Map<string, Promise<Json>>();
   for (const delivery of deliveries) {
+    let acceptedExternalId: string | undefined;
     try {
+      if (!carouselMedia.has(delivery.campaign_id)) {
+        carouselMedia.set(
+          delivery.campaign_id,
+          prepareCampaignCarouselMedia(
+            client,
+            delivery.organization_id,
+            delivery.organization_address,
+            delivery.template,
+            delivery.carousel_media,
+          ),
+        );
+      }
       const recipient = await resolveWhatsAppRecipient({
         client,
         organizationId: delivery.organization_id,
@@ -67,6 +82,7 @@ Deno.serve(async (req) => {
         template: delivery.template,
         mapping: delivery.template_variable_mapping,
         headerMedia: delivery.header_media,
+        carouselMedia: await carouselMedia.get(delivery.campaign_id),
         delivery: {
           contactAddress: delivery.contact_address,
           contactName: delivery.contact_name,
@@ -84,6 +100,7 @@ Deno.serve(async (req) => {
       if (!externalId) {
         throw new Error("WhatsApp did not return a message ID");
       }
+      acceptedExternalId = externalId;
 
       await client.rpc("record_campaign_delivery_result", {
         p_delivery_id: delivery.delivery_id,
@@ -91,6 +108,24 @@ Deno.serve(async (req) => {
       }).throwOnError();
       results.accepted += 1;
     } catch (error) {
+      if (acceptedExternalId) {
+        // Reconcile the acceptance, never convert an accepted send into an automatic retry.
+        const { error: reconciliationError } = await client.rpc(
+          "record_campaign_delivery_result",
+          {
+            p_delivery_id: delivery.delivery_id,
+            p_external_id: acceptedExternalId,
+          },
+        );
+        if (reconciliationError) {
+          log.error("Accepted campaign send needs reconciliation", {
+            delivery_id: delivery.delivery_id,
+            external_id: acceptedExternalId,
+          });
+        }
+        results.accepted += 1;
+        continue;
+      }
       const details = getWhatsAppErrorDetails(error);
       const { data: finalStatus } = await client.rpc(
         "record_campaign_delivery_result",
