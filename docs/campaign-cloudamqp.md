@@ -70,3 +70,36 @@ not reset it to queued or change the campaign's transport. Retain additive
 schema and legacy claimant's transport filter. Only then stop the new service.
 Restoring an old batch sender without the filter can duplicate delivery and is
 unsafe.
+
+## Verified staging release — 29 October 2026
+
+- Backend application revision: `9b92cda`; UI revision: `0f94c47`. Both are on
+  their respective staging branches; Main was not merged.
+- Generated migration `20261029155151` was backed up and applied to
+  `acifbsuxmpdtlhbsvhlj`. Worker-only execution grants were verified remotely.
+  The diff's unrelated revoke noise was removed and explicit new-function ACLs
+  restored with user-approved local migration repair before remote deployment.
+- Worker host: `51.170.85.38`. Runtime deployment directory:
+  `/opt/openbsp/campaign-dispatch-staging`; project: `openbsp-campaign-staging`.
+  Invoke Compose with `-f /opt/openbsp/campaign-dispatch-staging/compose.yaml`
+  and `SOURCE_REVISION=9b92cda`. Runtime uses a separate protected `.env`.
+- Image: `openbsp-campaign-worker:9b92cda`, digest
+  `sha256:c0448e2f2f314e21900c04471688942d4396ac306aff7188465e7502f1aace97`.
+  This is the first campaign-service deployment; retain this image for rollback
+  from future updates. No existing service image was replaced.
+- Only `SCRUM-133 Campaign Dispatch Test`, organization
+  `13313300-0000-4000-8000-000000000001`, is enabled. Its account is
+  deliberately disconnected. One queue-to-backend smoke job failed with zero
+  sends; a second simulated submitting job recovered to Needs review without a
+  resend. The staging DLQ retains these two safe test notifications for
+  inspection.
+- Readiness returned true; observed worker memory was about 42 MiB within its
+  256 MiB limit. Existing chatbot/voice container IDs and start times were
+  unchanged. The staging frontend deployment completed successfully.
+- Validation: 1,366 database assertions across 60 files; 461 frontend tests and
+  build; 11 handler tests; worker unit tests plus real local RabbitMQ routing,
+  confirmation, consumption and unroutable-publication checks passed.
+- Backup directory on the deployment workstation:
+  `C:/Hurera New Laptop/backups/scrum-133-staging-20261029`. No actual Meta
+  template send was performed. Live-recipient approval, marketing launch
+  safeguards and Main rollout remain separate decisions.
