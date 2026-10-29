@@ -15,6 +15,8 @@ create table public.campaigns (
   processing_count integer default 0 not null,
   accepted_count integer default 0 not null,
   failed_count integer default 0 not null,
+  needs_review_count integer default 0 not null,
+  dispatch_transport text default 'postgres' not null,
   created_at timestamp with time zone default now() not null,
   updated_at timestamp with time zone default now() not null
 );
@@ -55,7 +57,10 @@ check (service = 'whatsapp'::public.service);
 
 alter table only public.campaigns
 add constraint campaigns_status_check
-check (status in ('draft', 'queued', 'running', 'completed', 'failed'));
+check (status in ('draft', 'queued', 'running', 'completed', 'failed', 'needs_review'));
+
+alter table public.campaigns add constraint campaigns_dispatch_transport_check
+check (dispatch_transport in ('postgres', 'cloudamqp'));
 
 alter table only public.campaigns
 add constraint campaigns_delivery_counts_check
@@ -64,6 +69,7 @@ check (
   and processing_count >= 0
   and accepted_count >= 0
   and failed_count >= 0
+  and needs_review_count >= 0
 );
 
 alter table only public.campaigns
@@ -198,7 +204,7 @@ check (jsonb_typeof(variables) = 'object');
 
 alter table only public.campaign_deliveries
 add constraint campaign_deliveries_status_check
-check (status in ('queued', 'processing', 'accepted', 'failed'));
+check (status in ('queued', 'processing', 'accepted', 'failed', 'needs_review'));
 
 alter table only public.campaign_deliveries
 add constraint campaign_deliveries_attempts_check

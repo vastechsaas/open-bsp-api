@@ -258,6 +258,7 @@ create function public.list_campaigns_page(
   processing_count integer,
   accepted_count integer,
   failed_count integer,
+  needs_review_count integer,
   created_at timestamp with time zone,
   updated_at timestamp with time zone,
   audience_count bigint,
@@ -448,6 +449,7 @@ begin
     classified.processing_count,
     classified.accepted_count,
     classified.failed_count,
+    classified.needs_review_count,
     classified.created_at,
     classified.updated_at,
     classified.campaign_audience_count,
@@ -742,9 +744,19 @@ begin
     queued_count = snapshot_count,
     processing_count = 0,
     accepted_count = 0,
-    failed_count = 0
+    failed_count = 0,
+    dispatch_transport = case when exists (
+      select 1 from public.campaign_dispatch_settings s
+      where s.organization_id = p_organization_id and s.enabled
+    ) then 'cloudamqp' else 'postgres' end
   where id = p_campaign_id
     and organization_id = p_organization_id;
+
+  insert into public.campaign_dispatch_jobs (organization_id, campaign_id, delivery_id)
+  select d.organization_id, d.campaign_id, d.id
+  from public.campaign_deliveries d join public.campaigns c on c.id = d.campaign_id
+  where d.campaign_id = p_campaign_id and c.dispatch_transport = 'cloudamqp'
+  on conflict (delivery_id, attempt_no) do nothing;
 
   return snapshot_count;
 end;
@@ -784,6 +796,7 @@ begin
   select c.id into target_campaign_id
   from public.campaigns c
   where c.status in ('queued', 'running')
+    and c.dispatch_transport = 'postgres'
     and c.queued_count > 0
     and public.is_organization_active(c.organization_id)
     and exists (

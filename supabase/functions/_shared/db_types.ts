@@ -787,6 +787,104 @@ export type Database = {
           },
         ]
       }
+      campaign_dispatch_jobs: {
+        Row: {
+          attempt_no: number
+          campaign_id: string
+          created_at: string
+          delivery_id: string
+          due_at: string
+          error_code: string | null
+          external_id: string | null
+          id: string
+          lease_expires_at: string | null
+          lease_token: string | null
+          organization_id: string
+          phase: string
+          publication_expires_at: string | null
+          publication_token: string | null
+          publish_after: string
+          send_started_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          attempt_no?: number
+          campaign_id: string
+          created_at?: string
+          delivery_id: string
+          due_at?: string
+          error_code?: string | null
+          external_id?: string | null
+          id?: string
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          organization_id: string
+          phase?: string
+          publication_expires_at?: string | null
+          publication_token?: string | null
+          publish_after?: string
+          send_started_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attempt_no?: number
+          campaign_id?: string
+          created_at?: string
+          delivery_id?: string
+          due_at?: string
+          error_code?: string | null
+          external_id?: string | null
+          id?: string
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          organization_id?: string
+          phase?: string
+          publication_expires_at?: string | null
+          publication_token?: string | null
+          publish_after?: string
+          send_started_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_dispatch_jobs_organization_id_campaign_id_deliver_fkey"
+            columns: ["organization_id", "campaign_id", "delivery_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_deliveries"
+            referencedColumns: ["organization_id", "campaign_id", "id"]
+          },
+          {
+            foreignKeyName: "campaign_dispatch_jobs_organization_id_campaign_id_fkey"
+            columns: ["organization_id", "campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
+      campaign_dispatch_settings: {
+        Row: {
+          enabled: boolean
+          organization_id: string
+        }
+        Insert: {
+          enabled?: boolean
+          organization_id: string
+        }
+        Update: {
+          enabled?: boolean
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_dispatch_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaigns: {
         Row: {
           accepted_count: number
@@ -794,10 +892,12 @@ export type Database = {
           carousel_media: Json
           created_at: string
           created_by: string | null
+          dispatch_transport: string
           failed_count: number
           header_media: Json | null
           id: string
           name: string
+          needs_review_count: number
           organization_address: string
           organization_id: string
           processing_count: number
@@ -814,10 +914,12 @@ export type Database = {
           carousel_media?: Json
           created_at?: string
           created_by?: string | null
+          dispatch_transport?: string
           failed_count?: number
           header_media?: Json | null
           id?: string
           name: string
+          needs_review_count?: number
           organization_address: string
           organization_id: string
           processing_count?: number
@@ -834,10 +936,12 @@ export type Database = {
           carousel_media?: Json
           created_at?: string
           created_by?: string | null
+          dispatch_transport?: string
           failed_count?: number
           header_media?: Json | null
           id?: string
           name?: string
+          needs_review_count?: number
           organization_address?: string
           organization_id?: string
           processing_count?: number
@@ -3471,6 +3575,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      begin_campaign_dispatch_send: {
+        Args: { p_job_id: string; p_token: string }
+        Returns: boolean
+      }
       begin_node_conversation_operation: {
         Args: {
           p_action: string
@@ -3540,6 +3648,11 @@ export type Database = {
           variables: Json
         }[]
       }
+      claim_campaign_dispatch_job: { Args: { p_job_id: string }; Returns: Json }
+      claim_campaign_dispatch_publications: {
+        Args: { p_limit?: number }
+        Returns: Json
+      }
       commit_chatbot_flow_execution: {
         Args: {
           p_current_node_id: string
@@ -3587,6 +3700,10 @@ export type Database = {
       }
       complete_whatsapp_account_sync: {
         Args: { p_request_id: string; p_revision: string }
+        Returns: boolean
+      }
+      confirm_campaign_dispatch_publication: {
+        Args: { p_job_id: string; p_token: string }
         Returns: boolean
       }
       contact_address_update_rules: {
@@ -3889,6 +4006,16 @@ export type Database = {
           p_integration_key: string
           p_name: string
           p_organization_id: string
+        }
+        Returns: string
+      }
+      finish_campaign_dispatch_job: {
+        Args: {
+          p_error_code?: string
+          p_external_id?: string
+          p_job_id: string
+          p_outcome: string
+          p_token: string
         }
         Returns: string
       }
@@ -4333,6 +4460,7 @@ export type Database = {
           header_media: Json
           id: string
           name: string
+          needs_review_count: number
           organization_address: string
           organization_id: string
           processing_count: number
@@ -5219,6 +5347,7 @@ export type Database = {
         }
         Returns: string
       }
+      recover_campaign_dispatch_jobs: { Args: never; Returns: number }
       remove_platform_organization_agent: {
         Args: { p_agent_id: string; p_request_id: string }
         Returns: boolean
@@ -5307,6 +5436,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_campaign_dispatch_delivery: {
+        Args: { p_delivery_id: string; p_status: string }
+        Returns: undefined
       }
       set_conversation_agent_assignment: {
         Args: { p_agent_id: string; p_conversation_id: string }
