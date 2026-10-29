@@ -1,0 +1,25 @@
+services:
+  campaign-worker:
+    image: openbsp-campaign-worker:${SOURCE_REVISION:?Use the reviewed commit SHA}
+    build:
+      context: .
+      args:
+        SOURCE_REVISION: ${SOURCE_REVISION:?Use the reviewed commit SHA}
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:8093:8080"
+    init: true
+    stop_grace_period: 45s
+    mem_limit: 256m
+    cpus: 0.5
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

@@ -54,6 +54,11 @@ verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/campaign-worker/index.ts"
 
+[functions.campaign-dispatch]
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/campaign-dispatch/index.ts"
+
 [functions.instagram-dispatcher]
 verify_jwt = false
 import_map = "./functions/deno.json"
