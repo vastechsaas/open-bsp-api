@@ -15,13 +15,14 @@ consumer verifies envelope identity against the authoritative backend record
 before processing.
 
 `campaign-dispatch/jobs/:id` accepts GET status and POST process, both protected
-by the existing Supabase service key. The handler reuses Meta/media helpers;
-tokens stay in Supabase. It commits `submitting` before the external request.
-Recovery requeues expired preparation, but expired submission becomes
-`needs_review`, never another send. Only the same fenced attempt can reconcile a
-late known WAMID. Actual Meta send attempts increment at the submission
-boundary. Definitive transient failures get two delayed retries (30/60 seconds
-plus jitter).
+by the existing internal `EDGE_FUNCTIONS_TOKEN` (service-key fallback only when
+unset). The worker uses a separate Supabase service key for worker-only database
+RPCs. The handler reuses Meta/media helpers; tokens stay in Supabase. It commits
+`submitting` before the external request. Recovery requeues expired preparation,
+but expired submission becomes `needs_review`, never another send. Only the same
+fenced attempt can reconcile a late known WAMID. Actual Meta send attempts
+increment at the submission boundary. Definitive transient failures get two
+delayed retries (30/60 seconds plus jitter).
 
 ## Deploy to staging
 

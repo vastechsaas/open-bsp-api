@@ -8,7 +8,12 @@ import { createConsumer, publishJob } from "./worker.js";
 
 const config = loadConfig(process.env);
 const topology = names(config.environment);
-const backend = createBackend(config.url, config.serviceKey);
+const backend = createBackend(
+  config.url,
+  config.serviceKey,
+  fetch,
+  config.dispatchKey,
+);
 const log = (event: string, fields: Record<string, unknown> = {}) =>
   console.log(
     JSON.stringify({ time: new Date().toISOString(), event, ...fields }),

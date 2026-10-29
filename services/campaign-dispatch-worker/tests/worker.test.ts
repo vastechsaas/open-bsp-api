@@ -174,3 +174,24 @@ test("configuration rejects environment/project mismatch", () => {
     })
   );
 });
+
+test("dispatch and database credentials remain separate", async () => {
+  const headers: Headers[] = [];
+  const backend = createBackend(
+    "https://example.test",
+    "database-key",
+    async (_url, init) => {
+      headers.push(new Headers(init?.headers));
+      return Response.json({ phase: "accepted" });
+    },
+    "internal-dispatch-key",
+  );
+  await backend.process(job);
+  await backend.recover();
+  assert.equal(
+    headers[0]?.get("Authorization"),
+    "Bearer internal-dispatch-key",
+  );
+  assert.equal(headers[0]?.get("apikey"), "database-key");
+  assert.equal(headers[1]?.get("Authorization"), "Bearer database-key");
+});
