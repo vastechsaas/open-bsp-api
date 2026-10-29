@@ -45,7 +45,8 @@ const repository: DispatchRepository = {
 
 Deno.serve(createDispatchHandler({
   repository,
-  serviceKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
+  serviceKey: Deno.env.get("EDGE_FUNCTIONS_TOKEN") ??
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
   async prepare(job) {
     const { data: campaign } = await client.from("campaigns").select("*")
       .eq("organization_id", job.organization_id).eq("id", job.campaign_id)

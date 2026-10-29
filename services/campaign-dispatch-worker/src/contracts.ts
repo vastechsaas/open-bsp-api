@@ -31,11 +31,15 @@ export function loadConfig(env: NodeJS.ProcessEnv) {
     throw new Error("TLS broker URL required");
   }
   const serviceKey = z.string().min(20).parse(env.SUPABASE_SERVICE_ROLE_KEY);
+  const dispatchKey = z.string().min(20).parse(
+    env.EDGE_FUNCTIONS_TOKEN ?? serviceKey,
+  );
   return {
     environment,
     url: url.origin,
     broker,
     serviceKey,
+    dispatchKey,
     port: z.coerce.number().int().min(1).max(65535).default(8080).parse(
       env.PORT,
     ),

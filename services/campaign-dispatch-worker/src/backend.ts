@@ -19,12 +19,15 @@ export function createBackend(
   url: string,
   key: string,
   fetcher: typeof fetch = fetch,
+  dispatchKey: string = key,
 ): Backend {
   async function request(path: string, body?: unknown) {
     const response = await fetcher(`${url}${path}`, {
       method: body === undefined ? "GET" : "POST",
       headers: {
-        Authorization: `Bearer ${key}`,
+        Authorization: `Bearer ${
+          path.startsWith("/functions/") ? dispatchKey : key
+        }`,
         apikey: key,
         "Content-Type": "application/json",
       },
