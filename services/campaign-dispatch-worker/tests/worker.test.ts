@@ -175,6 +175,30 @@ test("configuration rejects environment/project mismatch", () => {
   );
 });
 
+test("production configuration pins Main and isolates every queue", () => {
+  const config = loadConfig({
+    DEPLOYMENT_ENV: "production",
+    SUPABASE_URL: "https://buvjopvpkgvzhykwsxnk.supabase.co",
+    CLOUDAMQP_URL: "amqps://example.test",
+    SUPABASE_SERVICE_ROLE_KEY: "x".repeat(30),
+    EDGE_FUNCTIONS_TOKEN: "y".repeat(30),
+  });
+  assert.equal(config.environment, "production");
+  assert.equal(config.url, "https://buvjopvpkgvzhykwsxnk.supabase.co");
+  for (const key of ["exchange", "dispatch", "retry", "dlq"] as const) {
+    assert.notEqual(names("production")[key], names("staging")[key]);
+    assert.match(names("production")[key], /^openbsp\.production\.campaign\./);
+  }
+  assert.throws(() =>
+    loadConfig({
+      DEPLOYMENT_ENV: "production",
+      SUPABASE_URL: "https://acifbsuxmpdtlhbsvhlj.supabase.co",
+      CLOUDAMQP_URL: "amqps://example.test",
+      SUPABASE_SERVICE_ROLE_KEY: "x".repeat(30),
+    })
+  );
+});
+
 test("dispatch and database credentials remain separate", async () => {
   const headers: Headers[] = [];
   const backend = createBackend(

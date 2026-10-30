@@ -41,8 +41,11 @@ delayed retries (30/60 seconds plus jitter).
    actual templates without recipient authorization. Enable only the isolated
    staging organization's settings through deployment SQL after verification.
 
-Main rollout is not authorized. Capacity has been confirmed by the user; monitor
-resource usage and broker backlog under the staging load before future rollout.
+Main rollout was authorized on 30 October 2026. Use a separate production
+Compose project and protected environment, `DEPLOYMENT_ENV=production`, Main
+project `buvjopvpkgvzhykwsxnk`, and `HEALTH_PORT=8094`. Never point the staging
+container at Main. Production queues use `openbsp.production.campaign.*.v1`.
+Capacity has been confirmed by the user; monitor resource usage and backlog.
 There is no configurable rate/daily-budget control in this migration. Consumer
 prefetch one is concurrency, not a sending limit. Never infer launch readiness
 for a real marketing audience from these queue checks alone.
