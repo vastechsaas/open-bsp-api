@@ -89,3 +89,10 @@ All 21 focused carousel/template tests passed. Full backend validation passed
 with database tests explicitly skipped because local Docker was unavailable; the
 live read-only smoke checks above are not a replacement for the full SQL
 regression suite.
+
+Frontend promotion commit: `528d62a`. All 445 frontend tests, strict generated
+database-type synchronization, lint (zero errors, existing warning baseline),
+TypeScript and the production build passed. Locale conflicts were resolved by
+preserving Main's values and applying only the 37 carousel translation changes
+per locale. The frontend commit was pushed to Main after the backend deployment.
+Production browser acceptance and a real Meta template submission were not run.
