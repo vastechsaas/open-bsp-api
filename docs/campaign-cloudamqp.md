@@ -73,3 +73,63 @@ not reset it to queued or change the campaign's transport. Retain additive
 schema and legacy claimant's transport filter. Only then stop the new service.
 Restoring an old batch sender without the filter can duplicate delivery and is
 unsafe.
+
+## Main release — 30 October 2026
+
+The user approved selective Main promotion and CloudAMQP selection for all
+organizations present at rollout. Future organizations still default to the
+legacy transport unless explicitly enabled. Existing campaign runs never change
+transport. No actual template send or campaign start was performed for this
+release.
+
+Final verification: all **23 current Main organizations** have their setting
+enabled. At enablement there were zero campaign jobs and zero legacy campaigns;
+no runs were migrated. The Main UI deployment for `4b83853` succeeded, and its
+public English locale serves the new Needs review/reference labels. Production
+and staging workers both remained ready after enablement.
+
+- Backend: `5432cd6` and `f738371` promote the staging campaign implementation;
+  `0c04579` adds the isolated production health-port configuration and test.
+  Frontend: `4b83853`. Main's carousel code and unrelated features are
+  preserved.
+- Main project `buvjopvpkgvzhykwsxnk` was verified. The dry run selected only
+  `20261029155151_scrum_133_campaign_cloudamqp.sql`; it was applied
+  successfully. The new `campaign-dispatch` function is deployed. Authenticated
+  nonexistent-job status returns 404; requests without internal authentication
+  return 401. Tenant/anonymous worker execution is denied; service-role
+  execution is allowed.
+- Before migration, affected data, function definitions/ACLs, constraints,
+  triggers, column metadata and migration history were backed up and round-trip
+  verified using the current Windows user's DPAPI protection, outside Git:
+  `C:/Users/Hurera Mujeeb/.codex/backups/campaign-main-2026-10-30/before-cloudamqp-f54612f373f3446e9c4c78901a4225cd.dpapi`.
+  SHA-256: `248D6FBD80E933C46BAE87DAEC120D852B62D608AF89D967E2B9CDB0D061CCEA`.
+  Campaign and delivery tables were empty at backup time.
+- Oracle host `51.170.85.38`, directory
+  `/opt/openbsp/campaign-dispatch-production`, Compose project
+  `openbsp-campaign-production`, loopback readiness port **8094**. The
+  root-owned environment file is mode 600 and contains Main-only backend
+  credentials. Application source is unchanged from reviewed image
+  `openbsp-campaign-worker:9b92cda`, digest
+  `sha256:c0448e2f2f314e21900c04471688942d4396ac306aff7188465e7502f1aace97`.
+  This exact image was reused, not rebuilt or mislabeled as a newer source SHA.
+- Production queues are `openbsp.production.campaign.*.v1`; staging stays on
+  `openbsp.staging.campaign.*.v1` and port 8093. Readiness and queue inspection
+  verified one consumer per dispatch queue. The production queues were empty;
+  staging retained its two intentional DLQ test notifications. Existing chatbot,
+  voice and staging-campaign container start times were unchanged.
+- Validation: 14 worker unit tests and build; 19 focused Deno tests; 448 UI
+  tests, strict paired database-type check, TypeScript and Vite build. UI lint
+  had zero errors and the existing 373-warning baseline. Full backend checks ran
+  1,334 SQL assertions: one unrelated Main-vs-staging permission metadata
+  mismatch was resolved by a successful 42-assertion rerun using Main's
+  schema-source function inside a rolled-back transaction. The shared local
+  database was not changed. Main's live public/billing type blocks match the
+  release; managed Storage and hosted PostgREST generator metadata differ from
+  local generation and were not imported as unrelated type churn.
+
+Rollback: disable the relevant `campaign_dispatch_settings` rows for new runs,
+then drain/reconcile existing CloudAMQP jobs before stopping only the production
+Compose project. Keep the additive migration, legacy transport filter and image.
+Do not switch the staging container to Main or replay unresolved jobs through
+the legacy sender. Configurable scheduling/throttling, consent and delivery/read
+reporting remain separate work; these checks are not a live marketing-send test.
