@@ -1,7 +1,8 @@
 # Image carousel templates (SCRUM-132)
 
-Staging-first support for catalogue-independent Marketing templates. Main and
-the standalone chatbot engine are outside this rollout.
+Support for catalogue-independent Marketing templates, originally delivered to
+staging. The Main rollout was approved on 2026-10-30. The standalone chatbot
+engine is unchanged.
 
 ## Supported format
 
@@ -57,3 +58,34 @@ after generated DROP/CREATE changes; tenant roles must not claim deliveries.
 
 For this rollout, use staging PSDF for inspection/approval submission only. Do
 not start a campaign or send templates to any number without new approval.
+
+## Main release — 2026-10-30
+
+Only SCRUM-132 is promoted: backend source commit `b2d990d` and frontend source
+commit `deef86b`. Other staging features are not part of this release.
+
+Main project: `buvjopvpkgvzhykwsxnk`. The migration dry run selected only
+`20261027200604_carousel_templates.sql`. Before deployment, the affected tables,
+function definitions, trigger definitions and migration history were backed up
+under the current Windows user's DPAPI protection, outside Git:
+
+`C:/Users/Hurera Mujeeb/.codex/backups/carousel-main-2026-10-30/before-carousel-540cd0b9377e43c5bd938d09715055cb.dpapi`
+
+SHA-256: `E7C938551D38A58E7AFCF5CB02568B8109B6A8AED7D371EB2643CF6492DB745A`. The
+backup round trip was verified. Both affected tables were empty at capture.
+
+The release requires `whatsapp-management`, `campaign-worker` and
+`whatsapp-dispatcher` from the promoted backend before exposing the editor. No
+campaign start, template submission to Meta or customer message is authorized by
+this deployment.
+
+The migration was applied to Main and read back successfully. Both columns,
+service-role campaign-claim access, authenticated-role exclusion and basic asset
+validation smoke checks passed. Deployed functions are active:
+`whatsapp-management` version 38, `campaign-worker` version 16 and
+`whatsapp-dispatcher` version 28.
+
+All 21 focused carousel/template tests passed. Full backend validation passed
+with database tests explicitly skipped because local Docker was unavailable; the
+live read-only smoke checks above are not a replacement for the full SQL
+regression suite.
