@@ -2,8 +2,8 @@
 
 Jira: https://hureram8.atlassian.net/browse/SCRUM-140
 
-Status: planning only. No runtime code, migrations or live policy settings
-changed.
+Status: implementation and staging validation in progress. Main and the
+production campaign worker are outside this rollout.
 
 Backend branch: `scrum-140-campaign-policy-backend`. UI branch:
 `scrum-140-campaign-policy-ui`.
@@ -132,12 +132,12 @@ coordinates; CloudAMQP transports identifier-only notifications.
 
 ## Implementation sequence/checklist
 
-- [ ] Refine counting/time-boundary rules and migration/backfill design.
-- [ ] Implement policy/schedule schema, protected RPCs, reservations and
+- [x] Refine counting/time-boundary rules and migration/backfill design.
+- [x] Implement policy/schedule schema, protected RPCs, reservations and
       dispatch fences with database/Deno tests.
-- [ ] Extend publisher/consumer eligibility, pacing, recovery and isolated
+- [x] Extend publisher/consumer eligibility, pacing, recovery and isolated
       worker tests.
-- [ ] Build Super Admin policy and campaign scheduling/status UX after backend
+- [x] Build Super Admin policy and campaign scheduling/status UX after backend
       types are ready.
 - [ ] Failure/race/DST/regression testing, no-send staging rollout, runbook and
       approval evidence.

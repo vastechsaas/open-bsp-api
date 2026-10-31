@@ -16,6 +16,16 @@ create table public.campaigns (
   accepted_count integer default 0 not null,
   failed_count integer default 0 not null,
   needs_review_count integer default 0 not null,
+  expired_count integer default 0 not null,
+  cancelled_count integer default 0 not null,
+  scheduled_start_at timestamptz,
+  expires_at timestamptz,
+  schedule_timezone text default 'UTC' not null,
+  send_window_start time,
+  send_window_end time,
+  max_sends_per_minute integer,
+  policy_required boolean default false not null,
+  cancelled_at timestamptz,
   dispatch_transport text default 'postgres' not null,
   created_at timestamp with time zone default now() not null,
   updated_at timestamp with time zone default now() not null
@@ -57,7 +67,7 @@ check (service = 'whatsapp'::public.service);
 
 alter table only public.campaigns
 add constraint campaigns_status_check
-check (status in ('draft', 'queued', 'running', 'completed', 'failed', 'needs_review'));
+check (status in ('draft', 'queued', 'running', 'completed', 'failed', 'needs_review', 'expired', 'cancelled'));
 
 alter table public.campaigns add constraint campaigns_dispatch_transport_check
 check (dispatch_transport in ('postgres', 'cloudamqp'));
@@ -70,6 +80,15 @@ check (
   and accepted_count >= 0
   and failed_count >= 0
   and needs_review_count >= 0
+  and expired_count >= 0
+  and cancelled_count >= 0
+);
+
+alter table public.campaigns add constraint campaigns_schedule_check check (
+  (expires_at is null or scheduled_start_at is null or expires_at > scheduled_start_at)
+  and ((send_window_start is null and send_window_end is null) or
+    (send_window_start is not null and send_window_end is not null and send_window_start <> send_window_end))
+  and (max_sends_per_minute is null or max_sends_per_minute between 1 and 60000)
 );
 
 alter table only public.campaigns
@@ -204,7 +223,7 @@ check (jsonb_typeof(variables) = 'object');
 
 alter table only public.campaign_deliveries
 add constraint campaign_deliveries_status_check
-check (status in ('queued', 'processing', 'accepted', 'failed', 'needs_review'));
+check (status in ('queued', 'processing', 'accepted', 'failed', 'needs_review', 'expired', 'cancelled'));
 
 alter table only public.campaign_deliveries
 add constraint campaign_deliveries_attempts_check

@@ -8,9 +8,15 @@ begin
   end if;
   if tg_op = 'UPDATE' and old.status <> 'draft'
     and (new.template is distinct from old.template or new.carousel_media is distinct from old.carousel_media
-      or new.template_variable_mapping is distinct from old.template_variable_mapping) then
+      or new.template_variable_mapping is distinct from old.template_variable_mapping
+      or (new.organization_id,new.organization_address,new.audience_type,new.scheduled_start_at,new.expires_at,
+        new.schedule_timezone,new.send_window_start,new.send_window_end,new.max_sends_per_minute,new.policy_required)
+      is distinct from (old.organization_id,old.organization_address,old.audience_type,old.scheduled_start_at,old.expires_at,
+        old.schedule_timezone,old.send_window_start,old.send_window_end,old.max_sends_per_minute,old.policy_required)) then
     raise exception 'Queued campaign content is immutable' using errcode = '23514';
   end if;
+  if not exists(select 1 from pg_timezone_names where name=new.schedule_timezone) then
+    raise exception 'Valid campaign time zone required' using errcode='22023'; end if;
   if not exists (
     select 1
     from public.organizations_addresses
@@ -37,7 +43,8 @@ end;
 $$;
 
 create trigger enforce_campaign_draft_rules
-before insert or update of organization_id, organization_address, created_by, template, carousel_media, template_variable_mapping
+before insert or update of organization_id, organization_address, created_by, template, carousel_media, template_variable_mapping,
+  audience_type,scheduled_start_at,expires_at,schedule_timezone,send_window_start,send_window_end,max_sends_per_minute,policy_required
 on public.campaigns
 for each row
 execute function public.enforce_campaign_draft_rules();
@@ -259,6 +266,11 @@ create function public.list_campaigns_page(
   accepted_count integer,
   failed_count integer,
   needs_review_count integer,
+  expired_count integer,
+  cancelled_count integer,
+  scheduled_start_at timestamptz,
+  expires_at timestamptz,
+  sending_state jsonb,
   created_at timestamp with time zone,
   updated_at timestamp with time zone,
   audience_count bigint,
@@ -450,6 +462,11 @@ begin
     classified.accepted_count,
     classified.failed_count,
     classified.needs_review_count,
+    classified.expired_count,
+    classified.cancelled_count,
+    classified.scheduled_start_at,
+    classified.expires_at,
+    public.get_campaign_sending_state(classified.organization_id,classified.id),
     classified.created_at,
     classified.updated_at,
     classified.campaign_audience_count,
@@ -482,6 +499,7 @@ declare
   mapping_value text;
   csv_column text;
   snapshot_count bigint;
+  enforce_policy boolean;
 begin
   if not exists (
     select 1
@@ -495,6 +513,7 @@ begin
       message = 'organization is not accessible to the authenticated user';
   end if;
 
+  perform public.lock_campaign_sending_policy(p_organization_id);
   select * into campaign
   from public.campaigns
   where id = p_campaign_id
@@ -512,6 +531,15 @@ begin
       errcode = '23514',
       message = 'campaign has already been started';
   end if;
+  select coalesce(p.enabled,false) into enforce_policy from public.campaign_sending_policies p where organization_id=p_organization_id;
+  enforce_policy := coalesce(enforce_policy,false);
+  if campaign.expires_at <= clock_timestamp() then
+    raise exception 'Campaign expiry must be in the future' using errcode='23514'; end if;
+  if enforce_policy and campaign.expires_at is null then
+    raise exception 'Campaign expiry required while sending policy is enabled' using errcode='23514'; end if;
+  if (enforce_policy or campaign.scheduled_start_at is not null or campaign.expires_at is not null or campaign.send_window_start is not null)
+    and not exists(select 1 from public.campaign_dispatch_settings where organization_id=p_organization_id and enabled) then
+    raise exception 'Scheduled or policy-managed campaigns require CloudAMQP' using errcode='23514'; end if;
 
   if not exists (
     select 1
@@ -745,6 +773,7 @@ begin
     processing_count = 0,
     accepted_count = 0,
     failed_count = 0,
+    policy_required = enforce_policy,
     dispatch_transport = case when exists (
       select 1 from public.campaign_dispatch_settings s
       where s.organization_id = p_organization_id and s.enabled
@@ -752,8 +781,11 @@ begin
   where id = p_campaign_id
     and organization_id = p_organization_id;
 
-  insert into public.campaign_dispatch_jobs (organization_id, campaign_id, delivery_id)
-  select d.organization_id, d.campaign_id, d.id
+  insert into public.campaign_dispatch_jobs (organization_id, campaign_id, delivery_id, due_at, publish_after, waiting_reason)
+  select d.organization_id, d.campaign_id, d.id,
+    greatest(clock_timestamp(),coalesce(c.scheduled_start_at,clock_timestamp())),
+    greatest(clock_timestamp(),coalesce(c.scheduled_start_at,clock_timestamp())),
+    case when c.scheduled_start_at>clock_timestamp() then 'scheduled' end
   from public.campaign_deliveries d join public.campaigns c on c.id = d.campaign_id
   where d.campaign_id = p_campaign_id and c.dispatch_transport = 'cloudamqp'
   on conflict (delivery_id, attempt_no) do nothing;
