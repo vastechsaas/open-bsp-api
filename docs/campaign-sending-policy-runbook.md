@@ -4,8 +4,10 @@
 
 - Super Admin → Organization → Campaign controls: enable enforcement, daily
   message allowance, budget time zone, sends/minute/number and recipient cap.
-- Campaign configuration → Schedule & delivery: Send now / later, time zone,
-  expiry, optional daily sending window and optional slower speed.
+- Campaign configuration → Schedule & delivery: Send now / later, time zone, and
+  an optional daily sending window. New campaigns have no final deadline or
+  user-selected speed; Super Admin controls the limits and campaigns continue
+  across eligible windows/days until their audience is processed.
 - Review and campaign listings show durable waiting reasons; review also shows
   usage, next eligibility, expired/cancelled counts and cancellation controls.
 
@@ -33,7 +35,11 @@ a conflict rather than silently overwriting another administrator's changes.
   blocked for 48 hours after recent submissions to prevent quota resets.
 - Sending requires all limits, the start and daily window to permit it. After
   midnight, a 09:00–18:00 campaign waits until 09:00. Overnight windows cross
-  midnight. Local start/expiry inputs reject missing or repeated DST times.
+  midnight. Local start inputs reject missing or repeated DST times.
+- Existing explicitly configured deadlines/speed overrides remain compatible in
+  the backend and on already-started campaigns. The simplified editor discloses
+  that saving an older draft clears those two settings. No existing records are
+  automatically rewritten. Review still shows any historical deadline.
 - Expiry/cancellation stops unsent work, not an accepted/in-flight submission.
   Recovery processes this even if no queue notification arrives. No automatic
   customer message is sent by expiry/cancellation.
