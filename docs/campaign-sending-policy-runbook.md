@@ -129,3 +129,36 @@ remains. Main promotion and real recipient sends require separate approval.
   attach during this release. Jira comments could not be posted (current
   connector returned inaccessible/authentication errors); preserve this evidence
   for SCRUM-140.
+
+## Simplified scheduling follow-up — 1 November 2026
+
+- User-confirmed scope: remove the final-deadline and custom-speed inputs; keep
+  campaign start/time zone and daily sending hours. New/edited drafts send
+  `expires_at=null` and `max_sends_per_minute=null`, inheriting organization
+  policy. Limits/windows defer and resume work until the audience is processed.
+- Older drafts show a notice that saving removes their legacy deadline/speed;
+  that conversion can be saved without requiring an unrelated edit. Existing
+  started campaign deadlines and backend API compatibility remain unchanged.
+- Backend branch `scrum-140-campaign-scheduling-simplification-backend`, feature
+  `4684f07`, staging merge `0923e6f`. UI branch
+  `scrum-140-campaign-scheduling-simplification-ui`, feature `beed403`, staging
+  merge `53c715d`.
+- Generated migration `20261031203956` was trimmed with explicit user approval
+  to the generated start_campaign function and existing grants. Unrelated
+  trigger/constraint rebuild noise was excluded before local application. No old
+  migration was edited. Regenerated/synchronized database types were unchanged.
+- Encrypted staging backup:
+  `node_modules/.scrum140-backup/staging-before-simplified-scheduling.dpapi`;
+  SHA256 `AD26F62A23EF0EF27CE24F36029ACBC9F95AA120BAF35D47E709B69E5EB82FBB`. A
+  staging dry run listed only this migration before deployment. The deployed
+  function no longer requires expiry; existing campaign records matched the
+  before-deployment snapshot exactly.
+- Validation: backend full static/plugin/voice checks; full database regression
+  **61 files / 1,426 assertions passed** after making clock-sensitive fixtures
+  explicitly due and waiting for the actual legacy deadline. Focused campaign
+  checks99/99; policy60/60 also passed in a rolled-back staging transaction.
+  Frontend470 tests, lint (0 errors), TypeScript and production build passed;
+  the final legacy-save guard also passed focused tests and incremental typing.
+- No actual template sends, Oracle runtime update, Main merge or production
+  configuration change was performed for this follow-up. The Vercel deployment
+  is tracked against UI staging commit53c715d.
