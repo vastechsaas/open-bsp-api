@@ -535,8 +535,6 @@ begin
   enforce_policy := coalesce(enforce_policy,false);
   if campaign.expires_at <= clock_timestamp() then
     raise exception 'Campaign expiry must be in the future' using errcode='23514'; end if;
-  if enforce_policy and campaign.expires_at is null then
-    raise exception 'Campaign expiry required while sending policy is enabled' using errcode='23514'; end if;
   if (enforce_policy or campaign.scheduled_start_at is not null or campaign.expires_at is not null or campaign.send_window_start is not null)
     and not exists(select 1 from public.campaign_dispatch_settings where organization_id=p_organization_id and enabled) then
     raise exception 'Scheduled or policy-managed campaigns require CloudAMQP' using errcode='23514'; end if;

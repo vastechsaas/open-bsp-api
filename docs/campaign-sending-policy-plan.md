@@ -2,6 +2,13 @@
 
 Jira: https://hureram8.atlassian.net/browse/SCRUM-140
 
+Scope revision (1 November 2026): the campaign editor keeps start scheduling and
+daily sending hours, but removes final deadlines and user-selected speed. New
+campaigns inherit Super Admin limits and continue across eligible days/windows
+until the audience is processed. The original deadline/override details below
+describe the first rollout, not the simplified editor. Existing started runs and
+explicit backend/API deadline compatibility are preserved.
+
 Status: implemented and merged to staging. Backend/worker no-send verification
 and automated frontend deployment passed. Manual authenticated UI review
 remains; see the runbook. Main and the production campaign worker are outside
