@@ -2,8 +2,10 @@
 
 Jira: https://hureram8.atlassian.net/browse/SCRUM-140
 
-Status: implementation and staging validation in progress. Main and the
-production campaign worker are outside this rollout.
+Status: implemented and merged to staging. Backend/worker no-send verification
+and automated frontend deployment passed. Manual authenticated UI review
+remains; see the runbook. Main and the production campaign worker are outside
+this rollout.
 
 Backend branch: `scrum-140-campaign-policy-backend`. UI branch:
 `scrum-140-campaign-policy-ui`.

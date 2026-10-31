@@ -80,3 +80,46 @@ existing work and reservations while retaining a compatible handler/worker and
 additive schema. Do not merely switch enforcement off or restore a sender that
 bypasses policy gates. The save RPC rejects disabling enforcement while work
 remains. Main promotion and real recipient sends require separate approval.
+
+## Staging release evidence — 1 November 2026
+
+- Backend feature `aa95acb`, staging merge `05118c6`; UI feature `f10cdb6`,
+  staging merge `310285a`. The existing staging carousel preview fix was
+  retained.
+- Project `acifbsuxmpdtlhbsvhlj`, migration `20261030180254`; campaign-dispatch
+  Edge Function deployed. New function privileges and repaired recovery verified
+  remotely. The newly applied local alias repair was explicitly approved.
+- Encrypted affected-data backup (Windows current-user DPAPI, owner-restricted
+  directory): `node_modules/.scrum140-backup/staging-before-scrum140.dpapi` on
+  the release workstation. Decryption/project check passed. SHA256:
+  `F600D659E8F39238C7D6F9D6F6064B87384B132CF772397B6823334E38624A6C`.
+- Staging worker image `openbsp-campaign-worker:aa95acb`, revision label
+  `aa95acb`, image ID
+  `sha256:62d192b6a71d1a2c8a55d6df14af51f92e61869e76fc88c92aabbade5b91c09b`;
+  readiness and container health passed on8093. Previous9b92cda image retained.
+- Production campaign, chatbot and voice container IDs/start times were
+  unchanged; production8094 remained healthy. No Main branch or
+  production-policy changes.
+- Disposable organization `14014000-0000-4000-8000-000000000001`: **SCRUM-140
+  Campaign Policy Test**. Its sender is deliberately disconnected;
+  recipients/accounting are labelled mocks. One scheduled job, one daily-budget
+  wait, one expired recipient and one cancelled recipient were verified through
+  the deployed queue/worker. All four deliveries retained **zero send
+  attempts**. The sole enabled policy is in this fixture; other staging
+  organizations remain unchanged. No Auth user or email invitation was created
+  for this fixture.
+- Full backend static/plugin/voice validation passed; initial quota-fixture and
+  recovery regression failures were corrected and the complete database suite
+  rerun: **61 files / 1,421 assertions passed**. Policy tests:55 locally and in
+  a rolled-back staging transaction. Two real concurrent database connections
+  reserved only one final slot. Handler13/13; worker16 unit tests plus build.
+  Worker broker integration was skipped without a configured local broker;
+  deployed staging queue smoke checks above exercised the existing real broker.
+- Full frontend validation passed: **468 tests**, generated-type
+  synchronization, lint (0 errors,375 warnings), TypeScript and production
+  build. No actual Meta template sends were performed.
+- Vercel `meta-vista-ui` deployment for310285a succeeded. Authenticated
+  visual/manual review is still required: the in-app browser webview did not
+  attach during this release. Jira comments could not be posted (current
+  connector returned inaccessible/authentication errors); preserve this evidence
+  for SCRUM-140.
