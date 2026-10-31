@@ -806,6 +806,7 @@ export type Database = {
           publish_after: string
           send_started_at: string | null
           updated_at: string
+          waiting_reason: string | null
         }
         Insert: {
           attempt_no?: number
@@ -825,6 +826,7 @@ export type Database = {
           publish_after?: string
           send_started_at?: string | null
           updated_at?: string
+          waiting_reason?: string | null
         }
         Update: {
           attempt_no?: number
@@ -844,6 +846,7 @@ export type Database = {
           publish_after?: string
           send_started_at?: string | null
           updated_at?: string
+          waiting_reason?: string | null
         }
         Relationships: [
           {
@@ -885,23 +888,135 @@ export type Database = {
           },
         ]
       }
+      campaign_send_ledger: {
+        Row: {
+          accepted_at: string | null
+          delivery_id: string | null
+          id: string
+          job_id: string | null
+          legacy_delivery_id: string | null
+          organization_address: string
+          organization_id: string
+          recipient_key: string
+          state: string
+          submitted_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          delivery_id?: string | null
+          id?: string
+          job_id?: string | null
+          legacy_delivery_id?: string | null
+          organization_address: string
+          organization_id: string
+          recipient_key: string
+          state: string
+          submitted_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          delivery_id?: string | null
+          id?: string
+          job_id?: string | null
+          legacy_delivery_id?: string | null
+          organization_address?: string
+          organization_id?: string
+          recipient_key?: string
+          state?: string
+          submitted_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_send_ledger_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_deliveries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_send_ledger_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: true
+            referencedRelation: "campaign_dispatch_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_send_ledger_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_sending_policies: {
+        Row: {
+          budget_timezone: string
+          daily_limit: number | null
+          enabled: boolean
+          max_sends_per_minute: number | null
+          organization_id: string
+          recipient_cap: number | null
+          revision: number
+          updated_at: string
+        }
+        Insert: {
+          budget_timezone?: string
+          daily_limit?: number | null
+          enabled?: boolean
+          max_sends_per_minute?: number | null
+          organization_id: string
+          recipient_cap?: number | null
+          revision?: number
+          updated_at?: string
+        }
+        Update: {
+          budget_timezone?: string
+          daily_limit?: number | null
+          enabled?: boolean
+          max_sends_per_minute?: number | null
+          organization_id?: string
+          recipient_cap?: number | null
+          revision?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_sending_policies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaigns: {
         Row: {
           accepted_count: number
           audience_type: Database["public"]["Enums"]["campaign_audience_type"]
+          cancelled_at: string | null
+          cancelled_count: number
           carousel_media: Json
           created_at: string
           created_by: string | null
           dispatch_transport: string
+          expired_count: number
+          expires_at: string | null
           failed_count: number
           header_media: Json | null
           id: string
+          max_sends_per_minute: number | null
           name: string
           needs_review_count: number
           organization_address: string
           organization_id: string
+          policy_required: boolean
           processing_count: number
           queued_count: number
+          schedule_timezone: string
+          scheduled_start_at: string | null
+          send_window_end: string | null
+          send_window_start: string | null
           service: Database["public"]["Enums"]["service"]
           status: string
           template: Json
@@ -911,19 +1026,29 @@ export type Database = {
         Insert: {
           accepted_count?: number
           audience_type: Database["public"]["Enums"]["campaign_audience_type"]
+          cancelled_at?: string | null
+          cancelled_count?: number
           carousel_media?: Json
           created_at?: string
           created_by?: string | null
           dispatch_transport?: string
+          expired_count?: number
+          expires_at?: string | null
           failed_count?: number
           header_media?: Json | null
           id?: string
+          max_sends_per_minute?: number | null
           name: string
           needs_review_count?: number
           organization_address: string
           organization_id: string
+          policy_required?: boolean
           processing_count?: number
           queued_count?: number
+          schedule_timezone?: string
+          scheduled_start_at?: string | null
+          send_window_end?: string | null
+          send_window_start?: string | null
           service?: Database["public"]["Enums"]["service"]
           status?: string
           template: Json
@@ -933,19 +1058,29 @@ export type Database = {
         Update: {
           accepted_count?: number
           audience_type?: Database["public"]["Enums"]["campaign_audience_type"]
+          cancelled_at?: string | null
+          cancelled_count?: number
           carousel_media?: Json
           created_at?: string
           created_by?: string | null
           dispatch_transport?: string
+          expired_count?: number
+          expires_at?: string | null
           failed_count?: number
           header_media?: Json | null
           id?: string
+          max_sends_per_minute?: number | null
           name?: string
           needs_review_count?: number
           organization_address?: string
           organization_id?: string
+          policy_required?: boolean
           processing_count?: number
           queued_count?: number
+          schedule_timezone?: string
+          scheduled_start_at?: string | null
+          send_window_end?: string | null
+          send_window_start?: string | null
           service?: Database["public"]["Enums"]["service"]
           status?: string
           template?: Json
@@ -3624,6 +3759,24 @@ export type Database = {
         }
         Returns: Json
       }
+      campaign_dispatch_eligibility: {
+        Args: { p_job_id: string }
+        Returns: Json
+      }
+      campaign_recipient_key: { Args: { p_address: string }; Returns: string }
+      campaign_window_next_at: {
+        Args: {
+          p_at: string
+          p_end: string
+          p_start: string
+          p_timezone: string
+        }
+        Returns: string
+      }
+      cancel_campaign: {
+        Args: { p_campaign_id: string; p_organization_id: string }
+        Returns: Json
+      }
       carousel_campaign_ready: {
         Args: { p_mapping: Json; p_media: Json; p_template: Json }
         Returns: boolean
@@ -3925,6 +4078,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      defer_campaign_dispatch_job: {
+        Args: { p_eligibility: Json; p_job_id: string }
+        Returns: Json
+      }
       delete_quick_reply: {
         Args: { p_quick_reply_id: string }
         Returns: string
@@ -4069,6 +4226,14 @@ export type Database = {
           variables: Json
         }[]
       }
+      get_campaign_sending_policy: {
+        Args: { p_organization_id: string }
+        Returns: Json
+      }
+      get_campaign_sending_state: {
+        Args: { p_campaign_id: string; p_organization_id: string }
+        Returns: Json
+      }
       get_conversation_queue_conversations: {
         Args: {
           p_limit?: number
@@ -4208,6 +4373,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      get_platform_campaign_policy: {
+        Args: { p_organization_id: string }
+        Returns: Json
       }
       get_platform_integration_availability: {
         Args: { p_organization_id: string }
@@ -4450,9 +4619,12 @@ export type Database = {
           accepted_count: number
           audience_count: number
           audience_type: Database["public"]["Enums"]["campaign_audience_type"]
+          cancelled_count: number
           carousel_media: Json
           created_at: string
           created_by: string
+          expired_count: number
+          expires_at: string
           failed_count: number
           header_media: Json
           id: string
@@ -4463,6 +4635,8 @@ export type Database = {
           processing_count: number
           queued_count: number
           readiness: string
+          scheduled_start_at: string
+          sending_state: Json
           service: Database["public"]["Enums"]["service"]
           status: string
           template: Json
@@ -5018,6 +5192,10 @@ export type Database = {
           source_event_key: string
           total_count: number
         }[]
+      }
+      lock_campaign_sending_policy: {
+        Args: { p_organization_id: string }
+        Returns: undefined
       }
       lock_organization_team: {
         Args: { p_organization_id: string }
@@ -5611,6 +5789,15 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      update_platform_campaign_policy: {
+        Args: {
+          p_expected_revision: number
+          p_organization_id: string
+          p_policy: Json
+          p_request_id: string
+        }
+        Returns: Json
       }
       update_platform_integration_availability: {
         Args: {

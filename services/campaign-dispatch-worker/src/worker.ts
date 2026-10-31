@@ -139,7 +139,8 @@ export function createConsumer(
         job.job_id,
       );
     } else if (
-      !["accepted", "retry_scheduled", "deferred"].includes(result.phase)
+      !["accepted", "retry_scheduled", "deferred", "expired", "cancelled"]
+        .includes(result.phase)
     ) {
       // Running/unknown state: DB recovery owns the lease. Revisit without resending.
       await publish(

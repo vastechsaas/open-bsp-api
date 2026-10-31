@@ -14,7 +14,7 @@ const repository: DispatchRepository = {
   async status(id) {
     const { data } = await client.from("campaign_dispatch_jobs")
       .select(
-        "id,organization_id,campaign_id,delivery_id,phase,error_code,external_id",
+        "id,organization_id,campaign_id,delivery_id,phase,error_code,external_id,waiting_reason,due_at",
       ).eq("id", id).maybeSingle().throwOnError();
     return data;
   },

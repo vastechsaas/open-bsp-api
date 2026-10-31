@@ -71,6 +71,35 @@ Deno.test("campaign dispatch requires service authentication", async () => {
   );
   assertEquals(f.sends(), 0);
 });
+
+Deno.test("policy changing during preparation defers without sending or recording a failed attempt", async () => {
+  const f = fixture();
+  let reads = 0;
+  f.deps.repository.status = () =>
+    Promise.resolve(
+      ++reads === 1 ? job : {
+        ...job,
+        waiting_reason: "daily_allowance",
+      },
+    );
+  f.deps.repository.begin = () => Promise.resolve(false);
+  const response = await createDispatchHandler(f.deps)(request());
+  assertEquals(await response.json(), { phase: "deferred" });
+  assertEquals(f.sends(), 0);
+  assertEquals(f.outcomes, []);
+});
+
+Deno.test("cancellation during preparation cannot cross the send boundary", async () => {
+  const f = fixture();
+  let reads = 0;
+  f.deps.repository.status = () =>
+    Promise.resolve(++reads === 1 ? job : { ...job, phase: "cancelled" });
+  f.deps.repository.begin = () => Promise.resolve(false);
+  assertEquals(await (await createDispatchHandler(f.deps)(request())).json(), {
+    phase: "cancelled",
+  });
+  assertEquals(f.sends(), 0);
+});
 Deno.test("campaign dispatch rejects forged tenant identity and extra secrets", async () => {
   const f = fixture();
   const handler = createDispatchHandler(f.deps);
