@@ -17,7 +17,8 @@ create table public.campaign_dispatch_jobs (
   delivery_id uuid not null,
   attempt_no integer not null default 1 check (attempt_no between 1 and 3),
   phase text not null default 'pending' check (phase in
-    ('pending', 'preparing', 'submitting', 'accepted', 'failed', 'retry_scheduled', 'needs_review')),
+    ('pending', 'preparing', 'submitting', 'accepted', 'failed', 'retry_scheduled', 'needs_review', 'expired', 'cancelled')),
+  waiting_reason text check (waiting_reason in ('scheduled', 'sending_window', 'daily_allowance', 'number_rate', 'recipient_frequency', 'policy_unavailable')),
   due_at timestamptz not null default now(),
   publish_after timestamptz not null default now(),
   publication_token uuid,
@@ -34,6 +35,7 @@ create table public.campaign_dispatch_jobs (
   foreign key (organization_id, campaign_id) references public.campaigns(organization_id, id) on delete cascade
 );
 create index campaign_dispatch_jobs_publication_idx on public.campaign_dispatch_jobs (publish_after, id) where phase = 'pending';
+create index campaign_dispatch_jobs_org_publication_idx on public.campaign_dispatch_jobs (organization_id,publish_after,id) where phase='pending';
 create index campaign_dispatch_jobs_recovery_idx on public.campaign_dispatch_jobs (lease_expires_at, id) where phase in ('preparing', 'submitting');
 alter table public.campaign_dispatch_jobs enable row level security;
 revoke all on table public.campaign_dispatch_jobs from public, anon, authenticated;

@@ -6,6 +6,8 @@ export type DispatchJob = {
   phase: string;
   error_code: string | null;
   external_id: string | null;
+  waiting_reason?: string | null;
+  due_at?: string;
 };
 
 export type DispatchRepository = {
@@ -74,7 +76,14 @@ export function createDispatchHandler<T>(deps: DispatchDependencies<T>) {
         const prepared = await deps.prepare(job);
         if (!await deps.repository.begin(id, token)) {
           // No external call happened. A stale preparer must never send.
-          return response({ phase: "reconciling" });
+          const state = await deps.repository.status(id);
+          return response({
+            phase: state?.phase === "pending" && state.waiting_reason
+              ? "deferred"
+              : ["expired", "cancelled"].includes(state?.phase ?? "")
+              ? state!.phase
+              : "reconciling",
+          });
         }
         submitted = true;
         const sent = await deps.send(prepared);

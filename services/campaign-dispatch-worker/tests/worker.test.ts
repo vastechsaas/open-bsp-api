@@ -143,6 +143,26 @@ test("uncertainty goes to DLQ without another send", async () => {
   );
   assert.deepEqual(f.calls, ["dlq", "ack"]);
 });
+
+for (const phase of ["expired", "cancelled"]) {
+  test(`${phase} job is acknowledged without retry or a send`, async () => {
+    const f = fixture();
+    f.backend.status = async () => ({ phase });
+    await createConsumer(f.channel, topology, f.backend, () => {})(
+      f.message(job),
+    );
+    assert.deepEqual(f.calls, ["ack"]);
+  });
+}
+
+test("policy deferral is durable in backend and does not occupy the retry queue", async () => {
+  const f = fixture();
+  f.backend.process = async () => ({ phase: "deferred" });
+  await createConsumer(f.channel, topology, f.backend, () => {})(
+    f.message(job),
+  );
+  assert.deepEqual(f.calls, ["ack"]);
+});
 test("malformed messages cannot leak secret payloads into DLQ", async () => {
   const f = fixture();
   await createConsumer(f.channel, topology, f.backend, () => {})(
