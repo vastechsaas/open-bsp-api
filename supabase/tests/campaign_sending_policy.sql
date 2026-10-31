@@ -50,7 +50,12 @@ select ok((select policy_required from public.campaigns where id='14030000-0000-
 select throws_ok($$update public.campaigns set expires_at=null where id='14030000-0000-4000-8000-000000000010'$$,'23514',null,'Queued schedule cannot be removed');
 create temp table policy_jobs(label text primary key,id uuid,token uuid,claim jsonb);
 insert into policy_jobs(label,id) select right(c.name,2),j.id from public.campaign_dispatch_jobs j join public.campaigns c on c.id=j.campaign_id where j.organization_id='14000000-0000-4000-8000-000000000001';
-update policy_jobs set token=(public.claim_campaign_dispatch_job(id)->>'lease_token')::uuid where label='10';
+-- Immediate fixtures must be safely due, not depend on sub-millisecond host/VM
+-- clock agreement. Scheduled-start assertions below keep their future due date.
+update public.campaign_dispatch_jobs set due_at=clock_timestamp()-interval '1 second' where organization_id='14000000-0000-4000-8000-000000000001';
+update policy_jobs set claim=public.claim_campaign_dispatch_job(id) where label='10';
+select diag('initial preparation: '||claim::text) from policy_jobs where label='10' and claim->>'phase'<>'claimed';
+update policy_jobs set token=(claim->>'lease_token')::uuid where label='10';
 select ok(public.begin_campaign_dispatch_send(id,token),'First actual submission reserves capacity') from policy_jobs where label='10';
 select ok(not public.begin_campaign_dispatch_send(id,token),'Same attempt cannot reserve twice') from policy_jobs where label='10';
 select is(public.finish_campaign_dispatch_job(id,token,'needs_review',null,'mock_uncertainty'),'needs_review','Ambiguous send remains uncertain') from policy_jobs where label='10';
@@ -65,6 +70,7 @@ update public.campaign_send_ledger set submitted_at=clock_timestamp()-interval '
 select public.start_campaign('14000000-0000-4000-8000-000000000001','14030000-0000-4000-8000-000000000012');
 select public.start_campaign('14000000-0000-4000-8000-000000000001','14030000-0000-4000-8000-000000000013');
 insert into policy_jobs(label,id) select right(c.name,2),j.id from public.campaign_dispatch_jobs j join public.campaigns c on c.id=j.campaign_id where j.organization_id='14000000-0000-4000-8000-000000000001' and right(c.name,2) in ('12','13');
+update public.campaign_dispatch_jobs set due_at=clock_timestamp()-interval '1 second' where id in (select id from policy_jobs where label in ('12','13'));
 update policy_jobs set claim=public.claim_campaign_dispatch_job(id) where label='12';
 update policy_jobs set claim=public.claim_campaign_dispatch_job(id) where label='13';
 select diag('preparation '||label||': '||claim::text) from policy_jobs where label in ('12','13') and claim->>'phase'<>'claimed';
@@ -88,7 +94,9 @@ select is(public.campaign_window_next_at('2026-11-01 05:30:00+00','America/New_Y
 -- Cancellation fences preparation without touching acceptance/uncertainty.
 select public.start_campaign('14000000-0000-4000-8000-000000000001','14030000-0000-4000-8000-000000000016');
 insert into policy_jobs(label,id) select '16',id from public.campaign_dispatch_jobs where campaign_id='14030000-0000-4000-8000-000000000016';
-update policy_jobs set token=(public.claim_campaign_dispatch_job(id)->>'lease_token')::uuid where label='16';
+update public.campaign_dispatch_jobs set due_at=clock_timestamp()-interval '1 second' where id=(select id from policy_jobs where label='16');
+update policy_jobs set claim=public.claim_campaign_dispatch_job(id) where label='16';
+update policy_jobs set token=(claim->>'lease_token')::uuid where label='16';
 select lives_ok($$select public.cancel_campaign('14000000-0000-4000-8000-000000000001','14030000-0000-4000-8000-000000000016')$$,'Authorized cancellation is idempotent');
 select ok(not public.begin_campaign_dispatch_send(id,token),'Cancelled preparer cannot send') from policy_jobs where label='16';
 select is((select phase from public.campaign_dispatch_jobs where id=(select id from policy_jobs where label='16')),'cancelled','Cancelled job is terminal');
@@ -97,8 +105,18 @@ select ok(not exists(select 1 from public.campaign_send_ledger where job_id=(sel
 update public.campaigns set expires_at=clock_timestamp()+interval '1 second' where id='14030000-0000-4000-8000-000000000015';
 select public.start_campaign('14000000-0000-4000-8000-000000000001','14030000-0000-4000-8000-000000000015');
 insert into policy_jobs(label,id) select '15',id from public.campaign_dispatch_jobs where campaign_id='14030000-0000-4000-8000-000000000015';
-update policy_jobs set token=(public.claim_campaign_dispatch_job(id)->>'lease_token')::uuid where label='15';
-select pg_sleep(1.1);
+update public.campaign_dispatch_jobs set due_at=clock_timestamp()-interval '1 second' where id=(select id from policy_jobs where label='15');
+update policy_jobs set claim=public.claim_campaign_dispatch_job(id) where label='15';
+update policy_jobs set token=(claim->>'lease_token')::uuid where label='15';
+select ok((select expires_at is not null from public.campaigns where id='14030000-0000-4000-8000-000000000015'),'Starting a legacy campaign preserves its explicit deadline');
+-- Wait for the actual database deadline, not an assumed host/container clock delta.
+do $$declare deadline timestamptz; waits integer:=0; begin
+  select expires_at into strict deadline from public.campaigns where id='14030000-0000-4000-8000-000000000015';
+  while clock_timestamp()<deadline loop
+    perform pg_sleep(0.05); waits:=waits+1;
+    if waits>200 then raise exception 'Database clock did not reach fixture deadline'; end if;
+  end loop;
+end$$;
 select ok(not public.begin_campaign_dispatch_send(id,token),'Expiry wins over an already-prepared send') from policy_jobs where label='15';
 select is((select phase from public.campaign_dispatch_jobs where id=(select id from policy_jobs where label='15')),'expired','Expired job does not silently complete');
 select is((select expired_count from public.campaigns where id='14030000-0000-4000-8000-000000000015'),1,'Unsent expired recipient has its own count');
@@ -123,5 +141,16 @@ select lives_ok($$select public.recover_campaign_dispatch_jobs()$$,'Recovery han
 select is((select phase from public.campaign_dispatch_jobs where campaign_id='14030000-0000-4000-8000-000000000014'),'cancelled','Future notification cannot send cancelled campaign');
 select is((select cancelled_count from public.campaigns where id='14030000-0000-4000-8000-000000000014'),1,'Cancelled recipients have distinct terminal counters');
 select is((select count(*) from public.campaign_send_ledger where organization_id='14000000-0000-4000-8000-000000000001'),2::bigint,'Unsent cancellation and expiry create no reservations');
+-- Campaigns can drain their audience across days without a final deadline.
+insert into public.campaigns(id,organization_id,name,organization_address,template,audience_type,send_window_start,send_window_end,scheduled_start_at,schedule_timezone)
+values ('14030000-0000-4000-8000-000000000017','14000000-0000-4000-8000-000000000001','No deadline policy campaign','policy-a',
+ '{"id":"mock-only","name":"mock_only","language":"en_US","status":"APPROVED","components":[]}','csv_upload','09:00','18:00',clock_timestamp()+interval '1 day','Asia/Karachi');
+insert into public.campaign_csv_recipients(organization_id,campaign_id,contact_address)
+values ('14000000-0000-4000-8000-000000000001','14030000-0000-4000-8000-000000000017','mock-no-real-recipient');
+select is(public.start_campaign('14000000-0000-4000-8000-000000000001','14030000-0000-4000-8000-000000000017'),1::bigint,'Enforced scheduled campaign with a daily window can start without expiry');
+select ok((select policy_required and expires_at is null and max_sends_per_minute is null from public.campaigns where id='14030000-0000-4000-8000-000000000017'),'No deadline retains policy enforcement and inherits organization speed');
+select ok((select phase='pending' and waiting_reason='scheduled' from public.campaign_dispatch_jobs where campaign_id='14030000-0000-4000-8000-000000000017'),'No deadline does not bypass scheduled start');
+update public.campaign_send_ledger set state='reserved',submitted_at=clock_timestamp() where organization_id='14000000-0000-4000-8000-000000000001';
+select ok(not (public.campaign_dispatch_eligibility(id) ? 'terminal') and (public.campaign_dispatch_eligibility(id)->>'next_at')::timestamptz>clock_timestamp(),'A no-deadline campaign waits for capacity rather than expiring') from public.campaign_dispatch_jobs where campaign_id='14030000-0000-4000-8000-000000000017';
 select * from finish();
 rollback;
