@@ -84,3 +84,57 @@ Deno.test("only status changes; original content, conversation and timestamps un
     status: { read: new Date(1791700000 * 1000).toISOString() },
   }]);
 });
+
+Deno.test("campaign status lane records receipts without creating chat placeholders", async () => {
+  const { client, updates } = mock([]);
+  const receipts: unknown[] = [];
+  const response = await processStatusOnly(
+    payload(),
+    "org",
+    new Set(["12345"]),
+    client,
+    (receipt) => {
+      receipts.push(receipt);
+      return Promise.resolve(true);
+    },
+  );
+  assertEquals(response.status, 200);
+  assertEquals(updates, []);
+  assertEquals(receipts.length, 1);
+  assertEquals(
+    (receipts[0] as { p_external_id: string }).p_external_id,
+    "wamid.x",
+  );
+});
+
+Deno.test("status lane keeps noncampaign chat handling and validates tenant before receipt writes", async () => {
+  let retained = 0;
+  const ingest = () => {
+    retained++;
+    return Promise.resolve(false);
+  };
+  const { client, updates } = mock([]);
+  assertEquals(
+    (await processStatusOnly(
+      payload(),
+      "org",
+      new Set(["other"]),
+      client,
+      ingest,
+    )).status,
+    403,
+  );
+  assertEquals(retained, 0);
+  assertEquals(
+    (await processStatusOnly(
+      payload(),
+      "org",
+      new Set(["12345"]),
+      client,
+      ingest,
+    )).status,
+    503,
+  );
+  assertEquals(retained, 1);
+  assertEquals(updates, []);
+});
