@@ -28,10 +28,14 @@ required.
 - [x] Generate/apply one schema migration and synchronize generated types.
 - [x] Complete backend validation: 63 database files, 1,510 assertions, all
       passed.
-- [ ] Complete frontend validation.
+- [x] Complete frontend validation: 484 tests, type synchronization, TypeScript
+      and production build passed. Existing lint warnings only; two new
+      test-only warnings were removed and the affected test file rechecked
+      cleanly.
 - [x] Confirm staging identity; back up affected campaign data/schema.
-- [ ] Deploy backend before UI; merge/push staging only.
-- [ ] Isolated no-send staging verification.
+- [x] Deploy backend before UI; merge/push staging only.
+- [x] Isolated no-send staging database verification.
+- [ ] Verify deployed UI pause/resume and list badge/filter.
 - [ ] Record commits/checks and Jira reference.
 
 Rollback must retain the pause-aware database gate until held campaigns are
@@ -48,3 +52,16 @@ SHA-256: `A6A95DD3D4E0ADE940DC8BC7DEAACDCE54919F5B75C362897F2C268540620681`.
 Snapshot: 10 campaigns, 9 deliveries, 6 jobs plus recipients, ledger, receipts
 and activity; public schema included. Round-trip decryption verified. Dry run
 lists only the new manual-control migration.
+
+## Delivery evidence
+
+Backend implementation: `ecce59a`; staging merge: `3f65617`. UI implementation:
+`d8b2a41`; staging merge: `758e356`. Migration verified applied exactly once on
+staging. Main refs were not changed.
+
+Synthetic campaign `15015000-0000-4000-8000-000000000099`, under **SCRUM-128
+PSDF isolated sync test**, is paused at revision 3 with zero attempts/accepted
+sends. It uses a disconnected synthetic account and is scheduled for 2099. The
+staged SQL verification checks pause, resume, old-request replay protection and
+scheduled deferral, then leaves the fixture paused. Existing accounts/campaigns
+are untouched. No real templates or customer messages were sent.
