@@ -187,15 +187,15 @@ grant execute on function public.get_campaign_receipt_summary(uuid,uuid) to auth
 
 create function public.list_campaign_activity_page(p_organization_id uuid,p_campaign_id uuid,p_page integer default 1,
   p_page_size integer default 10) returns table(id bigint,delivery_id uuid,job_id uuid,attempt_no integer,
-    event_type text,reason_code text,provider_at timestamptz,recorded_at timestamptz,total_count bigint)
+    event_type text,reason_code text,provider_at timestamptz,recorded_at timestamptz,actor_name text,total_count bigint)
 language plpgsql stable security definer set search_path='' as $$
 begin
   perform public.get_campaign_receipt_summary(p_organization_id,p_campaign_id);
-  return query select a.id,a.delivery_id,a.job_id,a.attempt_no,a.event_type,a.reason_code,a.provider_at,a.recorded_at,count(*) over()
+  return query select a.id,a.delivery_id,a.job_id,a.attempt_no,a.event_type,a.reason_code,a.provider_at,a.recorded_at,a.actor_name,count(*) over()
     from public.campaign_activity a where a.organization_id=p_organization_id and a.campaign_id=p_campaign_id
     order by a.recorded_at desc,a.id desc limit least(greatest(coalesce(p_page_size,10),1),50)
     offset (greatest(coalesce(p_page,1),1)::bigint-1)*least(greatest(coalesce(p_page_size,10),1),50);
 end;
 $$;
 revoke all on function public.list_campaign_activity_page(uuid,uuid,integer,integer) from public;
-grant execute on function public.list_campaign_activity_page(uuid,uuid,integer,integer) to authenticated,anon;
+grant execute on function public.list_campaign_activity_page(uuid,uuid,integer,integer) to authenticated,anon,service_role;

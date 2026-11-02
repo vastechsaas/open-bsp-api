@@ -21,6 +21,32 @@ const envelope = {
   campaign_id: job.campaign_id,
   delivery_id: job.delivery_id,
 };
+
+Deno.test("manual pause before claim defers without preparing or sending", async () => {
+  const f = fixture();
+  let preparations = 0;
+  f.deps.repository.claim = () => Promise.resolve({ phase: "deferred" });
+  f.deps.prepare = () => {
+    preparations++;
+    return Promise.resolve("unused");
+  };
+  const response = await createDispatchHandler(f.deps)(request());
+  assertEquals(await response.json(), { phase: "deferred" });
+  assertEquals(preparations, 0);
+  assertEquals(f.sends(), 0);
+  assertEquals(f.outcomes, []);
+});
+
+Deno.test("manual pause during preparation defers at final gate without an attempt", async () => {
+  const f = fixture();
+  f.deps.repository.begin = () => Promise.resolve(false);
+  f.deps.repository.status = () =>
+    Promise.resolve({ ...job, waiting_reason: "manual_pause" });
+  const response = await createDispatchHandler(f.deps)(request());
+  assertEquals(await response.json(), { phase: "deferred" });
+  assertEquals(f.sends(), 0);
+  assertEquals(f.outcomes, []);
+});
 function fixture() {
   const outcomes: string[] = [];
   let sends = 0;

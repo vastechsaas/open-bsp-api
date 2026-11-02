@@ -147,6 +147,7 @@ begin
   select * into strict c from public.campaigns where id=j.campaign_id;
   if c.cancelled_at is not null then return jsonb_build_object('terminal','cancelled'); end if;
   if c.expires_at <= current_at then return jsonb_build_object('terminal','expired'); end if;
+  if c.paused_at is not null then return jsonb_build_object('reason','manual_pause'); end if;
   candidate := greatest(current_at,coalesce(c.scheduled_start_at,current_at));
   if candidate > current_at then reason := 'scheduled'; end if;
   select * into p from public.campaign_sending_policies where organization_id=j.organization_id;
@@ -209,7 +210,7 @@ begin
     return jsonb_build_object('phase',terminal);
   end if;
   update public.campaign_dispatch_jobs set phase='pending',waiting_reason=p_eligibility->>'reason',
-    due_at=(p_eligibility->>'next_at')::timestamptz,publish_after=(p_eligibility->>'next_at')::timestamptz,
+    due_at=coalesce((p_eligibility->>'next_at')::timestamptz,due_at),publish_after=coalesce((p_eligibility->>'next_at')::timestamptz,publish_after),
     lease_token=null,lease_expires_at=null,publication_token=null,publication_expires_at=null,updated_at=clock_timestamp() where id=j.id;
   perform public.set_campaign_dispatch_delivery(j.delivery_id,'queued');
   return jsonb_build_object('phase','deferred','reason',p_eligibility->>'reason','next_at',p_eligibility->>'next_at');
@@ -227,7 +228,8 @@ begin
   select jsonb_build_object('waiting_count',count(*),'next_at',min(due_at),
     'reason',(array_agg(waiting_reason order by due_at,id))[1]) into result from public.campaign_dispatch_jobs
     where organization_id=p_organization_id and campaign_id=p_campaign_id and phase='pending' and waiting_reason is not null;
-  return result;
+  return result || (select jsonb_build_object('paused_at',c.paused_at,'paused_by_name',c.paused_by_name,'control_revision',c.control_revision)
+    from public.campaigns c where c.id=p_campaign_id);
 end;
 $$;
 

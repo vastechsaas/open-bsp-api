@@ -18,7 +18,7 @@ create table public.campaign_dispatch_jobs (
   attempt_no integer not null default 1 check (attempt_no between 1 and 3),
   phase text not null default 'pending' check (phase in
     ('pending', 'preparing', 'submitting', 'accepted', 'failed', 'retry_scheduled', 'needs_review', 'expired', 'cancelled')),
-  waiting_reason text check (waiting_reason in ('scheduled', 'sending_window', 'daily_allowance', 'number_rate', 'recipient_frequency', 'policy_unavailable')),
+  waiting_reason text check (waiting_reason in ('scheduled', 'sending_window', 'daily_allowance', 'number_rate', 'recipient_frequency', 'policy_unavailable', 'manual_pause')),
   due_at timestamptz not null default now(),
   publish_after timestamptz not null default now(),
   publication_token uuid,
