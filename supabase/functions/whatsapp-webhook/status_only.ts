@@ -1,11 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "../_shared/supabase.ts";
+import type { WebhookStatus } from "../_shared/types/status_types.ts";
+import { type Receipt, retainCampaignReceipt } from "./campaign_receipts.ts";
 
 type StatusUpdate = {
   externalId: string;
   number: string;
   customer: string;
   status: Record<string, Json>;
+  receipt: WebhookStatus;
 };
 const record = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
@@ -50,6 +53,7 @@ export function parseStatusOnly(payload: unknown): StatusUpdate[] | undefined {
           number: value.metadata.phone_number_id,
           customer: status.recipient_id,
           status: { [String(status.status)]: date.toISOString() },
+          receipt: status as WebhookStatus,
         });
         if (result.length > 100) return;
       }
@@ -65,13 +69,28 @@ export async function processStatusOnly(
   organization: string,
   allowedNumbers: Set<string>,
   client: SupabaseClient<Database>,
+  ingestCampaignReceipt?: (receipt: Receipt) => Promise<boolean>,
 ): Promise<Response> {
-  const updates = parseStatusOnly(payload);
+  let updates = parseStatusOnly(payload);
   if (!updates) {
     return new Response("Invalid status-only webhook", { status: 400 });
   }
   if (updates.some((row) => !allowedNumbers.has(row.number))) {
     return new Response("Status tenant mismatch", { status: 403 });
+  }
+  if (ingestCampaignReceipt) {
+    const chatUpdates: StatusUpdate[] = [];
+    for (const update of updates) {
+      const campaign = await retainCampaignReceipt(
+        ingestCampaignReceipt,
+        organization,
+        update.number,
+        update.receipt,
+      );
+      if (!campaign) chatUpdates.push(update);
+    }
+    updates = chatUpdates;
+    if (!updates.length) return new Response();
   }
   const { data: messages, error } = await client.from("messages")
     .select(

@@ -57,6 +57,7 @@ export function createBackend(
     },
     recover: async () => {
       await rpc("recover_campaign_dispatch_jobs");
+      await rpc("reconcile_campaign_receipts");
     },
     process: async (job) =>
       state(

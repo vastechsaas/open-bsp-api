@@ -941,6 +941,11 @@ begin
   where d.id = p_delivery_id
   for update;
 
+  -- A signed receipt may have reconciled this exact acceptance before the HTTP result.
+  if delivery.status = 'accepted' and delivery.external_id = p_external_id then
+    return 'accepted';
+  end if;
+
   if delivery.status <> 'processing' then
     raise exception using
       errcode = '23514',

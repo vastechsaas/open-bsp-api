@@ -33,6 +33,11 @@ import {
   prepareContactAddresses,
 } from "./contact_addresses.ts";
 import { processStatusOnly } from "./status_only.ts";
+import {
+  type Receipt,
+  retainCampaignReceipt,
+  retainReceiptOnlyBatch,
+} from "./campaign_receipts.ts";
 
 const API_VERSION = "v24.0";
 const VERIFY_TOKEN = Deno.env.get("WHATSAPP_VERIFY_TOKEN");
@@ -53,7 +58,6 @@ async function buildOrgAddressMap(
     .from("organizations_addresses")
     .select()
     .in("address", addresses)
-    .eq("status", "connected")
     .eq("service", "whatsapp")
     .order("created_at", { ascending: false })
     .throwOnError();
@@ -531,18 +535,22 @@ async function processMessage(request: Request): Promise<Response> {
   const client = createUnsecureClient();
 
   const payload = JSON.parse(body) as MetaWebhookPayload;
+  const receiptsOnly =
+    request.headers.get("X-OpenBSP-Receipts-Only") === "true";
   const nodeHeader = request.headers.get("X-OpenBSP-Node-Messages");
   const nodeMessages = nodeHeader
     ? z.record(z.string(), episodeSchema).parse(JSON.parse(nodeHeader))
     : undefined;
   let nodeOrganization: string | undefined;
   const statusOnly = request.headers.get("X-OpenBSP-Status-Only") === "1";
-  if (nodeMessages || statusOnly) {
+  if (nodeMessages || statusOnly || receiptsOnly) {
     const authorization = request.headers.get("Authorization");
     if (!authorization?.startsWith("Bearer ")) {
       return new Response("Unauthorized episode context", { status: 401 });
     }
-    const { data: key } = await createApiClient(request).from("api_keys")
+    // Receipt-only ingestion may retain evidence for an archived tenant; it grants no execution access.
+    const authClient = receiptsOnly ? client : createApiClient(request);
+    const { data: key } = await authClient.from("api_keys")
       .select("organization_id").eq("key", authorization.slice(7))
       .maybeSingle();
     if (!key) {
@@ -558,6 +566,22 @@ async function processMessage(request: Request): Promise<Response> {
   // Collect all unique organization addresses and build lookup map
   const uniqueOrgAddresses = collectOrgAddresses(payload);
   const orgAddressMap = await buildOrgAddressMap(client, uniqueOrgAddresses);
+  const ingestReceipt = async (receipt: Receipt) => {
+    const { data } = await client.rpc("ingest_campaign_receipt", receipt)
+      .throwOnError();
+    return data === true;
+  };
+  if (receiptsOnly) {
+    const retained = await retainReceiptOnlyBatch(
+      payload,
+      nodeOrganization,
+      orgAddressMap,
+      ingestReceipt,
+    );
+    return new Response(retained ? null : "Receipt tenant mismatch", {
+      status: retained ? 200 : 403,
+    });
+  }
   if (statusOnly) {
     return await processStatusOnly(
       payload,
@@ -568,6 +592,7 @@ async function processMessage(request: Request): Promise<Response> {
         ).map((account) => account.address),
       ),
       client,
+      ingestReceipt,
     );
   }
   const webhookReceivedAt = new Date().toISOString();
@@ -744,6 +769,21 @@ async function processMessage(request: Request): Promise<Response> {
       const organization_id = orgAddressRow.organization_id;
       const organization_address = orgAddressRow.address;
 
+      // Receipt retention must not reconnect an account or admit suspended traffic.
+      if (orgAddressRow.status !== "connected") {
+        if (field === "messages" && "statuses" in value) {
+          for (const status of value.statuses) {
+            await retainCampaignReceipt(
+              ingestReceipt,
+              organization_id,
+              organization_address,
+              status,
+            );
+          }
+        }
+        continue;
+      }
+
       if (
         (field === "messages" || field === "smb_message_echoes" ||
           field === "history") && "contacts" in value
@@ -863,6 +903,14 @@ async function processMessage(request: Request): Promise<Response> {
 
       if (field === "messages" && "statuses" in value) {
         for (const status of value.statuses) {
+          if (
+            await retainCampaignReceipt(
+              ingestReceipt,
+              organization_id,
+              organization_address,
+              status,
+            )
+          ) continue;
           statuses.push({
             organization_id:
               orgAddressMap.get(organization_address)!.organization_id,

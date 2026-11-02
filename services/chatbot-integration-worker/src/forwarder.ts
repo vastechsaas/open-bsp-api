@@ -48,11 +48,14 @@ function resolveRequest(
               "X-OpenBSP-Status-Only": "1",
             }
             : {}),
-          ...(event.payload.node_messages
+          ...(event.payload.node_messages || event.payload.receipts_only
             ? {
               Authorization: `Bearer ${account.openbsp_api_key}`,
+              ...(event.payload.receipts_only
+                ? { "X-OpenBSP-Receipts-Only": "true" }
+                : {}),
               "X-OpenBSP-Node-Messages": JSON.stringify(
-                event.payload.node_messages,
+                event.payload.node_messages ?? {},
               ),
             }
             : {}),
