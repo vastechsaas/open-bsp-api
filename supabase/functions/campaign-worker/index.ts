@@ -32,6 +32,7 @@ Deno.serve(async (req) => {
   }
 
   const client = createUnsecureClient();
+  await client.rpc("reconcile_campaign_receipts").throwOnError();
   const { data: deliveries } = await client
     .rpc("claim_campaign_deliveries", { p_limit: BATCH_SIZE })
     .throwOnError();
@@ -90,6 +91,8 @@ Deno.serve(async (req) => {
         },
         ...recipient,
       });
+      payload.biz_opaque_callback_data =
+        `campaign:legacy:${delivery.delivery_id}:${delivery.attempts}`;
       const response = await postPayloadToWhatsAppEndpoint({
         payload,
         phoneNumberId: delivery.organization_address,

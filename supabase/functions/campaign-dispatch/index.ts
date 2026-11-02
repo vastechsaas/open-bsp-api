@@ -94,6 +94,7 @@ Deno.serve(createDispatchHandler({
       },
       ...recipient,
     });
+    payload.biz_opaque_callback_data = `campaign:job:${job.id}`;
     return {
       payload,
       phoneNumberId: campaign.organization_address,
