@@ -695,8 +695,11 @@ export type Database = {
       }
       campaign_activity: {
         Row: {
+          actor_name: string | null
+          actor_user_id: string | null
           attempt_no: number | null
           campaign_id: string
+          control_revision: number | null
           deduplication_key: string | null
           delivery_id: string | null
           event_type: string
@@ -706,10 +709,14 @@ export type Database = {
           provider_at: string | null
           reason_code: string | null
           recorded_at: string
+          request_id: string | null
         }
         Insert: {
+          actor_name?: string | null
+          actor_user_id?: string | null
           attempt_no?: number | null
           campaign_id: string
+          control_revision?: number | null
           deduplication_key?: string | null
           delivery_id?: string | null
           event_type: string
@@ -719,10 +726,14 @@ export type Database = {
           provider_at?: string | null
           reason_code?: string | null
           recorded_at?: string
+          request_id?: string | null
         }
         Update: {
+          actor_name?: string | null
+          actor_user_id?: string | null
           attempt_no?: number | null
           campaign_id?: string
+          control_revision?: number | null
           deduplication_key?: string | null
           delivery_id?: string | null
           event_type?: string
@@ -732,6 +743,7 @@ export type Database = {
           provider_at?: string | null
           reason_code?: string | null
           recorded_at?: string
+          request_id?: string | null
         }
         Relationships: [
           {
@@ -1145,6 +1157,7 @@ export type Database = {
           cancelled_at: string | null
           cancelled_count: number
           carousel_media: Json
+          control_revision: number
           created_at: string
           created_by: string | null
           dispatch_transport: string
@@ -1158,6 +1171,8 @@ export type Database = {
           needs_review_count: number
           organization_address: string
           organization_id: string
+          paused_at: string | null
+          paused_by_name: string | null
           policy_required: boolean
           processing_count: number
           queued_count: number
@@ -1177,6 +1192,7 @@ export type Database = {
           cancelled_at?: string | null
           cancelled_count?: number
           carousel_media?: Json
+          control_revision?: number
           created_at?: string
           created_by?: string | null
           dispatch_transport?: string
@@ -1190,6 +1206,8 @@ export type Database = {
           needs_review_count?: number
           organization_address: string
           organization_id: string
+          paused_at?: string | null
+          paused_by_name?: string | null
           policy_required?: boolean
           processing_count?: number
           queued_count?: number
@@ -1209,6 +1227,7 @@ export type Database = {
           cancelled_at?: string | null
           cancelled_count?: number
           carousel_media?: Json
+          control_revision?: number
           created_at?: string
           created_by?: string | null
           dispatch_transport?: string
@@ -1222,6 +1241,8 @@ export type Database = {
           needs_review_count?: number
           organization_address?: string
           organization_id?: string
+          paused_at?: string | null
+          paused_by_name?: string | null
           policy_required?: boolean
           processing_count?: number
           queued_count?: number
@@ -4785,6 +4806,7 @@ export type Database = {
           p_page_size?: number
         }
         Returns: {
+          actor_name: string
           attempt_no: number
           delivery_id: string
           event_type: string
@@ -4804,6 +4826,7 @@ export type Database = {
           p_page_size?: number
           p_readiness?: string
           p_search?: string
+          p_status?: string
         }
         Returns: {
           accepted_count: number
@@ -5486,6 +5509,15 @@ export type Database = {
         Args: { p_id: string; p_name: string }
         Returns: boolean
       }
+      pause_campaign: {
+        Args: {
+          p_campaign_id: string
+          p_expected_revision: number
+          p_organization_id: string
+          p_request_id: string
+        }
+        Returns: Json
+      }
       platform_onboarding_command: {
         Args: { p_actor: string; p_command: string; p_payload: Json }
         Returns: Json
@@ -5769,6 +5801,15 @@ export type Database = {
           status: string
         }[]
       }
+      resume_campaign: {
+        Args: {
+          p_campaign_id: string
+          p_expected_revision: number
+          p_organization_id: string
+          p_request_id: string
+        }
+        Returns: Json
+      }
       retry_whatsapp_account_sync: {
         Args: { p_address: string; p_organization_id: string }
         Returns: string
@@ -5809,6 +5850,16 @@ export type Database = {
       set_campaign_dispatch_delivery: {
         Args: { p_delivery_id: string; p_status: string }
         Returns: undefined
+      }
+      set_campaign_paused: {
+        Args: {
+          p_campaign_id: string
+          p_expected_revision: number
+          p_organization_id: string
+          p_paused: boolean
+          p_request_id: string
+        }
+        Returns: Json
       }
       set_conversation_agent_assignment: {
         Args: { p_agent_id: string; p_conversation_id: string }

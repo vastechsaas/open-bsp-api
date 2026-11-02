@@ -2,6 +2,10 @@
 create function public.guard_campaign_dispatch_transport() returns trigger
 language plpgsql set search_path = '' as $$
 begin
+  if current_user in ('anon','authenticated') and (
+    (tg_op='INSERT' and (new.paused_at is not null or new.paused_by_name is not null or new.control_revision<>0)) or
+    (tg_op='UPDATE' and (new.paused_at,new.paused_by_name,new.control_revision) is distinct from (old.paused_at,old.paused_by_name,old.control_revision))
+  ) then raise exception 'Campaign controls are backend managed' using errcode='42501'; end if;
   if tg_op = 'UPDATE' and old.status <> 'draft'
     and new.dispatch_transport is distinct from old.dispatch_transport then
     raise exception 'campaign transport is immutable after start' using errcode = '23514';
@@ -59,6 +63,7 @@ declare result jsonb;
 begin
   with organizations as (
     select j.organization_id,min(j.publish_after) as oldest from public.campaign_dispatch_jobs j
+    join public.campaigns active on active.id=j.campaign_id and (active.paused_at is null or active.cancelled_at is not null or active.expires_at<=clock_timestamp())
     where j.phase='pending' and j.due_at<=clock_timestamp() and j.publish_after<=clock_timestamp()
       and (j.publication_expires_at is null or j.publication_expires_at<clock_timestamp())
     group by j.organization_id order by min(j.publish_after),j.organization_id limit 100
@@ -66,6 +71,7 @@ begin
     select batch.id,row_number() over(partition by o.organization_id order by batch.campaign_ordinal,batch.publish_after,batch.id) as ordinal
     from organizations o cross join lateral (
       select j.campaign_id,min(j.publish_after) as oldest from public.campaign_dispatch_jobs j
+      join public.campaigns active on active.id=j.campaign_id and (active.paused_at is null or active.cancelled_at is not null or active.expires_at<=clock_timestamp())
       where j.organization_id=o.organization_id and j.phase='pending' and j.due_at<=clock_timestamp()
         and j.publish_after<=clock_timestamp() and (j.publication_expires_at is null or j.publication_expires_at<clock_timestamp())
       group by j.campaign_id order by min(j.publish_after),j.campaign_id limit 25
@@ -80,6 +86,7 @@ begin
     select j.id from pool p join public.campaign_dispatch_jobs j on j.id=p.id
     join public.campaigns c on c.id = j.campaign_id and c.dispatch_transport = 'cloudamqp'
     where j.phase = 'pending' and j.publish_after <= clock_timestamp()
+      and (c.paused_at is null or c.cancelled_at is not null or c.expires_at<=clock_timestamp())
       and j.due_at <= clock_timestamp()
       and (j.publication_expires_at is null or j.publication_expires_at < clock_timestamp())
       and public.is_organization_active(j.organization_id)
@@ -269,7 +276,9 @@ begin
       perform public.finish_campaign_dispatch_job(j.id, j.lease_token, 'needs_review', null, 'submission_outcome_unknown');
     else
       update public.campaign_dispatch_jobs set phase = 'pending', lease_token = null, lease_expires_at = null,
-        publication_token = null, publication_expires_at = null, publish_after = clock_timestamp(), updated_at = clock_timestamp()
+        publication_token = null, publication_expires_at = null,
+        waiting_reason=case when exists(select 1 from public.campaigns where id=j.campaign_id and paused_at is not null) then 'manual_pause' else waiting_reason end,
+        publish_after = greatest(due_at,clock_timestamp()), updated_at = clock_timestamp()
       where id = j.id;
       perform public.set_campaign_dispatch_delivery(j.delivery_id, 'queued');
     end if;

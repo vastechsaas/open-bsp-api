@@ -26,6 +26,9 @@ create table public.campaigns (
   max_sends_per_minute integer,
   policy_required boolean default false not null,
   cancelled_at timestamptz,
+  paused_at timestamptz,
+  paused_by_name text,
+  control_revision bigint default 0 not null check (control_revision >= 0),
   dispatch_transport text default 'postgres' not null,
   created_at timestamp with time zone default now() not null,
   updated_at timestamp with time zone default now() not null

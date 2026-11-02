@@ -247,7 +247,8 @@ create function public.list_campaigns_page(
   p_page_size integer default 10,
   p_search text default null,
   p_audience_type public.campaign_audience_type default null,
-  p_readiness text default null
+  p_readiness text default null,
+  p_status text default null
 ) returns table (
   organization_id uuid,
   id uuid,
@@ -304,6 +305,8 @@ begin
   normalized_page_size := least(greatest(coalesce(p_page_size, 10), 1), 100);
   normalized_search := lower(btrim(coalesce(p_search, '')));
   normalized_readiness := nullif(lower(btrim(coalesce(p_readiness, ''))), '');
+  if p_status is not null and p_status <> 'paused' then
+    raise exception 'Campaign status filter is invalid' using errcode='22023'; end if;
 
   if normalized_readiness is not null
     and normalized_readiness not in ('ready', 'needs_attention')
@@ -355,6 +358,9 @@ begin
       end as campaign_audience_count
     from public.campaigns c
     where c.organization_id = p_organization_id
+      and (p_status is null or (c.dispatch_transport='cloudamqp' and c.paused_at is not null
+        and c.cancelled_at is null and c.status in ('queued','running','needs_review')
+        and (c.expires_at is null or c.expires_at>clock_timestamp()) and c.queued_count+c.processing_count>0))
       and (p_audience_type is null or c.audience_type = p_audience_type)
       and (
         normalized_search = ''
@@ -480,6 +486,9 @@ begin
   limit normalized_page_size;
 end;
 $$;
+
+revoke all on function public.list_campaigns_page(uuid,integer,integer,text,public.campaign_audience_type,text,text) from public;
+grant execute on function public.list_campaigns_page(uuid,integer,integer,text,public.campaign_audience_type,text,text) to authenticated,anon,service_role;
 
 create function public.start_campaign(
   p_organization_id uuid,
