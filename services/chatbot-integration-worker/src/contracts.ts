@@ -12,6 +12,7 @@ const whatsappWebhookPayload = z.object({
   raw_body: z.string().min(2).max(2_000_000),
   x_hub_signature_256: z.string().regex(/^sha256=[a-fA-F0-9]{64}$/),
   app_id: digits,
+  receipts_only: z.literal(true).optional(),
   node_messages: z.record(episodeSchema).optional(),
 }).strict().superRefine((payload, context) => {
   try {

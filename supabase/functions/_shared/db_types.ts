@@ -693,6 +693,63 @@ export type Database = {
           },
         ]
       }
+      campaign_activity: {
+        Row: {
+          attempt_no: number | null
+          campaign_id: string
+          deduplication_key: string | null
+          delivery_id: string | null
+          event_type: string
+          id: number
+          job_id: string | null
+          organization_id: string
+          provider_at: string | null
+          reason_code: string | null
+          recorded_at: string
+        }
+        Insert: {
+          attempt_no?: number | null
+          campaign_id: string
+          deduplication_key?: string | null
+          delivery_id?: string | null
+          event_type: string
+          id?: never
+          job_id?: string | null
+          organization_id: string
+          provider_at?: string | null
+          reason_code?: string | null
+          recorded_at?: string
+        }
+        Update: {
+          attempt_no?: number | null
+          campaign_id?: string
+          deduplication_key?: string | null
+          delivery_id?: string | null
+          event_type?: string
+          id?: never
+          job_id?: string | null
+          organization_id?: string
+          provider_at?: string | null
+          reason_code?: string | null
+          recorded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_activity_organization_id_campaign_id_delivery_id_fkey"
+            columns: ["organization_id", "campaign_id", "delivery_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_deliveries"
+            referencedColumns: ["organization_id", "campaign_id", "id"]
+          },
+          {
+            foreignKeyName: "campaign_activity_organization_id_campaign_id_fkey"
+            columns: ["organization_id", "campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
       campaign_csv_recipients: {
         Row: {
           campaign_id: string
@@ -784,6 +841,47 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "campaigns"
             referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
+      campaign_delivery_receipts: {
+        Row: {
+          campaign_id: string
+          delivered_at: string | null
+          delivery_id: string
+          failed_at: string | null
+          failure_code: string | null
+          organization_id: string
+          read_at: string | null
+          sent_at: string | null
+        }
+        Insert: {
+          campaign_id: string
+          delivered_at?: string | null
+          delivery_id: string
+          failed_at?: string | null
+          failure_code?: string | null
+          organization_id: string
+          read_at?: string | null
+          sent_at?: string | null
+        }
+        Update: {
+          campaign_id?: string
+          delivered_at?: string | null
+          delivery_id?: string
+          failed_at?: string | null
+          failure_code?: string | null
+          organization_id?: string
+          read_at?: string | null
+          sent_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_delivery_receipts_organization_id_campaign_id_del_fkey"
+            columns: ["organization_id", "campaign_id", "delivery_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_deliveries"
+            referencedColumns: ["organization_id", "campaign_id", "id"]
           },
         ]
       }
@@ -883,6 +981,56 @@ export type Database = {
             foreignKeyName: "campaign_dispatch_settings_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_receipt_inbox: {
+        Row: {
+          correlation: string | null
+          error_code: string | null
+          external_id: string
+          id: number
+          next_check_at: string
+          organization_address: string
+          organization_id: string
+          processed_at: string | null
+          provider_at: string
+          receipt_type: string
+          recorded_at: string
+        }
+        Insert: {
+          correlation?: string | null
+          error_code?: string | null
+          external_id: string
+          id?: never
+          next_check_at?: string
+          organization_address: string
+          organization_id: string
+          processed_at?: string | null
+          provider_at: string
+          receipt_type: string
+          recorded_at?: string
+        }
+        Update: {
+          correlation?: string | null
+          error_code?: string | null
+          external_id?: string
+          id?: never
+          next_check_at?: string
+          organization_address?: string
+          organization_id?: string
+          processed_at?: string | null
+          provider_at?: string
+          receipt_type?: string
+          recorded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_receipt_inbox_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
@@ -3627,6 +3775,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      apply_campaign_receipt: {
+        Args: { p_receipt_id: number }
+        Returns: boolean
+      }
       apply_node_conversation_lifecycle: {
         Args: {
           p_address: string
@@ -4229,6 +4381,10 @@ export type Database = {
           variables: Json
         }[]
       }
+      get_campaign_receipt_summary: {
+        Args: { p_campaign_id: string; p_organization_id: string }
+        Returns: Json
+      }
       get_campaign_sending_policy: {
         Args: { p_organization_id: string }
         Returns: Json
@@ -4574,6 +4730,18 @@ export type Database = {
           updated_at: string
         }[]
       }
+      ingest_campaign_receipt: {
+        Args: {
+          p_correlation?: string
+          p_error_code?: string
+          p_external_id: string
+          p_organization_address: string
+          p_organization_id: string
+          p_provider_at: string
+          p_receipt_type: string
+        }
+        Returns: boolean
+      }
       init_data: {
         Args: {
           p_limit?: number
@@ -4608,6 +4776,25 @@ export type Database = {
       is_whatsapp_contact_auto_save_enabled: {
         Args: { p_organization_id: string }
         Returns: boolean
+      }
+      list_campaign_activity_page: {
+        Args: {
+          p_campaign_id: string
+          p_organization_id: string
+          p_page?: number
+          p_page_size?: number
+        }
+        Returns: {
+          attempt_no: number
+          delivery_id: string
+          event_type: string
+          id: number
+          job_id: string
+          provider_at: string
+          reason_code: string
+          recorded_at: string
+          total_count: number
+        }[]
       }
       list_campaigns_page: {
         Args: {
@@ -5405,6 +5592,10 @@ export type Database = {
           p_request_id: string
         }
         Returns: Json
+      }
+      reconcile_campaign_receipts: {
+        Args: { p_limit?: number }
+        Returns: number
       }
       reconcile_organization_media_storage_batch: {
         Args: { p_limit?: number }

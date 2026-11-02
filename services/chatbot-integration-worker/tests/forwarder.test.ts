@@ -3,6 +3,20 @@ import test from "node:test";
 import { createForwarder } from "../src/forwarder.js";
 import { account, replyEvent, silentLogger, webhookEvent } from "./fixtures.js";
 
+test("receipt-only routing authenticates the tenant without modifying signed bytes", async () => {
+  const result = await makeForwarder((_url, init) => {
+    const headers = new Headers(init?.headers);
+    assert.equal(headers.get("Authorization"), "Bearer openbsp-secret");
+    assert.equal(headers.get("X-OpenBSP-Receipts-Only"), "true");
+    assert.equal(init?.body, webhookEvent.payload.raw_body);
+    return Promise.resolve(new Response(null, { status: 200 }));
+  })({
+    ...webhookEvent,
+    payload: { ...webhookEvent.payload, receipts_only: true },
+  });
+  assert.equal(result.outcome, "success");
+});
+
 test("episode routing is authenticated separately without changing the signed Meta body", async () => {
   const node_messages = {
     "wamid.original": {
