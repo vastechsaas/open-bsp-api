@@ -14,9 +14,15 @@ function client(
     missingDraft?: boolean;
     quota?: boolean;
     missingImage?: boolean;
+    existingImage?: Blob;
+    duplicate?: boolean;
+    previewFailure?: boolean;
+    uploadError?: unknown;
   } = {},
 ) {
   let uploads = 0;
+  let downloads = 0;
+  const stored = new Map<string, Blob>();
   const chain = {
     select: () => chain,
     eq: () => chain,
@@ -30,6 +36,10 @@ function client(
     get uploads() {
       return uploads;
     },
+    get downloads() {
+      return downloads;
+    },
+    stored,
     api: {
       rpc: () =>
         Promise.resolve({
@@ -39,22 +49,35 @@ function client(
       from: () => chain,
       storage: {
         from: () => ({
-          upload: () => {
+          upload: (key: string, file: Blob, settings: { upsert: boolean }) => {
             uploads++;
+            assertEquals(settings.upsert, false);
+            const error = options.uploadError ||
+              (options.quota
+                ? { message: "media storage quota exceeded" }
+                : null) ||
+              (options.duplicate || stored.has(key)
+                ? { statusCode: "409", message: "The resource already exists" }
+                : null);
+            if (!error) stored.set(key, file);
             return Promise.resolve({
-              error: options.quota ? new Error("Quota exceeded") : null,
+              error,
             });
           },
           createSignedUrl: () =>
             Promise.resolve({
               data: { signedUrl: "https://example.test/private-preview" },
-              error: null,
+              error: options.previewFailure
+                ? new Error("Preview failed")
+                : null,
             }),
-          download: () =>
-            Promise.resolve({
-              data: png(),
+          download: (key: string) => {
+            downloads++;
+            return Promise.resolve({
+              data: options.existingImage || stored.get(key) || png(),
               error: options.missingImage ? new Error("Missing image") : null,
-            }),
+            });
+          },
         }),
       },
     } as unknown as SupabaseClient<Database>,
@@ -141,4 +164,82 @@ Deno.test("private carousel assets retain durable references and obey quota fail
   await rejects(() =>
     loadCarouselImages(mock.api, crypto.randomUUID(), [result.asset], 1)
   );
+});
+
+const upload = (mock: ReturnType<typeof client>, organizationId = org) =>
+  uploadCarouselImage(
+    mock.api,
+    organizationId,
+    "campaign",
+    crypto.randomUUID(),
+    crypto.randomUUID(),
+    png(),
+  );
+
+Deno.test("identical carousel images and concurrent retries reuse tenant bytes without update grants", async () => {
+  const mock = client();
+  const results = await Promise.all([upload(mock), upload(mock), upload(mock)]);
+  assertEquals(
+    new Set(results.map((result) => result.asset.storage_uri)).size,
+    1,
+  );
+  assertEquals(mock.stored.size, 1);
+  assertEquals(mock.downloads, 2);
+  assertEquals(new Set(results.map((result) => result.asset.card_id)).size, 3);
+  const other = await upload(mock, crypto.randomUUID());
+  assertEquals(other.asset.storage_uri === results[0].asset.storage_uri, false);
+  assertEquals(mock.stored.size, 2);
+});
+
+Deno.test("duplicate conflicts require readable matching bytes, type and size", async () => {
+  for (
+    const options of [
+      { missingImage: true },
+      { existingImage: new Blob(["different"], { type: "image/png" }) },
+      { existingImage: new Blob([new Uint8Array(8)], { type: "image/png" }) },
+      {
+        existingImage: new Blob([await png().arrayBuffer()], {
+          type: "image/jpeg",
+        }),
+      },
+    ]
+  ) {
+    const mock = client({ duplicate: true, ...options });
+    try {
+      await upload(mock);
+      throw new Error("Expected rejection");
+    } catch (error) {
+      assertEquals((error as Error).cause, {
+        code: "carousel_image_reuse_failed",
+      });
+    }
+    assertEquals(mock.stored.size, 0);
+  }
+});
+
+Deno.test("upload and preview errors expose safe retry codes, not storage internals", async () => {
+  for (
+    const [options, code] of [
+      [{ quota: true }, "carousel_storage_quota_exceeded"],
+      [{
+        uploadError: { statusCode: "403", message: "private storage details" },
+      }, "carousel_upload_failed"],
+      [{ previewFailure: true }, "carousel_preview_failed"],
+    ] as const
+  ) {
+    const mock = client(options);
+    try {
+      await upload(mock);
+      throw new Error("Expected rejection");
+    } catch (error) {
+      assertEquals((error as Error).cause, { code });
+      assertEquals((error as Error).message.includes("private storage"), false);
+    }
+    assertEquals(mock.downloads, 0);
+  }
+  const mock = client({ previewFailure: true });
+  await rejects(() => upload(mock));
+  await rejects(() => upload(mock));
+  assertEquals(mock.stored.size, 1);
+  assertEquals(mock.downloads, 1);
 });

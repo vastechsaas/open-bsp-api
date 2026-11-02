@@ -1,13 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { HTTPException } from "jsr:@hono/hono/http-exception";
+import { encodeBase64Url } from "jsr:@std/encoding/base64url";
 import type { Database } from "../_shared/supabase.ts";
 import type { CarouselMediaAsset } from "../_shared/types/whatsapp_template_types.ts";
 import { parseCarouselAssets } from "../_shared/carousel.ts";
-import {
-  createSignedUrl,
-  downloadFromStorage,
-  uploadToStorage,
-} from "../_shared/media.ts";
+import { createSignedUrl, downloadFromStorage } from "../_shared/media.ts";
 import { validateTemplateMediaSample } from "../_shared/meta_media.ts";
 
 /** One bounded upload, authorized against an existing mutable tenant draft. */
@@ -19,7 +16,12 @@ export async function uploadCarouselImage(
   cardId: string,
   file: File,
 ) {
-  validateTemplateMediaSample(file, "IMAGE");
+  try {
+    validateTemplateMediaSample(file, "IMAGE");
+    await validateImageBytes(file);
+  } catch {
+    throw uploadError("carousel_image_invalid", 400);
+  }
   if (resource === "template") {
     const { data: organizations, error } = await client.rpc(
       "get_authorized_orgs_by_roles",
@@ -31,7 +33,6 @@ export async function uploadCarouselImage(
       });
     }
   }
-  await validateImageBytes(file);
   const { data, error } = await client.from(
     resource === "template" ? "message_templates" : "campaigns",
   )
@@ -55,7 +56,7 @@ export async function uploadCarouselImage(
     mime_type: file.type,
     size: file.size,
   }], organizationId);
-  const uri = await uploadToStorage(client, organizationId, file, file.name);
+  const uri = await retainCarouselImage(client, organizationId, file);
   const asset = parseCarouselAssets([{
     card_id: cardId,
     storage_uri: uri,
@@ -63,7 +64,73 @@ export async function uploadCarouselImage(
     mime_type: file.type,
     size: file.size,
   }], organizationId)[0];
-  return { asset, preview_url: await createSignedUrl(client, uri) };
+  try {
+    return { asset, preview_url: await createSignedUrl(client, uri) };
+  } catch {
+    throw uploadError("carousel_preview_failed");
+  }
+}
+
+function uploadError(code: string, status: 400 | 409 | 503 = 503) {
+  return new HTTPException(status, {
+    message:
+      "The carousel image could not be prepared. Retry saving this card.",
+    cause: { code },
+  });
+}
+
+/** Content-addressed images are immutable: reuse verified bytes, never UPDATE storage. */
+async function retainCarouselImage(
+  client: SupabaseClient<Database>,
+  organizationId: string,
+  file: File,
+) {
+  const hash = encodeBase64Url(
+    await crypto.subtle.digest("SHA-256", await file.arrayBuffer()),
+  );
+  const key = `/organizations/${organizationId}/attachments/${hash}`;
+  let error;
+  try {
+    ({ error } = await client.storage.from("media").upload(key, file, {
+      upsert: false,
+      metadata: { name: file.name },
+    }));
+  } catch {
+    throw uploadError("carousel_upload_failed");
+  }
+  if (error) {
+    const code = (error as { code?: string }).code;
+    const duplicate =
+      Number((error as { statusCode?: string }).statusCode) === 409 ||
+      code === "Duplicate" ||
+      code === "ResourceAlreadyExists" ||
+      error.message === "The resource already exists";
+    if (!duplicate) {
+      throw uploadError(
+        error.message.includes("media storage quota exceeded")
+          ? "carousel_storage_quota_exceeded"
+          : "carousel_upload_failed",
+      );
+    }
+    // Read with the same authenticated tenant client. A conflict alone is not proof
+    // that this caller can reuse the object. This also handles concurrent uploads.
+    try {
+      const existing = await downloadFromStorage(
+        client,
+        "internal://media" + key,
+      );
+      if (existing.size !== file.size || existing.type !== file.type) {
+        throw new Error("Image metadata mismatch");
+      }
+      const existingHash = encodeBase64Url(
+        await crypto.subtle.digest("SHA-256", await existing.arrayBuffer()),
+      );
+      if (existingHash !== hash) throw new Error("Image content mismatch");
+    } catch {
+      throw uploadError("carousel_image_reuse_failed", 409);
+    }
+  }
+  return "internal://media" + key;
 }
 
 export async function loadCarouselImages(
