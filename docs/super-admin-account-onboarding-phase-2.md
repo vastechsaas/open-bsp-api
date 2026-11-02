@@ -84,7 +84,8 @@ provisioning/login templates. Branch only for the feature metadata marker:
 
 ```html
 {{ if eq .Data.account_onboarding "v1" }}
-<a href="{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=invite">Set password &amp; join</a>
+<a
+  href="{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=invite">Set password &amp; join</a>
 {{ else }}
 <a href="{{ .ConfirmationURL }}">Accept invitation</a>
 {{ end }}
