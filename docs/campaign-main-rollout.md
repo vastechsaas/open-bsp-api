@@ -97,10 +97,13 @@ backup: `/opt/openbsp/deployment-backups/campaign-main-20261102/`.
 - Node: build,9 boundary tests,57 core tests and4 receipt forwarding/persistence
   tests passed; no real sends or live tenant configuration changes.
 - Frontend:466 tests, generated-type synchronization, lint (zero errors,
-  existing377-warning baseline) and TypeScript passed; production build pending.
+  existing377-warning baseline), TypeScript and production build passed.
 - Backend static/plugin/voice checks passed. Initial local database regressions
   identified missing standard Vault/billing fixtures in the isolated database;
-  fixtures were initialized locally and only affected files are being rerun.
+  fixtures were initialized locally. All five affected files passed their rerun
+  (183 assertions); the other56 files passed the initial run. Overall
+  coverage:61 SQL files /1,445 assertions. No application changes were needed
+  for these fixture-only failures.
 
 ## Rollback
 
@@ -113,5 +116,40 @@ artifacts only in their named projects; do not touch PHP, voice or staging.
 
 ## Delivery evidence
 
-Pending final validation, Main migration/deployment, no-send checks and branch
-pushes. Update this section after verified completion.
+- Backend Main application commit `cf99639`; all three migration versions are
+  recorded on `buvjopvpkgvzhykwsxnk`. A subsequent dry run reports up to date.
+  Edge Functions are Active: `whatsapp-webhook`48, `campaign-worker`18,
+  `campaign-dispatch`3. Targeted API deployments succeeded. GitHub's backend
+  `check` passed. The pre-existing whole-project Supabase Preview check still
+  reports `failed to bundle function: exit status10`; it did not prevent the
+  explicit, verified campaign function deployments.
+- UI Main `fa303b1` includes user scheduling, Super Admin controls and activity
+  reporting. Both configured Vercel deployments succeeded. Public Main locale
+  assets confirm Campaign controls, Campaign activity and Delivered (includes
+  read), while retaining the carousel image-upload hotfix.
+- Node Main `23a874d` is pushed. Production API/worker now run the promoted
+  `node-chatbot-engine:23a874d`; API readiness passed on4080.
+- Main integration worker `openbsp-main-chatbot-worker:e7c0199` is healthy and
+  consuming both existing lanes on8082. Production campaign worker
+  `openbsp-campaign-worker:e7c0199` is healthy/ready on8094 with
+  `environment=production` and no in-flight work.
+- The worker's existing credentials successfully performed a read-only status
+  request against Main's protected dispatch handler: HTTP200, phase accepted,
+  zero send requests. No test template was submitted or sent.
+- Post-deployment encrypted-baseline comparison confirms all original fields of
+  two campaigns, four deliveries, four jobs, four CSV recipients and23 transport
+  settings are unchanged. Private receipt ingest/activity ACLs were verified.
+  All23 Main organizations retain CloudAMQP selection. No sending policy is
+  enabled; Super Admin must explicitly configure limits. Existing campaigns
+  retain their transport/status/history.
+- Activity has no fabricated historical events. It starts recording new
+  lifecycle/receipt evidence; later identifiable receipts can update existing
+  sends. Missing old delivery evidence remains unknown.
+- PHP, voice, Node infrastructure and staging runtime container images/start
+  times remain unchanged. The isolated local migration-validation database was
+  separate from the original development stack.
+- Jira SCRUM-140 was rechecked, but the connector still requires
+  reauthentication. This file is the rollout evidence until Jira is reconnected.
+
+The baseline-verification script is specific to this release; intentional new
+campaigns or updates after rollout will correctly fail its exact comparison.
