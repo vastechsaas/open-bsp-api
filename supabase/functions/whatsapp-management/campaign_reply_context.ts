@@ -190,6 +190,13 @@ export async function readCampaignReplyContext(
       ...campaignReplyPreview(campaign, delivery, organization_id),
     }];
   });
+  return await signCampaignPreviews(service, previews);
+}
+
+export async function signCampaignPreviews<T extends Preview>(
+  service: SupabaseClient<Database>,
+  previews: T[],
+) {
   const paths = [
     ...new Set(
       previews.flatMap(({ cards }) =>
