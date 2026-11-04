@@ -39,6 +39,10 @@ import {
   campaignReplyRequest,
   readCampaignReplyContext,
 } from "./campaign_reply_context.ts";
+import {
+  campaignConversationHistoryRequest,
+  readCampaignConversationHistory,
+} from "./campaign_conversation_history.ts";
 import { type User } from "@supabase/supabase-js";
 import {
   deleteCampaignMedia,
@@ -1046,6 +1050,23 @@ app.post("/whatsapp-management/campaign-reply-context", async (c) => {
   );
   c.header("Cache-Control", "private, no-store");
   return c.json({ previews });
+});
+
+app.post("/whatsapp-management/campaign-conversation-history", async (c) => {
+  if (!c.get("user")) throw new HTTPException(403);
+  const input = campaignConversationHistoryRequest.safeParse(
+    await c.req.json().catch(() => null),
+  );
+  if (!input.success) {
+    return c.json({ message: "Invalid conversation history request" }, 400);
+  }
+  const page = await readCampaignConversationHistory(
+    c.get("supabase"),
+    createUnsecureClient(),
+    input.data,
+  );
+  c.header("Cache-Control", "private, no-store");
+  return c.json(page);
 });
 
 Deno.serve(app.fetch);
