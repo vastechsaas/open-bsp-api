@@ -21,7 +21,7 @@ function asRecord(value: Json): JsonRecord {
   return value as JsonRecord;
 }
 
-function mappedValue(
+export function mappedValue(
   source: string,
   delivery: CampaignTemplateDelivery,
 ): string {

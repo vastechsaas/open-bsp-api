@@ -35,6 +35,10 @@ import {
   SignupPayload,
 } from "./embedded_signup.ts";
 import { syncWhatsAppProfile, updateWhatsAppProfile } from "./profile.ts";
+import {
+  campaignReplyRequest,
+  readCampaignReplyContext,
+} from "./campaign_reply_context.ts";
 import { type User } from "@supabase/supabase-js";
 import {
   deleteCampaignMedia,
@@ -1025,6 +1029,23 @@ app.post("/whatsapp-management/onboard", async (c) => {
 
     throw error;
   }
+});
+
+app.post("/whatsapp-management/campaign-reply-context", async (c) => {
+  if (!c.get("user")) throw new HTTPException(403);
+  const input = campaignReplyRequest.safeParse(
+    await c.req.json().catch(() => null),
+  );
+  if (!input.success) {
+    return c.json({ message: "Invalid campaign reply context request" }, 400);
+  }
+  const previews = await readCampaignReplyContext(
+    c.get("supabase"),
+    createUnsecureClient(),
+    input.data,
+  );
+  c.header("Cache-Control", "private, no-store");
+  return c.json({ previews });
 });
 
 Deno.serve(app.fetch);
