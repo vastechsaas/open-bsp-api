@@ -70,18 +70,15 @@ export function whatsappToMarkdown(text: string): string {
           return subPart;
         }
 
-        let processed = subPart;
-
-        // 1. Bold: *text* -> **text**
-        processed = processed.replace(/\*([^\*]+?)\*/g, "**$1**");
-
-        // 2. Italic: _text_ -> *text*
-        processed = processed.replace(/_([^_]+?)_/g, "*$1*");
-
-        // 3. Strikethrough: ~text~ -> ~~text~~
-        processed = processed.replace(/~([^~]+?)~/g, "~~$1~~");
-
-        return processed;
+        // URL paths and query keys can contain WhatsApp formatting delimiters.
+        // Keep those bytes intact so the stored customer message remains clickable.
+        return subPart.split(/((?:https?:\/\/|www\.)[^\s<>`]+)/gi)
+          .map((fragment, index) =>
+            index % 2 === 1 ? fragment : fragment
+              .replace(/\*([^\*]+?)\*/g, "**$1**")
+              .replace(/_([^_]+?)_/g, "*$1*")
+              .replace(/~([^~]+?)~/g, "~~$1~~")
+          ).join("");
       }).join("");
     }).join("");
   } catch (error) {
