@@ -67,4 +67,16 @@ replay completed campaign sends.
   Windows user-bound encryption outside Git. Previous deployed function sources
   are retained beside the backup under
   `.codex/backups/bounded-media-main-20261106`.
-- Deployment and post-release verification remain pending.
+- Main backend change: `1b8a639`. Migration applied; media-preprocessor v62 and
+  campaign-worker v20 are ACTIVE. No Node/Oracle deployment was required.
+- Live smoke tests: missing credentials return 401; the configured scheduler
+  token returns 405 for safe GETs on both functions. Invalid IDs return 400; a
+  real disabled-organization media record returns `skipped` without analysis.
+- The bounded cron completed successfully on consecutive scheduled runs.
+  Disabled organizations have zero new preprocessing jobs. No campaign sends
+  were initiated by validation.
+- Twenty-four additional campaign payload/dispatch/carousel tests passed.
+- Mirrored frontend types passed 470 tests, exact database-type synchronization,
+  TypeScript and production build; lint had only the existing warning baseline.
+- Cached carousel-media egress remains outside this fix. Existing accrued usage
+  is not reset by deployment.
