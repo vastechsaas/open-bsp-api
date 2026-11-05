@@ -2262,6 +2262,54 @@ export type Database = {
           },
         ]
       }
+      media_preprocessing_jobs: {
+        Row: {
+          attempts: number
+          last_error_code: string | null
+          lease_token: string | null
+          message_id: string
+          next_attempt_at: string
+          organization_id: string
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          last_error_code?: string | null
+          lease_token?: string | null
+          message_id: string
+          next_attempt_at?: string
+          organization_id: string
+          state: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          last_error_code?: string | null
+          lease_token?: string | null
+          message_id?: string
+          next_attempt_at?: string
+          organization_id?: string
+          state?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_preprocessing_jobs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_preprocessing_jobs_organization_id_message_id_fkey"
+            columns: ["organization_id", "message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
       message_mentions: {
         Row: {
           created_at: string
@@ -4252,6 +4300,10 @@ export type Database = {
           flow_id: string
         }[]
       }
+      enqueue_media_preprocessing: {
+        Args: { p_message_id: string }
+        Returns: boolean
+      }
       enqueue_node_chatbot_operation: {
         Args: {
           p_action: string
@@ -4282,6 +4334,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      enqueue_pending_media_preprocessing: {
+        Args: { p_limit?: number }
+        Returns: number
       }
       enqueue_user_notification: {
         Args: {
@@ -4324,6 +4380,15 @@ export type Database = {
           p_token: string
         }
         Returns: string
+      }
+      finish_media_preprocessing: {
+        Args: {
+          p_artifacts?: Json
+          p_message_id: string
+          p_outcome: string
+          p_token: string
+        }
+        Returns: boolean
       }
       finish_platform_organization_provisioning: {
         Args: { p_error?: string; p_provisioning_id: string; p_status: string }
@@ -5735,6 +5800,10 @@ export type Database = {
         Returns: undefined
       }
       require_platform_admin: { Args: never; Returns: string }
+      reserve_media_preprocessing: {
+        Args: { p_message_id: string }
+        Returns: string
+      }
       resolve_chatbot_webhook_credential: {
         Args: { p_credential_id: string; p_organization_id: string }
         Returns: Json
@@ -5844,6 +5913,10 @@ export type Database = {
       start_campaign: {
         Args: { p_campaign_id: string; p_organization_id: string }
         Returns: number
+      }
+      start_media_preprocessing: {
+        Args: { p_message_id: string; p_token: string }
+        Returns: boolean
       }
       transfer_conversation_to_queue_with_private_note: {
         Args: {

@@ -2,6 +2,7 @@ import * as log from "../_shared/logger.ts";
 import { buildCampaignTemplatePayload } from "../_shared/campaign_template.ts";
 import { createUnsecureClient, type Json } from "../_shared/supabase.ts";
 import { prepareCampaignCarouselMedia } from "../whatsapp-management/campaign_media.ts";
+import { hasInternalServiceAuth } from "../_shared/internal_auth.ts";
 import {
   getWhatsAppErrorDetails,
   postPayloadToWhatsAppEndpoint,
@@ -12,6 +13,7 @@ const BATCH_SIZE = 25;
 const DEFAULT_ACCESS_TOKEN = Deno.env.get("META_SYSTEM_USER_ACCESS_TOKEN") ||
   "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const EDGE_FUNCTIONS_TOKEN = Deno.env.get("EDGE_FUNCTIONS_TOKEN");
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -21,9 +23,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 Deno.serve(async (req) => {
-  const token = req.headers.get("Authorization")?.replace("Bearer ", "");
-
-  if (!SERVICE_ROLE_KEY || token !== SERVICE_ROLE_KEY) {
+  if (!hasInternalServiceAuth(req, EDGE_FUNCTIONS_TOKEN, SERVICE_ROLE_KEY)) {
     return jsonResponse({ error: "Unauthorized" }, 401);
   }
 

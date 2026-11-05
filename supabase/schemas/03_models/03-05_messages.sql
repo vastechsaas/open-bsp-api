@@ -169,7 +169,7 @@ when (
   and (new.status ->> 'pending') is not null
   and (new.content ->> 'type') = 'file'
 )
-execute function public.edge_function('/media-preprocessor', 'post');
+execute function public.queue_media_preprocessing_trigger();
 
 create trigger z_notify_webhook_messages
 after insert or update

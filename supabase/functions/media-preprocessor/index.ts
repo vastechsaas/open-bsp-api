@@ -3,7 +3,6 @@ import {
   createUnsecureClient,
   type MessageRow,
   type Part,
-  type WebhookPayload,
 } from "../_shared/supabase.ts";
 import {
   type ApiError,
@@ -15,6 +14,11 @@ import { encodeBase64 } from "jsr:@std/encoding/base64";
 import * as log from "../_shared/logger.ts";
 import { stringify } from "jsr:@std/csv/stringify";
 import { Json } from "../_shared/db_types.ts";
+import {
+  createMediaHandler,
+  type MediaRepository,
+  type MediaResult,
+} from "./handler.ts";
 
 type ModalityTokenCount = { modality: string; tokenCount: number };
 
@@ -114,31 +118,47 @@ const INLINE_DATA_SIZE_LIMIT = 19 * 1000 * 1000; // 19MB
 
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-Deno.serve(async (req) => {
-  const authHeader = req.headers.get("Authorization");
-  const token = authHeader?.replace("Bearer ", "");
+const client = createUnsecureClient();
+const repository: MediaRepository = {
+  async reserve(id) {
+    const { data } = await client.rpc("reserve_media_preprocessing", {
+      p_message_id: id,
+    }).throwOnError();
+    return data;
+  },
+  async start(id, token) {
+    const { data } = await client.rpc("start_media_preprocessing", {
+      p_message_id: id,
+      p_token: token,
+    }).throwOnError();
+    return data === true;
+  },
+  async message(id) {
+    const { data } = await client.from("messages").select("*").eq("id", id)
+      .single().throwOnError();
+    return data;
+  },
+  async finish(id, token, result) {
+    const { data } = await client.rpc("finish_media_preprocessing", {
+      p_message_id: id,
+      p_token: token,
+      p_outcome: result.outcome,
+      ...("artifacts" in result && result.artifacts
+        ? { p_artifacts: result.artifacts as Json }
+        : {}),
+    }).throwOnError();
+    return data === true;
+  },
+};
 
-  if (token !== SERVICE_ROLE_KEY) {
-    return new Response("Unauthorized", { status: 401 });
-  }
-
-  const client = createUnsecureClient();
-
-  const incoming = ((await req.json()) as WebhookPayload<MessageRow>).record!;
-
-  const log_update_and_respond = async (
+async function processMedia(incoming: MessageRow): Promise<MediaResult> {
+  const log_update_and_respond = (
     logLevel: "error" | "warn" | "info",
     logMessage: string,
   ) => {
     log[logLevel](logMessage);
 
-    await client
-      .from("messages")
-      .update({ status: { preprocessed: new Date().toISOString() } })
-      .eq("id", incoming.id)
-      .throwOnError();
-
-    return new Response();
+    return { outcome: "skipped" as const };
   };
 
   const { data: conv } = await client
@@ -184,7 +204,7 @@ Deno.serve(async (req) => {
     apiKey,
   });
 
-  const { content, status } = incoming;
+  const { content } = incoming;
 
   if (content.type !== "file") {
     return log_update_and_respond(
@@ -308,12 +328,6 @@ Deno.serve(async (req) => {
     }
   }
 
-  await client
-    .from("messages")
-    .update({ status: { preprocessing: new Date().toISOString() } })
-    .eq("id", incoming.id)
-    .throwOnError();
-
   const file = await downloadFromStorage(client, content.file.uri);
   const base64File = encodeBase64(await file.arrayBuffer());
 
@@ -428,13 +442,13 @@ Deno.serve(async (req) => {
 
     // 500, 503: transient server errors worth retrying
     if ([429, 500, 503].includes(status)) {
-      log.error("Retryable Gemini API error in preprocessing", error);
+      log.error("Retryable Gemini API error in preprocessing", { status });
       throw error;
     }
 
     return log_update_and_respond(
       "error",
-      `Gemini API error in preprocessing. Skipping preprocessing. ${error}`,
+      `Gemini API error in preprocessing. Skipping preprocessing. Status ${status}`,
     );
   }
 
@@ -553,23 +567,12 @@ Deno.serve(async (req) => {
     });
   }
 
-  const preprocessed = {
-    ...incoming,
-    content: {
-      ...content,
-      artifacts,
-    },
-    status: {
-      ...status,
-      preprocessed: new Date().toISOString(),
-    },
-  };
+  return { outcome: "succeeded", artifacts };
+}
 
-  await client
-    .from("messages")
-    .update(preprocessed)
-    .eq("id", incoming.id)
-    .throwOnError();
-
-  return new Response();
-});
+Deno.serve(createMediaHandler({
+  edgeToken: Deno.env.get("EDGE_FUNCTIONS_TOKEN"),
+  serviceRoleKey: SERVICE_ROLE_KEY,
+  repository,
+  process: processMedia,
+}));
