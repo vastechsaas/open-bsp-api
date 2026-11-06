@@ -986,6 +986,44 @@ export type Database = {
           },
         ]
       }
+      campaign_media_cache: {
+        Row: {
+          lease_expires_at: string | null
+          lease_token: string | null
+          media_id: string | null
+          organization_address: string
+          organization_id: string
+          storage_uri: string
+          uploaded_at: string | null
+        }
+        Insert: {
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          media_id?: string | null
+          organization_address: string
+          organization_id: string
+          storage_uri: string
+          uploaded_at?: string | null
+        }
+        Update: {
+          lease_expires_at?: string | null
+          lease_token?: string | null
+          media_id?: string | null
+          organization_address?: string
+          organization_id?: string
+          storage_uri?: string
+          uploaded_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_media_cache_organization_id_organization_address_fkey"
+            columns: ["organization_id", "organization_address"]
+            isOneToOne: false
+            referencedRelation: "organizations_addresses"
+            referencedColumns: ["organization_id", "address"]
+          },
+        ]
+      }
       campaign_receipt_inbox: {
         Row: {
           correlation: string | null
@@ -4003,6 +4041,15 @@ export type Database = {
         Args: { p_limit?: number }
         Returns: Json
       }
+      claim_campaign_media_cache: {
+        Args: {
+          p_organization_address: string
+          p_organization_id: string
+          p_stale_media_id?: string
+          p_storage_uri: string
+        }
+        Returns: Json
+      }
       commit_chatbot_flow_execution: {
         Args: {
           p_current_node_id: string
@@ -4023,6 +4070,16 @@ export type Database = {
           outcome: string
           run_lock_version: number
         }[]
+      }
+      complete_campaign_media_cache: {
+        Args: {
+          p_media_id: string
+          p_organization_address: string
+          p_organization_id: string
+          p_storage_uri: string
+          p_token: string
+        }
+        Returns: boolean
       }
       complete_node_chatbot_operation: {
         Args: { p_phase: string; p_request_id: string; p_result: Json }
@@ -5779,6 +5836,15 @@ export type Database = {
         Returns: string
       }
       recover_campaign_dispatch_jobs: { Args: never; Returns: number }
+      release_campaign_media_cache: {
+        Args: {
+          p_organization_address: string
+          p_organization_id: string
+          p_storage_uri: string
+          p_token: string
+        }
+        Returns: boolean
+      }
       remove_platform_organization_agent: {
         Args: { p_agent_id: string; p_request_id: string }
         Returns: boolean

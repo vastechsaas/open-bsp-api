@@ -2,7 +2,11 @@ import { HTTPException } from "jsr:@hono/hono/http-exception";
 import type { ContentfulStatusCode } from "jsr:@hono/hono/utils/http-status";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "../_shared/supabase.ts";
-import { canonicalCarousel, imageCarousel } from "../_shared/carousel.ts";
+import {
+  canonicalCarousel,
+  imageCarousel,
+  parseCarouselAssets,
+} from "../_shared/carousel.ts";
 import { parseTemplateDraftInput } from "../_shared/template_validation.ts";
 import type { TemplateDraftInput } from "../_shared/types/whatsapp_template_types.ts";
 import { loadCarouselImages } from "./carousel_media.ts";
@@ -13,6 +17,11 @@ import {
 } from "../_shared/meta_media.ts";
 import type { MediaHeaderFormat } from "../_shared/types/whatsapp_template_types.ts";
 import type { WhatsAppOrganizationAddressExtra } from "../_shared/types/extra_types.ts";
+import {
+  type MediaCacheClaim,
+  missingMediaReference,
+  reuseCampaignMedia,
+} from "./media_reuse.ts";
 
 const DEFAULT_ACCESS_TOKEN = Deno.env.get("META_SYSTEM_USER_ACCESS_TOKEN") ||
   "";
@@ -73,6 +82,7 @@ export async function uploadCampaignMedia(
   organizationAddress: string,
   format: MediaHeaderFormat,
   file: File,
+  signal?: AbortSignal,
 ): Promise<CampaignHeaderMedia> {
   validateTemplateMediaSample(file, format);
   const { accessToken } = await getCredentials(
@@ -89,6 +99,7 @@ export async function uploadCampaignMedia(
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}` },
       body: form,
+      signal,
     },
   );
   const result = await readMetaJson<{ id?: string }>(
@@ -124,6 +135,7 @@ export async function getMetaMedia(
   url.searchParams.set("phone_number_id", organizationAddress);
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
+    signal: AbortSignal.timeout(20000),
   });
   const metadata = await readMetaJson<
     { id: string; url: string; mime_type?: string; file_size?: number }
@@ -131,6 +143,11 @@ export async function getMetaMedia(
     response,
     "Campaign media is no longer available on Meta",
   );
+  if (metadata.id !== mediaId || !metadata.url) {
+    throw new HTTPException(502, {
+      message: "Meta returned invalid media metadata",
+    });
+  }
   return { metadata, accessToken };
 }
 
@@ -261,7 +278,7 @@ export async function startCampaignWithMediaValidation(
   return { queued_count: data };
 }
 
-/** Cached per campaign batch by the caller; never trust client-supplied Meta media IDs. */
+/** Backend-only persistent reuse; originals and campaign snapshots are unchanged. */
 export async function prepareCampaignCarouselMedia(
   client: SupabaseClient<Database>,
   organizationId: string,
@@ -275,24 +292,88 @@ export async function prepareCampaignCarouselMedia(
     canonicalCarousel(template as unknown as TemplateDraftInput),
     { requireComplete: true },
   );
-  const images = await loadCarouselImages(
-    client,
-    organizationId,
-    media,
-    carousel.cards.length,
-  );
+  const assets = parseCarouselAssets(media, organizationId);
+  if (assets.length !== carousel.cards.length) {
+    throw new HTTPException(409, {
+      message: "Upload an image for every carousel card",
+    });
+  }
   const prepared = [];
-  for (const [index, { asset, file }] of images.entries()) {
-    let uploaded: CampaignHeaderMedia;
+  for (const [index, asset] of assets.entries()) {
+    const key = {
+      p_organization_id: organizationId,
+      p_organization_address: organizationAddress,
+      p_storage_uri: asset.storage_uri,
+    };
+    let mediaId: string;
     try {
-      uploaded = await uploadCampaignMedia(
-        client,
-        organizationId,
-        organizationAddress,
-        "IMAGE",
-        file,
-      );
+      mediaId = await reuseCampaignMedia({
+        async claim(staleMediaId) {
+          const { data } = await client.rpc("claim_campaign_media_cache", {
+            ...key,
+            ...(staleMediaId ? { p_stale_media_id: staleMediaId } : {}),
+          }).throwOnError();
+          return data as unknown as MediaCacheClaim;
+        },
+        async available(id) {
+          try {
+            // Metadata only, not image bytes. Never put Meta download URLs/tokens in UI or cache.
+            await getMetaMedia(client, organizationId, organizationAddress, id);
+            return true;
+          } catch (error) {
+            if (error instanceof HTTPException) {
+              const cause = error.cause as
+                | { error?: { code?: number; error_subcode?: number } }
+                | undefined;
+              // Only definitive missing-object responses invalidate an upload.
+              // Auth failures, rate limits and outages must not cause re-upload storms.
+              if (
+                missingMediaReference(
+                  error.status,
+                  cause?.error?.code,
+                  cause?.error?.error_subcode,
+                )
+              ) return false;
+            }
+            throw error;
+          }
+        },
+        async upload() {
+          const [{ file }] = await loadCarouselImages(client, organizationId, [
+            asset,
+          ], 1);
+          const uploaded = await uploadCampaignMedia(
+            client,
+            organizationId,
+            organizationAddress,
+            "IMAGE",
+            file,
+            AbortSignal.timeout(60000),
+          );
+          return uploaded.media_id;
+        },
+        async complete(token, id) {
+          const { data } = await client.rpc("complete_campaign_media_cache", {
+            ...key,
+            p_token: token,
+            p_media_id: id,
+          }).throwOnError();
+          return data === true;
+        },
+        async release(token) {
+          await client.rpc("release_campaign_media_cache", {
+            ...key,
+            p_token: token,
+          }).throwOnError();
+        },
+      });
     } catch (error) {
+      if (
+        error instanceof DOMException &&
+        ["AbortError", "TimeoutError"].includes(error.name)
+      ) {
+        throw new TypeError("Campaign image preparation timed out");
+      }
       if (error instanceof HTTPException) {
         throw new WhatsAppError(`Card ${index + 1}: image preparation failed`, {
           ...(error.cause && typeof error.cause === "object"
@@ -303,7 +384,7 @@ export async function prepareCampaignCarouselMedia(
       }
       throw error;
     }
-    prepared.push({ ...asset, card_index: index, media_id: uploaded.media_id });
+    prepared.push({ ...asset, card_index: index, media_id: mediaId });
   }
   return prepared as unknown as Json;
 }
