@@ -66,4 +66,23 @@ old, more expensive image preparation but must not change send outcomes.
   explicit worker-only ACLs retained before any local/remote application.
 - Previous campaign function sources and the Main public/billing schema are
   backed up outside Git in `.codex/backups/campaign-media-reuse-main-20261107`.
-- Main deployment and post-release verification are pending.
+- Main backend commit: `b1786b3`. Migration applied; campaign-dispatch v6 and
+  campaign-worker v22 are ACTIVE. No Oracle worker/container changes were
+  needed.
+- Live no-send GET probes: unauthenticated calls return 401; authenticated
+  campaign-worker GET returns 405 and a nonexistent dispatch job returns 404. No
+  campaign claimant, image upload or customer send was invoked by smoke tests.
+- Main cache RLS is enabled; authenticated users cannot read/claim the cache,
+  anonymous users cannot commit IDs, and service-role coordination is allowed.
+- Initial cache is empty; it populates during subsequent authorized campaign
+  processing. No backfill, restart or resend is needed. Production bandwidth
+  savings have not yet been measured.
+- Frontend type-only sync merged to Main as `9281257`: all 470 tests, database
+  type synchronization, TypeScript and production build passed. Lint has only
+  the existing warning baseline; no functional UI controls changed.
+- Staging and the separate self-hosted Supabase instance were not modified.
+- GitHub's backend `check` passed for `b1786b3`. The separate Supabase Preview
+  check reports `failed to bundle function: exit status 10`; the preceding Main
+  commit `35816ef` has the identical failure. This pre-existing integration
+  issue did not prevent the explicit, verified deployment of both campaign
+  functions.
