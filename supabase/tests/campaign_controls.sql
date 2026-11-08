@@ -10,7 +10,6 @@ select '15000000-0000-4000-8000-000000000001',('15010000-0000-4000-8000-'||lpad(
   'Test '||n,false,jsonb_build_object('role',(array['owner','admin','member','supervisor','agent'])[n]) from generate_series(1,5)n;
 insert into public.organizations_addresses(organization_id,address,service,status,extra)
 values('15000000-0000-4000-8000-000000000001','mock-pause-number','whatsapp','connected','{}');
-insert into public.campaign_dispatch_settings values('15000000-0000-4000-8000-000000000001',true);
 insert into public.campaigns(id,organization_id,name,organization_address,template,audience_type)
 select ('15030000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid,'15000000-0000-4000-8000-000000000001','Pause '||n,
  'mock-pause-number','{"id":"mock","name":"mock","language":"en_US","status":"APPROVED","components":[]}','csv_upload' from generate_series(1,5)n;
