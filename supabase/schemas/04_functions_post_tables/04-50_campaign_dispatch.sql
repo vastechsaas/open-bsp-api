@@ -1,3 +1,21 @@
+-- Every newly provisioned organization gets campaign processing availability.
+-- This does not enable policy enforcement or set/change any sending limits.
+create function public.initialize_campaign_dispatch_settings() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  insert into public.campaign_dispatch_settings (organization_id, enabled)
+  values (new.id, true)
+  on conflict (organization_id) do nothing;
+  return new;
+end;
+$$;
+revoke all on function public.initialize_campaign_dispatch_settings() from public, anon, authenticated;
+grant execute on function public.initialize_campaign_dispatch_settings() to service_role;
+
+create trigger initialize_campaign_dispatch_settings
+after insert on public.organizations
+for each row execute function public.initialize_campaign_dispatch_settings();
+
 -- Invoker trigger: direct tenant writes cannot choose the execution transport.
 create function public.guard_campaign_dispatch_transport() returns trigger
 language plpgsql set search_path = '' as $$

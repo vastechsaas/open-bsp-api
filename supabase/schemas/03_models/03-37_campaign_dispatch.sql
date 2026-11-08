@@ -1,7 +1,7 @@
--- Deployment-managed tenant opt-in; disabling affects new runs only.
+-- Available by default; deployment overrides affect new runs only.
 create table public.campaign_dispatch_settings (
   organization_id uuid primary key references public.organizations(id) on delete cascade,
-  enabled boolean not null default false
+  enabled boolean not null default true
 );
 alter table public.campaign_dispatch_settings enable row level security;
 revoke all on table public.campaign_dispatch_settings from public, anon, authenticated;

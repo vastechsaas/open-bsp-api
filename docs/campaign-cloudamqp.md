@@ -1,9 +1,31 @@
 # Campaign CloudAMQP processing (SCRUM-133)
 
 Postgres remains authoritative. A campaign's transport is selected once at Run.
-`campaign_dispatch_settings` is service-only and defaults off. Existing runs
-remain `postgres`; the legacy claimant excludes `cloudamqp`. Disabling the flag
-does not migrate or abandon active work.
+`campaign_dispatch_settings` is service-only and is created enabled for every
+new organization. The availability rollout also enables existing organizations.
+This makes campaign controls available; it does not enable sending-policy
+enforcement or change configured budgets, rates or recipient limits. Existing
+runs retain their selected transport; the legacy claimant excludes `cloudamqp`.
+An explicit deployment override can still disable processing for new runs
+without migrating or abandoning active work.
+
+### Availability default rollout — 9 November 2026
+
+- Generated migration `20261108192855` enables existing organizations and adds
+  the organization-insert initializer. No policy, accounting or campaign state
+  is changed.
+- Oracle: 24 of 24 organizations enabled; default and trigger verified. Sending
+  policies were compared before/after and are identical. Affected data and
+  schema were backed up under
+  `/home/ubuntu/wababase/backups/campaign-controls-schema-20261108T194351Z`.
+- Focused default, dispatch, draft, activity and sending-policy database tests
+  passed. No templates were sent or campaigns started.
+- Full validation: application/plugin checks passed. The shared local database
+  has unrelated staging schema drift: missing Main media-cache/preprocessing
+  functions and the staging permission response includes an additional `enabled`
+  field. Those existing discrepancies were not modified by this fix.
+- Types were regenerated for comparison; the settings API shape is unchanged.
+  Unrelated staging-only type differences were not copied into Main.
 
 The transactional `campaign_dispatch_jobs` records contain identifiers and safe
 error codes only. A stable job identifies one of at most three attempts. The

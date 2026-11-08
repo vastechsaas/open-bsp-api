@@ -12,7 +12,6 @@ insert into public.platform_admins(user_id) values ('14010000-0000-4000-8000-000
 insert into public.organizations_addresses(organization_id,address,service,status,extra) values
 ('14000000-0000-4000-8000-000000000001','policy-a','whatsapp','connected','{}'),
 ('14000000-0000-4000-8000-000000000001','policy-b','whatsapp','connected','{}');
-insert into public.campaign_dispatch_settings values ('14000000-0000-4000-8000-000000000001',true);
 create temp table policy_input(value jsonb);
 insert into policy_input values ('{"enabled":true,"daily_limit":2,"max_sends_per_minute":60,"recipient_cap":1,"budget_timezone":"UTC"}');
 grant select on policy_input to authenticated;
