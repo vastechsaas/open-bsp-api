@@ -11,7 +11,6 @@ insert into public.campaigns(id,organization_id,name,organization_address,templa
 insert into public.campaign_csv_recipients(organization_id,campaign_id,contact_address) values
 ('14100000-0000-4000-8000-000000000001','14100000-0000-4000-8000-000000000010','15550000001'),
 ('14100000-0000-4000-8000-000000000001','14100000-0000-4000-8000-000000000010','15550000002');
-insert into public.campaign_dispatch_settings values('14100000-0000-4000-8000-000000000001',true);
 select set_config('request.jwt.claim.sub','14100000-0000-4000-8000-000000000002',true);
 select set_config('request.jwt.claim.role','authenticated',true);
 set local role authenticated;

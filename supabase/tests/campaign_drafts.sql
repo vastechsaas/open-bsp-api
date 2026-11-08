@@ -19,6 +19,11 @@ values
     '{}'
   );
 
+-- This suite exercises the retained legacy sender explicitly. New organizations
+-- otherwise use CloudAMQP by default (covered by campaign_dispatch.sql).
+update public.campaign_dispatch_settings set enabled=false
+where organization_id in ('13000000-0000-4000-8000-000000000001','13000000-0000-4000-8000-000000000002');
+
 insert into auth.users (
   instance_id,
   id,

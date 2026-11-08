@@ -17,7 +17,7 @@ insert into public.campaign_csv_recipients (organization_id, campaign_id, contac
 select '13300000-0000-4000-8000-000000000001', '13300000-0000-4000-8000-000000000010', '1555000000' || n from generate_series(1,3) n;
 insert into public.campaign_csv_recipients (organization_id, campaign_id, contact_address)
 values ('13300000-0000-4000-8000-000000000001', '13300000-0000-4000-8000-000000000011', '15550000004');
-insert into public.campaign_dispatch_settings values ('13300000-0000-4000-8000-000000000001', true);
+select ok((select enabled from public.campaign_dispatch_settings where organization_id='13300000-0000-4000-8000-000000000001'),'new organizations have campaign processing enabled by default');
 select set_config('request.jwt.claim.sub', '13300000-0000-4000-8000-000000000002', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
