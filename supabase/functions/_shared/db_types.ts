@@ -986,6 +986,147 @@ export type Database = {
           },
         ]
       }
+      campaign_log_export_parts: {
+        Row: {
+          export_id: string
+          part_no: number
+          path: string
+        }
+        Insert: {
+          export_id: string
+          part_no: number
+          path: string
+        }
+        Update: {
+          export_id?: string
+          part_no?: number
+          path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_log_export_parts_export_id_fkey"
+            columns: ["export_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_log_exports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_log_export_rows: {
+        Row: {
+          export_id: string
+          ordinal: number
+          recipient: string
+          recipient_name: string | null
+          sent_at: string | null
+          status: string
+          variables: Json
+        }
+        Insert: {
+          export_id: string
+          ordinal: number
+          recipient: string
+          recipient_name?: string | null
+          sent_at?: string | null
+          status: string
+          variables: Json
+        }
+        Update: {
+          export_id?: string
+          ordinal?: number
+          recipient?: string
+          recipient_name?: string | null
+          sent_at?: string | null
+          status?: string
+          variables?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_log_export_rows_export_id_fkey"
+            columns: ["export_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_log_exports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_log_exports: {
+        Row: {
+          campaign_id: string
+          display_name: string
+          expires_at: string
+          failures: number
+          id: string
+          lease_token: string | null
+          lease_until: string | null
+          mapping: Json
+          organization_id: string
+          owner_id: string
+          processed_count: number
+          request_id: string
+          row_count: number
+          sender_number: string
+          snapshot_at: string
+          state: string
+          template: Json
+          ticket_hash: string | null
+          ticket_until: string | null
+          timezone: string
+        }
+        Insert: {
+          campaign_id: string
+          display_name: string
+          expires_at?: string
+          failures?: number
+          id?: string
+          lease_token?: string | null
+          lease_until?: string | null
+          mapping: Json
+          organization_id: string
+          owner_id: string
+          processed_count?: number
+          request_id: string
+          row_count?: number
+          sender_number: string
+          snapshot_at?: string
+          state?: string
+          template: Json
+          ticket_hash?: string | null
+          ticket_until?: string | null
+          timezone: string
+        }
+        Update: {
+          campaign_id?: string
+          display_name?: string
+          expires_at?: string
+          failures?: number
+          id?: string
+          lease_token?: string | null
+          lease_until?: string | null
+          mapping?: Json
+          organization_id?: string
+          owner_id?: string
+          processed_count?: number
+          request_id?: string
+          row_count?: number
+          sender_number?: string
+          snapshot_at?: string
+          state?: string
+          template?: Json
+          ticket_hash?: string | null
+          ticket_until?: string | null
+          timezone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_log_exports_organization_id_campaign_id_fkey"
+            columns: ["organization_id", "campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["organization_id", "id"]
+          },
+        ]
+      }
       campaign_media_cache: {
         Row: {
           lease_expires_at: string | null
@@ -3920,6 +4061,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      authorize_campaign_log_export: {
+        Args: { p_campaign: string; p_org: string; p_owner: string }
+        Returns: boolean
+      }
       authorize_previous_chat_context: {
         Args: { p_conversation_id: string; p_organization_id: string }
         Returns: {
@@ -4001,6 +4146,8 @@ export type Database = {
         Args: { p_job_id: string }
         Returns: Json
       }
+      campaign_log_export_cleanup_candidates: { Args: never; Returns: string[] }
+      campaign_log_export_info: { Args: { p_id: string }; Returns: Json }
       campaign_recipient_key: { Args: { p_address: string }; Returns: string }
       campaign_window_next_at: {
         Args: {
@@ -4040,6 +4187,37 @@ export type Database = {
       claim_campaign_dispatch_publications: {
         Args: { p_limit?: number }
         Returns: Json
+      }
+      claim_campaign_log_export: {
+        Args: never
+        Returns: {
+          campaign_id: string
+          display_name: string
+          expires_at: string
+          failures: number
+          id: string
+          lease_token: string | null
+          lease_until: string | null
+          mapping: Json
+          organization_id: string
+          owner_id: string
+          processed_count: number
+          request_id: string
+          row_count: number
+          sender_number: string
+          snapshot_at: string
+          state: string
+          template: Json
+          ticket_hash: string | null
+          ticket_until: string | null
+          timezone: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "campaign_log_exports"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       claim_campaign_media_cache: {
         Args: {
@@ -4112,6 +4290,10 @@ export type Database = {
       confirm_campaign_dispatch_publication: {
         Args: { p_job_id: string; p_token: string }
         Returns: boolean
+      }
+      consume_campaign_log_download: {
+        Args: { p_ticket: string }
+        Returns: Json
       }
       contact_address_update_rules: {
         Args: {
@@ -4438,6 +4620,10 @@ export type Database = {
         }
         Returns: string
       }
+      finish_campaign_log_export_part: {
+        Args: { p_export_id: string; p_success: boolean; p_token: string }
+        Returns: boolean
+      }
       finish_media_preprocessing: {
         Args: {
           p_artifacts?: Json
@@ -4499,6 +4685,10 @@ export type Database = {
           name: string
           variables: Json
         }[]
+      }
+      get_campaign_log_export: {
+        Args: { p_campaign_id: string; p_organization_id: string }
+        Returns: Json
       }
       get_campaign_receipt_summary: {
         Args: { p_campaign_id: string; p_organization_id: string }
@@ -4895,6 +5085,10 @@ export type Database = {
       is_whatsapp_contact_auto_save_enabled: {
         Args: { p_organization_id: string }
         Returns: boolean
+      }
+      issue_campaign_log_download: {
+        Args: { p_export_id: string }
+        Returns: string
       }
       list_campaign_activity_page: {
         Args: {
@@ -5865,6 +6059,14 @@ export type Database = {
         }
         Returns: undefined
       }
+      request_campaign_log_export: {
+        Args: {
+          p_campaign_id: string
+          p_organization_id: string
+          p_request_id: string
+        }
+        Returns: Json
+      }
       require_platform_admin: { Args: never; Returns: string }
       reserve_media_preprocessing: {
         Args: { p_message_id: string }
@@ -5900,6 +6102,10 @@ export type Database = {
           restored_at: string
           status: string
         }[]
+      }
+      retry_campaign_log_export: {
+        Args: { p_export_id: string }
+        Returns: Json
       }
       retry_whatsapp_account_sync: {
         Args: { p_address: string; p_organization_id: string }

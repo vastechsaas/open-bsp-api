@@ -104,6 +104,11 @@ verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/platform-report-export/index.ts"
 
+[functions.campaign-log-export]
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/campaign-log-export/index.ts"
+
 [functions.platform-whatsapp-health]
 verify_jwt = false
 import_map = "./functions/deno.json"
