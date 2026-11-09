@@ -1,5 +1,5 @@
 import { createUnsecureClient } from "../_shared/supabase.ts";
-import { csvHeader } from "./csv.ts";
+import { csvDownloadPart, csvHeader } from "./csv.ts";
 import { type ExportJob, processExportPart } from "./worker.ts";
 
 const BUCKET = "campaign-log-exports";
@@ -120,7 +120,7 @@ async function download(req: Request): Promise<Response> {
         const { data: file, error } = await service.storage.from(BUCKET)
           .download(record.path);
         if (error || !file) throw error ?? new Error("Missing CSV part");
-        controller.enqueue(new Uint8Array(await file.arrayBuffer()));
+        controller.enqueue(encoder.encode(csvDownloadPart(await file.text())));
         part++;
       } catch {
         controller.error(new Error("Download interrupted; please retry"));
@@ -159,7 +159,9 @@ Deno.serve(async (req) => {
       return new Response(null, { status: 401, headers: cors });
     }
     await work();
-    return Response.json({ processed: true }, { headers: cors });
+    return Response.json({ processed: true, csv_columns: 6 }, {
+      headers: cors,
+    });
   } catch {
     // Do not log body, tickets, snapshot data or Storage credentials.
     return Response.json({ message: "Export processing unavailable" }, {

@@ -179,7 +179,11 @@ try {
     2,
   );
   assert.equal(lines.filter((line) => line.endsWith(',""')).length, 598);
-  assert.ok(csv.includes("Hello Synthetic 600"));
+  assert.equal(
+    lines[0].replace(/^\uFEFF/, ""),
+    '"Date","Time","Recipient number","Sender number","Display name","Status"',
+  );
+  assert.equal(csv.includes("Hello Synthetic"), false);
   const replay = await fetch(
     `${base}/functions/v1/campaign-log-export/download`,
     { method: "POST", body: new URLSearchParams({ ticket }) },

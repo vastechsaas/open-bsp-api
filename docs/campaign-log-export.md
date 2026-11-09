@@ -11,19 +11,19 @@ organization. Platform-admin status alone and organization API keys do not grant
 access. Request, status, retry, ticket issuance and download consumption all
 enforce authorization. No direct snapshot-table or Storage access is granted.
 
-CSV columns: Date, Time, Message content, Recipient number, Sender number,
-Display name, Status. Delivered means delivered/read evidence; Not Delivered
-means definitive dispatch/receipt failure without delivered/read evidence.
-Acceptance, cancellation, expiry and uncertainty stay blank. No failure reasons,
+CSV columns: Date, Time, Recipient number, Sender number, Display name, Status.
+Delivered means delivered/read evidence; Not Delivered means definitive
+dispatch/receipt failure without delivered/read evidence. Acceptance,
+cancellation, expiry and uncertainty stay blank. No failure reasons,
 credentials, media bytes or temporary image URLs are exported.
 
 Date/time uses the saved campaign timezone, displayed next to the action. Prefer
 the latest recorded submission time, otherwise the existing submission activity
 timestamp; missing historical times remain blank. Sender metadata is the
 available account profile at snapshot time, not a claim of historical branding.
-Content resolves saved template text, ordered carousel cards and website links
-using the existing personalization renderer. Unavailable historical content is
-not invented.
+Message content remains available in the campaign preview, not in the download.
+Legacy private parts are projected to the six-column layout when downloaded; see
+`campaign-csv-compact-hotfix.md`. Existing exports do not need regeneration.
 
 ## Background processing and download
 
