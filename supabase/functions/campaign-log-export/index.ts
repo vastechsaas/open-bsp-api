@@ -20,7 +20,8 @@ async function work() {
       async claim() {
         const { data } = await service.rpc("claim_campaign_log_export")
           .throwOnError();
-        return data?.id ? data as ExportJob : null;
+        const job = Array.isArray(data) ? data[0] : data;
+        return job?.id ? job as ExportJob : null;
       },
       async rows(job) {
         const { data } = await service.from("campaign_log_export_rows")

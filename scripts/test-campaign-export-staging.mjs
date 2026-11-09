@@ -19,7 +19,9 @@ const keyResponse = JSON.parse(
     "--output=json",
   ], { encoding: "utf8" }),
 );
-const keys = keyResponse.api_keys ?? keyResponse.keys ?? keyResponse;
+const keys = Array.isArray(keyResponse)
+  ? keyResponse
+  : keyResponse.api_keys ?? keyResponse.keys;
 const service = keys.find((key) => key.name === "service_role").api_key;
 const anon = keys.find((key) => key.name === "anon").api_key;
 const base = `https://${ref}.supabase.co`;
@@ -75,7 +77,9 @@ try {
       extra: { role: "owner" },
     },
     {
+      id: randomUUID(),
       organization_id: org,
+      user_id: null,
       name: "Synthetic second Owner",
       ai: false,
       extra: { role: "owner" },
@@ -123,12 +127,14 @@ try {
       organization_id: org,
       campaign_id: campaign,
       read_at: new Date().toISOString(),
+      failed_at: null,
     },
     {
       delivery_id: rows[1].id,
       organization_id: org,
       campaign_id: campaign,
       failed_at: new Date().toISOString(),
+      read_at: null,
     },
   ]);
   const input = { p_organization_id: org, p_campaign_id: campaign };
