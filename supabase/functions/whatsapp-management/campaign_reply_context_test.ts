@@ -2,8 +2,10 @@ import { assertEquals } from "../_shared/test_assert.ts";
 import {
   campaignReplyPreview,
   campaignReplyRequest,
+  publicCampaignImageUrl,
   readCampaignReplyContext,
   sameCampaignRecipient,
+  signCampaignPreviews,
 } from "./campaign_reply_context.ts";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "../_shared/supabase.ts";
@@ -56,6 +58,79 @@ const delivery = {
   name: "Customer",
   variables: { product: "a watch", slug: "watch" },
 };
+
+Deno.test("campaign images use the public origin without changing signed paths or tokens", () => {
+  const path = "/storage/v1/object/sign/media/organizations/test/a%20b.jpg";
+  const query = "?token=opaque.signature&download=photo%20one.jpg";
+  const internal = `http://api-gw:8000${path}${query}`;
+  assertEquals(
+    publicCampaignImageUrl(internal, "https://media.example.test"),
+    `https://media.example.test${path}${query}`,
+  );
+  const hosted = `https://project.supabase.co${path}${query}`;
+  assertEquals(publicCampaignImageUrl(hosted, ""), hosted);
+  assertEquals(
+    publicCampaignImageUrl(undefined, "https://media.example.test"),
+    undefined,
+  );
+  for (
+    const invalid of [
+      "http://media.example.test",
+      "https://user:secret@media.example.test",
+      "https://media.example.test?token=bad",
+      "https://media.example.test/prefix",
+      "not a URL",
+    ]
+  ) assertEquals(publicCampaignImageUrl(internal, invalid), undefined);
+});
+
+Deno.test("campaign signing batches private images and preserves previews when an image is missing", async () => {
+  const service = createClient<Database>(
+    "http://api-gw:8000",
+    "key",
+    {
+      auth: { persistSession: false },
+      global: {
+        fetch: (request, init) => {
+          assertEquals(
+            new URL(String(request)).pathname,
+            "/storage/v1/object/sign/media",
+          );
+          const body = JSON.parse(String(init?.body));
+          assertEquals(body, {
+            expiresIn: 900,
+            paths: ["one.jpg", "missing.jpg"],
+          });
+          return Promise.resolve(Response.json([
+            {
+              path: "one.jpg",
+              signedURL: "/object/sign/media/one.jpg?token=signed",
+              error: null,
+            },
+            { path: "missing.jpg", signedURL: null, error: "Object not found" },
+          ]));
+        },
+      },
+    },
+  );
+  const previews = await signCampaignPreviews(service, [{
+    name: "Campaign",
+    body: "Preserved",
+    links: [],
+    cards: [{ imagePath: "one.jpg", links: [] }, {
+      imagePath: "one.jpg",
+      links: [],
+    }, { imagePath: "missing.jpg", text: "Still visible", links: [] }],
+  }], "https://media.example.test");
+  assertEquals(previews[0].body, "Preserved");
+  assertEquals(
+    previews[0].cards[0].image_url,
+    "https://media.example.test/storage/v1/object/sign/media/one.jpg?token=signed",
+  );
+  assertEquals(previews[0].cards[1].image_url, previews[0].cards[0].image_url);
+  assertEquals(previews[0].cards[2].image_url, undefined);
+  assertEquals(previews[0].cards[2].text, "Still visible");
+});
 
 Deno.test("campaign quote renders personalized snapshot with safe links and scoped media", () => {
   const path = `organizations/${org}/attachments/${"a".repeat(43)}`;

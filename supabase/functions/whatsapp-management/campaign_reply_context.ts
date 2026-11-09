@@ -193,9 +193,39 @@ export async function readCampaignReplyContext(
   return await signCampaignPreviews(service, previews);
 }
 
+// Keep backend requests on the internal gateway, but never return that Docker
+// hostname to browsers. Hosted projects without an override retain SDK URLs.
+export function publicCampaignImageUrl(
+  signedUrl: string | undefined,
+  publicBase = Deno.env.get("SUPABASE_PUBLIC_URL"),
+): string | undefined {
+  if (!signedUrl || !publicBase) return signedUrl;
+  try {
+    const base = new URL(publicBase);
+    const image = new URL(signedUrl);
+    if (
+      base.protocol !== "https:" || base.username || base.password ||
+      base.pathname !== "/" || base.search || base.hash ||
+      !["http:", "https:"].includes(image.protocol) ||
+      !image.pathname.startsWith("/storage/v1/object/sign/media/")
+    ) return undefined;
+    image.protocol = base.protocol;
+    image.host = base.host;
+    image.port = base.port;
+    image.username = "";
+    image.password = "";
+    image.hash = "";
+    return image.href;
+  } catch {
+    // Misconfigured public URLs must not leak private hosts or hide chat text.
+    return undefined;
+  }
+}
+
 export async function signCampaignPreviews<T extends Preview>(
   service: SupabaseClient<Database>,
   previews: T[],
+  publicBase = Deno.env.get("SUPABASE_PUBLIC_URL"),
 ) {
   const paths = [
     ...new Set(
@@ -207,7 +237,12 @@ export async function signCampaignPreviews<T extends Preview>(
   const signed = paths.length
     ? (await service.storage.from("media").createSignedUrls(paths, 900)).data
     : [];
-  const urls = new Map(signed?.map(({ path, signedUrl }) => [path, signedUrl]));
+  const urls = new Map(
+    signed?.map(({ path, signedUrl }) => [
+      path,
+      publicCampaignImageUrl(signedUrl, publicBase),
+    ]),
+  );
   return previews.map((preview) => ({
     ...preview,
     cards: preview.cards.map(({ imagePath, ...card }) => ({
