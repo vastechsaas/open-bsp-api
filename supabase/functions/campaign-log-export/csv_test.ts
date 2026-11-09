@@ -1,6 +1,11 @@
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
+import {
+  assertEquals,
+  assertStringIncludes,
+  assertThrows,
+} from "jsr:@std/assert";
 import {
   csvCell,
+  csvDownloadPart,
   csvHeader,
   csvRow,
   type ExportDefinition,
@@ -41,6 +46,46 @@ Deno.test("CSV protects formulas, quotes, line breaks and international numbers"
   assertEquals(csvCell('Hello, "world"\nاردو'), '"Hello, ""world""\nاردو"');
   assertEquals(csvHeader.startsWith("\uFEFF"), true);
   assertEquals(csvHeader.includes("Failure"), false);
+  assertEquals(
+    csvHeader,
+    '\uFEFF"Date","Time","Recipient number","Sender number","Display name","Status"\r\n',
+  );
+});
+Deno.test("downloads remove multiline content from existing parts without shifting recipient/status cells", () => {
+  const fields = [
+    "2026-11-10",
+    "02:30:01",
+    'Intro, "offer"\r\nCard 1\nhttps://shop.test/item\nCard 2',
+    row.recipient,
+    definition.sender_number,
+    'Name, "quoted"',
+    "Delivered",
+  ];
+  const old = fields.map(csvCell).join(",") + "\r\n";
+  const expected =
+    fields.filter((_, index) => index !== 2).map(csvCell).join(",") + "\r\n";
+  assertEquals(csvDownloadPart(old), expected);
+  assertEquals(csvDownloadPart(old + expected), expected + expected);
+  assertEquals(csvDownloadPart(old).split("\r\n").filter(Boolean).length, 1);
+  assertEquals(
+    csvDownloadPart(csvRow(definition, { ...row, status: "" })).endsWith(
+      ',""\r\n',
+    ),
+    true,
+  );
+  assertEquals(csvDownloadPart(""), "");
+});
+Deno.test("malformed cached parts fail safely rather than shift columns or omit rows", () => {
+  for (
+    const part of [
+      '"unterminated',
+      '"a","b"\r\n',
+      "unquoted,fields",
+      '"a"garbage',
+    ]
+  ) {
+    assertThrows(() => csvDownloadPart(part), Error, "Invalid export CSV part");
+  }
 });
 Deno.test("CSV uses campaign timezone, personalized content, blank unknowns and missing times", () => {
   const csv = csvRow(definition, row);

@@ -4,12 +4,52 @@ import { campaignReplyPreview } from "../whatsapp-management/campaign_reply_cont
 export const csvHeader = "\uFEFF" + [
   "Date",
   "Time",
-  "Message content",
   "Recipient number",
   "Sender number",
   "Display name",
   "Status",
 ].map(csvCell).join(",") + "\r\n";
+
+// Private parts use the original quoted seven-field layout. Project them on
+// download, including files generated before this patch. Do not split on lines:
+// carousel text may contain embedded newlines and escaped quotes. Keeping the
+// internal writer unchanged also makes rolling deployment safe for old workers.
+export function csvDownloadPart(part: string): string {
+  let offset = 0;
+  const rows: string[] = [];
+  const invalid = () => new Error("Invalid export CSV part");
+  while (offset < part.length) {
+    const cells: string[] = [];
+    while (true) {
+      const start = offset;
+      if (part[offset++] !== '"') throw invalid();
+      let closed = false;
+      while (offset < part.length) {
+        if (part[offset++] !== '"') continue;
+        if (part[offset] === '"') {
+          offset++;
+          continue;
+        }
+        closed = true;
+        break;
+      }
+      if (!closed) throw invalid();
+      cells.push(part.slice(start, offset));
+      if (cells.length > 7) throw invalid();
+      if (part[offset] === ",") {
+        offset++;
+        continue;
+      }
+      if (part.slice(offset, offset + 2) === "\r\n") offset += 2;
+      else if (offset !== part.length) throw invalid();
+      break;
+    }
+    if (cells.length === 7) cells.splice(2, 1);
+    else if (cells.length !== 6) throw invalid();
+    rows.push(cells.join(",") + "\r\n");
+  }
+  return rows.join("");
+}
 
 export function csvCell(value: string): string {
   // Protect formulas even after leading whitespace/control characters. Also
