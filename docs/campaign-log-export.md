@@ -101,3 +101,9 @@ definitions were included because schema diff does not preserve those records.
   export evidence expires automatically after 24 hours. Two earlier
   smoke-harness setup failures were corrected; no production campaign data was
   affected.
+- All synthetic smoke organizations, including the empty failed-setup fixture,
+  were archived using the existing lifecycle operation. No customer data
+  deleted.
+- Backend staging head `4c7afe0`; UI staging head `dbeea7e`. The dependent UI
+  was pushed after the smoke passed. Vercel `meta-vista-ui` deployment
+  `GMEvXnvpJxoMhFY3cxcUyxQkS7KB` succeeded for that UI commit.
