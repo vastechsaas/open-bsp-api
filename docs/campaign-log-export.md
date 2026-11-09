@@ -131,3 +131,15 @@ definitions were included because schema diff does not preserve those records.
 - Main release branches: `codex/completed-campaign-csv-main-backend` and
   `codex/completed-campaign-csv-main-ui`. Frontend publication follows backend
   verification; final deployment evidence is recorded below.
+- Backend merged to Main at `6921e2d`; UI merged to Main at `f3a0045`. Main
+  integration checks passed: 41 database assertions, 4 CSV/worker tests, 2
+  focused UI tests, synchronized generated types, backend quick validation,
+  changed-file ESLint and the production UI build.
+- Vercel production deployment `G8H8Ty7HEVmGmFbDWttZQozaknoi` succeeded. Live
+  `https://socialconnect.vastech.biz` serves the new export request, progress
+  and download-ticket code in `/assets/_campaignId_.review-BLJ9xYJl.js`; its
+  client still targets `https://socialbase.socialconnect.vastech.biz`.
+- Normalized hashes of all three deployed export modules match the Main release
+  source. Edge Functions retained their prior start time; no live containers or
+  standalone workers were restarted. Disposable local Main-validation resources
+  were removed after successful checks. Staging refs remained unchanged.
