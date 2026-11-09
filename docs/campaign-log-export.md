@@ -85,4 +85,19 @@ definitions were included because schema diff does not preserve those records.
   `20261109192334_completed_campaign_log_exports.sql`.
 - Predeployment public schema/data backup secured outside the repository at
   `C:/Users/Hurera Mujeeb/.codex/backups/campaign-csv-staging-20261110/`.
-- UI validation and deployed smoke-test evidence pending.
+- Full UI validation passed: 490 tests, synchronized database types, ESLint with
+  zero errors, TypeScript and production Vite build. Existing unrelated lint
+  warnings remain. Focused UI tests/format checks also passed after final
+  polish.
+- Backend implementation commit `0420635`; UI commit `dbeea7e`. Backend staging
+  merged/deployed before the dependent UI. Main refs remain unchanged.
+- Staging smoke passed: organization `c79b30ec-825b-4a66-8ad6-44282c047b81`,
+  campaign `c53943e7-08a5-472e-9982-0b085f343252`, export
+  `879f156e-220f-4641-990d-9e063170e308`: 601 rows, 1 Delivered, 2 Not
+  Delivered, 598 blank. Native form POST streamed the complete CSV; replay and
+  revoked-role requests were denied; direct snapshot reads were denied. No
+  templates sent.
+- The successful synthetic fixture was archived after verification. Its private
+  export evidence expires automatically after 24 hours. Two earlier
+  smoke-harness setup failures were corrected; no production campaign data was
+  affected.
