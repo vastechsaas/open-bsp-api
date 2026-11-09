@@ -4,7 +4,7 @@
 
 Owner-only action beside existing campaign Activity, only for `completed`
 campaigns. Activity and dispatch permissions are unchanged. No sends or campaign
-worker changes. Main/Oracle require separate rollout approval.
+worker changes. Main/Oracle rollout was separately approved on 10 November 2026.
 
 Exports use authenticated, accepted organization Owner membership and an active
 organization. Platform-admin status alone and organization API keys do not grant
@@ -107,3 +107,27 @@ definitions were included because schema diff does not preserve those records.
 - Backend staging head `4c7afe0`; UI staging head `dbeea7e`. The dependent UI
   was pushed after the smoke passed. Vercel `meta-vista-ui` deployment
   `GMEvXnvpJxoMhFY3cxcUyxQkS7KB` succeeded for that UI commit.
+
+## Main and Oracle rollout — 10 November 2026 (Pakistan)
+
+- Selectively ported the export commits onto Main; staging-only Pause/Resume
+  fields, permissions and UI were not merged. Generated and synchronized types
+  from a disposable database built from Main migrations: only 206 export lines
+  were added, with no existing Main types removed.
+- Main-schema export database tests: all 41 passed. Focused UI permission/state
+  tests and database-type synchronization passed; production build checked.
+- Live Oracle backup verified with `pg_restore --list`:
+  `/home/ubuntu/wababase/backups/campaign-csv-main-20261109T200145Z/database-before.dump`.
+- Applied the additive export migration transactionally and deployed only the
+  new export function directory. Existing media URL hotfix, chatbot/campaign
+  workers, credentials and connections were preserved; no containers restarted.
+- Restored the already-preloaded `pg_cron` extension, declared by the existing
+  schema sources but missing from the restored database. No PostgreSQL restart
+  or other background jobs were enabled; the export job is the sole cron entry.
+- Oracle verification: anonymous processor requests return 401, invalid native
+  download tickets return 403, service-authenticated idle processing returns
+  200, private bucket remains non-public. Scheduled executions and their HTTP
+  responses both succeed (200). No campaign messages were sent.
+- Main release branches: `codex/completed-campaign-csv-main-backend` and
+  `codex/completed-campaign-csv-main-ui`. Frontend publication follows backend
+  verification; final deployment evidence is recorded below.
