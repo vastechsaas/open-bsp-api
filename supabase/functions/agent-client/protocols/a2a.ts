@@ -57,6 +57,12 @@ export class A2AHandler
         ];
       }
       case "file": {
+        if (part.attachment_recovery && part.attachment_recovery !== "ready") {
+          return [{
+            type: "text",
+            text: part.text || "Attachment unavailable",
+          }];
+        }
         const parts: A2aPart[] = [];
 
         let file: FileContent;

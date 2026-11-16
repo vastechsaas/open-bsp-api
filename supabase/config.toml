@@ -19,6 +19,11 @@ verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/whatsapp-webhook/index.ts"
 
+[functions.whatsapp-attachment-recovery]
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/whatsapp-attachment-recovery/index.ts"
+
 [functions.instagram-webhook]
 verify_jwt = false
 import_map = "./functions/deno.json"

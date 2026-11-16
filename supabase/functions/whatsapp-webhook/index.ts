@@ -12,6 +12,7 @@ import {
   type Database,
   type EditedMessage,
   type IncomingMessage,
+  type Json,
   type MessageInsert,
   type MetaWebhookPayload,
   type OrganizationAddressRow,
@@ -603,6 +604,11 @@ async function processMessage(request: Request): Promise<Response> {
   }
 
   const messages: MessageInsert[] = [];
+  const deferredAttachments: MessageInsert[] = [];
+  const recoveryOrganizations = new Set(
+    (Deno.env.get("WHATSAPP_ATTACHMENT_RECOVERY_ORGANIZATIONS") ?? "")
+      .split(",").map((value) => value.trim()).filter(Boolean),
+  );
   const statuses: MessageInsert[] = [];
   const contacts_addresses: ContactAddressInsert[] = [];
   const firstInboundContactKeys = new Set<string>();
@@ -873,7 +879,17 @@ async function processMessage(request: Request): Promise<Response> {
             timestamp: new Date(webhookMessage.timestamp * 1000).toISOString(),
           };
 
-          messages.push(message);
+          if (
+            field === "messages" && content.type === "file" &&
+            /^[0-9]{1,40}$/.test(content.file.uri) &&
+            Deno.env.get("WHATSAPP_ATTACHMENT_RECOVERY_ENABLED") === "true" &&
+            (recoveryOrganizations.size === 0 ||
+              recoveryOrganizations.has(organization_id))
+          ) {
+            deferredAttachments.push(message);
+          } else {
+            messages.push(message);
+          }
           if (field === "messages") {
             firstInboundContactKeys.add(
               contactAddressKey(
@@ -1365,6 +1381,15 @@ async function processMessage(request: Request): Promise<Response> {
   // Notes for messages:
   // Download media before upserting incoming messages
   // Patched messages include media local id and file size
+  if (deferredAttachments.length) {
+    const { data: inserted } = await client
+      .rpc("persist_whatsapp_attachment_messages", {
+        p_messages: deferredAttachments as unknown as Json,
+      }).throwOnError();
+    log.info("Persisted messages with queued WhatsApp attachments", {
+      count: inserted,
+    });
+  }
   const patchedMessages = await downloadMediaPromise;
 
   // A status row (content `{}`) and a message row can carry the same

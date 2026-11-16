@@ -154,6 +154,15 @@ export const MediaTypes = [
 export type FilePart = {
   type: "file";
   kind: (typeof MediaTypes)[number];
+  attachment_recovery?:
+    | "pending"
+    | "ready"
+    | "failed"
+    | "unavailable"
+    | "credentials"
+    | "storage"
+    | "too_large"
+    | "cancelled";
   file: {
     mime_type: string;
     uri: string; // --> internal://media/organizations/${organization_id}/attachments/${file_hash}

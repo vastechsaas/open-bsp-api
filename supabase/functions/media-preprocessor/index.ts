@@ -125,6 +125,10 @@ Deno.serve(async (req) => {
   const client = createUnsecureClient();
 
   const incoming = ((await req.json()) as WebhookPayload<MessageRow>).record!;
+  if (
+    incoming.content.type === "file" && incoming.content.attachment_recovery &&
+    incoming.content.attachment_recovery !== "ready"
+  ) return new Response();
 
   const log_update_and_respond = async (
     logLevel: "error" | "warn" | "info",

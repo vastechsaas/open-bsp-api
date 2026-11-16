@@ -3819,6 +3819,53 @@ export type Database = {
           },
         ]
       }
+      whatsapp_attachment_recovery_jobs: {
+        Row: {
+          automatic_attempts: number
+          lease_token: string | null
+          lease_until: string | null
+          manual: boolean
+          manual_attempts: number
+          manual_requested_at: string | null
+          media_id: string
+          message_id: string
+          next_attempt_at: string
+          state: string
+        }
+        Insert: {
+          automatic_attempts?: number
+          lease_token?: string | null
+          lease_until?: string | null
+          manual?: boolean
+          manual_attempts?: number
+          manual_requested_at?: string | null
+          media_id: string
+          message_id: string
+          next_attempt_at?: string
+          state?: string
+        }
+        Update: {
+          automatic_attempts?: number
+          lease_token?: string | null
+          lease_until?: string | null
+          manual?: boolean
+          manual_attempts?: number
+          manual_requested_at?: string | null
+          media_id?: string
+          message_id?: string
+          next_attempt_at?: string
+          state?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_attachment_recovery_jobs_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: true
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_integration_health: {
         Row: {
           created_at: string
@@ -4156,6 +4203,13 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      claim_whatsapp_attachment_recovery: {
+        Args: never
+        Returns: {
+          lease_token: string
+          message_id: string
+        }[]
       }
       commit_chatbot_flow_execution: {
         Args: {
@@ -4559,6 +4613,17 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      finish_whatsapp_attachment_recovery: {
+        Args: {
+          p_lease_token: string
+          p_message_id: string
+          p_outcome: string
+          p_path?: string
+          p_retry_after?: number
+          p_size?: number
+        }
+        Returns: boolean
       }
       get_authorized_orgs: {
         Args: { role?: Database["public"]["Enums"]["role"] }
@@ -5712,6 +5777,10 @@ export type Database = {
         }
         Returns: Json
       }
+      persist_whatsapp_attachment_messages: {
+        Args: { p_messages: Json }
+        Returns: number
+      }
       platform_onboarding_command: {
         Args: { p_actor: string; p_command: string; p_payload: Json }
         Returns: Json
@@ -6018,6 +6087,10 @@ export type Database = {
       }
       retry_whatsapp_account_sync: {
         Args: { p_address: string; p_organization_id: string }
+        Returns: string
+      }
+      retry_whatsapp_attachment_recovery: {
+        Args: { p_message_id: string }
         Returns: string
       }
       role_rank: {
@@ -6530,9 +6603,21 @@ export type Database = {
         Args: { p_agent_ids: string[]; p_organization_id: string }
         Returns: string[]
       }
+      wake_whatsapp_attachment_recovery: { Args: never; Returns: undefined }
       whatsapp_account_sync_status: {
         Args: { p_address: string; p_organization_id: string }
         Returns: Json
+      }
+      whatsapp_attachment_recovery_context: {
+        Args: { p_lease_token: string; p_message_id: string }
+        Returns: {
+          access_token: string
+          account_status: string
+          filename: string
+          media_id: string
+          organization_address: string
+          organization_id: string
+        }[]
       }
     }
     Enums: {

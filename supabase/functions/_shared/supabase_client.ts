@@ -71,7 +71,7 @@ export function createApiClient(req: Request) {
   );
 }
 
-export function createUnsecureClient() {
+export function createUnsecureClient(fetcher?: typeof fetch) {
   if (!Deno.env.get("SUPABASE_URL")) {
     throw new Error("Undefined SUPABASE_URL env var.");
   }
@@ -85,6 +85,7 @@ export function createUnsecureClient() {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     {
       auth: { persistSession: false },
+      ...(fetcher ? { global: { fetch: fetcher } } : {}),
     },
   );
 }
